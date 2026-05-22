@@ -6,6 +6,9 @@ from pathlib import Path
 from ultralytics import YOLO
 
 
+ROOT = Path(__file__).resolve().parents[1]
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a YOLO detector for CashSnap.")
     parser.add_argument("--data", default="configs/cashsnap_v1.yaml", help="YOLO dataset YAML path.")
@@ -13,7 +16,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=80)
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--batch", type=int, default=16)
-    parser.add_argument("--project", default="runs/cashsnap")
+    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--project", default=str(ROOT / "runs" / "cashsnap"))
     parser.add_argument("--name", default="yolo26n_v1")
     return parser.parse_args()
 
@@ -35,6 +39,7 @@ def main() -> None:
         pretrained=True,
         plots=True,
         val=True,
+        workers=args.workers,
     )
 
 

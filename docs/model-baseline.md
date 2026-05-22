@@ -5,8 +5,10 @@
 - Model: `yolo26n.pt`
 - Dataset: `data/cashsnap_v1/data.yaml`
 - Command: `python scripts/train_yolo.py --model yolo26n.pt --data data/cashsnap_v1/data.yaml --epochs 20 --imgsz 416 --batch 16 --name yolo26n_baseline_e20_i416`
-- Saved run: `C:\Users\Venom\runs\detect\runs\cashsnap\yolo26n_baseline_e20_i4162`
-- Best weights: `C:\Users\Venom\runs\detect\runs\cashsnap\yolo26n_baseline_e20_i4162\weights\best.pt`
+- Saved run: `D:\Project\KhmerCurrencyOCR\runs\ultralytics_migrated\detect\runs\cashsnap\yolo26n_baseline_e20_i4162`
+- Best weights: `D:\Project\KhmerCurrencyOCR\runs\ultralytics_migrated\detect\runs\cashsnap\yolo26n_baseline_e20_i4162\weights\best.pt`
+
+Note: early runs were created under `C:\Users\Venom\runs`; they were moved into `runs/ultralytics_migrated/` to keep training artifacts on the D drive.
 
 ## Validation
 
@@ -44,6 +46,25 @@ Image: `D:\Download\Banknotes_of_Cambodian_Khmer_Riel.jpg`
 - At `imgsz=640`, `conf=0.05`: 3 low-confidence detections, not enough for counting.
 
 Conclusion: the baseline is good for isolated/normal banknote photos in the curated datasets, but it is not ready for the real target scene: fanned, overlapping, hand-occluded KHR notes. The next dataset step should be a small real fan/overlap validation set plus targeted synthetic fan augmentation from clean note crops.
+
+## Synthetic Fan Experiments
+
+Generated KHR synthetic overlap/fan data with `scripts/generate_synthetic_fan_dataset.py`.
+
+- v2 mixed synthetic: `yolo26n_messy_synth_e10_i416`
+  - Validation: precision `0.955`, recall `0.929`, mAP50 `0.976`, mAP50-95 `0.933`
+  - Test: precision `0.930`, recall `0.961`, mAP50 `0.973`, mAP50-95 `0.934`
+  - Fan image: `0` detections at `416/conf=0.25`; `4` detections at `640/conf=0.05`
+- v3 dense fan synthetic: `yolo26n_messy_synth_v3_e8_i416`
+  - Best early checkpoint improved the fan image: `1` detection at `416/conf=0.25`; `8` detections at `640/conf=0.05`
+  - Later epochs trended sideways/down on clean validation, so the run was stopped after epoch 4/early 5.
+  - Current best fan checkpoint: `D:\Project\KhmerCurrencyOCR\runs\ultralytics_migrated\detect\runs\cashsnap\yolo26n_messy_synth_v3_e8_i416\weights\best.pt`
+- v4 partial-slice synthetic: `yolo26n_messy_synth_v4_e4_i416_w0`
+  - Validation: precision `0.926`, recall `0.942`, mAP50 `0.975`, mAP50-95 `0.925`
+  - Test: precision `0.960`, recall `0.924`, mAP50 `0.981`, mAP50-95 `0.937`
+  - Fan image regressed versus v3: `0` detections at `416/conf=0.25`; `6` detections at `640/conf=0.05`
+
+Conclusion: dense synthetic overlap helps the target failure case, but synthetic-only data has not solved fanned KHR counting. The next highest-value data step is real fanned/overlapped phone photos with labels, especially for `KHR_20000` and `KHR_50000`. Real YOLO crops were extracted, but the generated v5 audit showed rectangular background artifacts; do not train on real-crop synthetic until masking/segmentation is improved.
 
 ## Roboflow Model Comparison
 
