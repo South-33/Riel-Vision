@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from collections import Counter
 from pathlib import Path
 
@@ -19,7 +20,7 @@ def split_root(dataset_root: Path, split_path: str) -> Path:
 
 def count_split(dataset_root: Path, split_path: str, class_count: int) -> tuple[int, int, Counter[int], list[str]]:
     image_dir = split_root(dataset_root, split_path)
-    label_dir = Path(str(image_dir).replace(f"{Path.sep}images{Path.sep}", f"{Path.sep}labels{Path.sep}"))
+    label_dir = Path(str(image_dir).replace(f"{os.sep}images{os.sep}", f"{os.sep}labels{os.sep}"))
     images = sorted([p for p in image_dir.glob("*") if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}])
     counts: Counter[int] = Counter()
     problems: list[str] = []

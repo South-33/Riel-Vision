@@ -1,25 +1,28 @@
-# ── Raw / downloaded datasets (large, re-downloadable) ───────────────────────
+# Raw / downloaded datasets (large, re-downloadable)
 data/raw_datasets/
 data/processed/
+data/cashsnap_v1/
+data/dedup/
+data/audit/
+data/reference/
+data/curated/
 
-# Keep data/curated/ and data/reference/ — small curated NBC reference images,
-# tracked intentionally as project documentation / annotation reference.
-# If curated training data grows large, revisit with Git LFS.
+# Keep manifests and reproducible scripts in git; keep downloaded/generated data local.
 
-# ── Model weights ─────────────────────────────────────────────────────────────
+# Model weights
 *.pt
 *.pth
 *.onnx
 *.tflite
 *.mlmodel
 
-# ── Training runs & experiment outputs ───────────────────────────────────────
+# Training runs and experiment outputs
 runs/
 
-# ── Scratch / temp ────────────────────────────────────────────────────────────
+# Scratch / temp
 tmp/
 
-# ── Python ────────────────────────────────────────────────────────────────────
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -29,10 +32,14 @@ dist/
 build/
 *.egg
 
-# ── Jupyter ───────────────────────────────────────────────────────────────────
+# Jupyter
 .ipynb_checkpoints/
 
-# ── OS / editor ───────────────────────────────────────────────────────────────
+# Secrets
+.env
+*.env
+
+# OS / editor
 .DS_Store
 Thumbs.db
 .idea/
