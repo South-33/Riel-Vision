@@ -1,0 +1,5 @@
+reason,source,status,url,wanted_format
+Roboflow dataset export requires a signed download/API-key flow from an account.,Khmer-US-currency Roboflow,blocked/manual,https://universe.roboflow.com/robot-yfusg/khmer-us-currency-jofw1,YOLOv8/YOLO26 or COCO JSON
+Roboflow dataset export requires a signed download/API-key flow from an account.,Cambodia Currency Project Roboflow,blocked/manual,https://universe.roboflow.com/khmer-riel-classification-computer-vision/cambodia-currency-project,YOLOv8/YOLO26 or COCO JSON
+Roboflow dataset export requires a signed download/API-key flow from an account.,KHMER SCAN Roboflow,blocked/manual,https://universe.roboflow.com/test-gl3sj/khmer-scan,YOLOv8/YOLO26 or COCO JSON
+"Useful for reference discovery, but image reuse/licensing is mixed or unclear. Avoid bulk download until license is verified.",Numista Cambodia catalogue,not downloaded,https://en.numista.com/catalogue/cambodia_section-5.html,clean front/back reference images only if license permits

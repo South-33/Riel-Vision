@@ -1,0 +1,40 @@
+# ── Raw / downloaded datasets (large, re-downloadable) ───────────────────────
+data/raw_datasets/
+data/processed/
+
+# Keep data/curated/ and data/reference/ — small curated NBC reference images,
+# tracked intentionally as project documentation / annotation reference.
+# If curated training data grows large, revisit with Git LFS.
+
+# ── Model weights ─────────────────────────────────────────────────────────────
+*.pt
+*.pth
+*.onnx
+*.tflite
+*.mlmodel
+
+# ── Training runs & experiment outputs ───────────────────────────────────────
+runs/
+
+# ── Scratch / temp ────────────────────────────────────────────────────────────
+tmp/
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+*.egg
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ── OS / editor ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

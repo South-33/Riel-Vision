@@ -1,0 +1,83 @@
+bucket,curated_path,denomination,note,source
+deferred,data\curated\reference\khr_nbc\deferred\KHR_100000\001_100000_front.jpg,100000,200x84,data\reference\khr_nbc\001_100000_front.jpg
+junk,data\curated\reference\khr_nbc\junk\site_assets\002_100000_new_specimen_back.jpg,,200x90,data\reference\khr_nbc\002_100000_new_specimen_back.jpg
+junk,data\curated\reference\khr_nbc\junk\site_assets\003_100000_new_specimen_front.jpg,,200x90,data\reference\khr_nbc\003_100000_new_specimen_front.jpg
+deferred,data\curated\reference\khr_nbc\deferred\KHR_100000\004_100000_reverse.jpg,100000,200x83,data\reference\khr_nbc\004_100000_reverse.jpg
+junk,data\curated\reference\khr_nbc\junk\site_assets\005_10000_b_2015.jpg,,200x93,data\reference\khr_nbc\005_10000_b_2015.jpg
+junk,data\curated\reference\khr_nbc\junk\site_assets\006_10000_f_2015.jpg,,200x91,data\reference\khr_nbc\006_10000_f_2015.jpg
+target,data\curated\reference\khr_nbc\target\KHR_10000\007_10000_front.jpg,10000,200x98,data\reference\khr_nbc\007_10000_front.jpg
+target,data\curated\reference\khr_nbc\target\KHR_10000\008_10000_front_new.jpg,10000,200x90,data\reference\khr_nbc\008_10000_front_new.jpg
+target,data\curated\reference\khr_nbc\target\KHR_10000\009_10000_reverse.jpg,10000,200x97,data\reference\khr_nbc\009_10000_reverse.jpg
+target,data\curated\reference\khr_nbc\target\KHR_10000\010_10000_reverse_new.jpg,10000,200x82,data\reference\khr_nbc\010_10000_reverse_new.jpg
+target,data\curated\reference\khr_nbc\target\KHR_1000\011_1000_back_2013.jpg,1000,200x90,data\reference\khr_nbc\011_1000_back_2013.jpg
+target,data\curated\reference\khr_nbc\target\KHR_1000\012_1000_front.jpg,1000,200x102,data\reference\khr_nbc\012_1000_front.jpg
+target,data\curated\reference\khr_nbc\target\KHR_1000\013_1000_front_2013.jpg,1000,200x90,data\reference\khr_nbc\013_1000_front_2013.jpg
+target,data\curated\reference\khr_nbc\target\KHR_1000\014_1000_front_new.jpg,1000,200x92,data\reference\khr_nbc\014_1000_front_new.jpg
+target,data\curated\reference\khr_nbc\target\KHR_1000\015_1000_front_new_2005.jpg,1000,200x92,data\reference\khr_nbc\015_1000_front_new_2005.jpg
+target,data\curated\reference\khr_nbc\target\KHR_1000\016_1000_front_new_2017.jpg,1000,200x95,data\reference\khr_nbc\016_1000_front_new_2017.jpg
+target,data\curated\reference\khr_nbc\target\KHR_1000\017_1000_reverse.jpg,1000,200x107,data\reference\khr_nbc\017_1000_reverse.jpg
+target,data\curated\reference\khr_nbc\target\KHR_1000\018_1000_reverse_new.jpg,1000,200x94,data\reference\khr_nbc\018_1000_reverse_new.jpg
+target,data\curated\reference\khr_nbc\target\KHR_1000\019_1000_reverse_new_2005.jpg,1000,200x92,data\reference\khr_nbc\019_1000_reverse_new_2005.jpg
+target,data\curated\reference\khr_nbc\target\KHR_1000\020_1000_reverse_new_2017.jpg,1000,200x95,data\reference\khr_nbc\020_1000_reverse_new_2017.jpg
+deferred,data\curated\reference\khr_nbc\deferred\KHR_100\021_100_back_new_2015.jpg,100,200x90,data\reference\khr_nbc\021_100_back_new_2015.jpg
+deferred,data\curated\reference\khr_nbc\deferred\KHR_100\022_100_front_new.jpg,100,200x88,data\reference\khr_nbc\022_100_front_new.jpg
+deferred,data\curated\reference\khr_nbc\deferred\KHR_100\023_100_front_new_2001.jpg,100,200x92,data\reference\khr_nbc\023_100_front_new_2001.jpg
+deferred,data\curated\reference\khr_nbc\deferred\KHR_100\024_100_front_new_2015.jpg,100,200x90,data\reference\khr_nbc\024_100_front_new_2015.jpg
+deferred,data\curated\reference\khr_nbc\deferred\KHR_100\025_100_reverse_new.jpg,100,200x88,data\reference\khr_nbc\025_100_reverse_new.jpg
+deferred,data\curated\reference\khr_nbc\deferred\KHR_100\026_100_reverse_new_2001.jpg,100,200x90,data\reference\khr_nbc\026_100_reverse_new_2001.jpg
+other_banknote,data\curated\reference\khr_nbc\other_banknote\KHR_15000\027_15000_front_new_2019.jpg,15000,200x87,data\reference\khr_nbc\027_15000_front_new_2019.jpg
+other_banknote,data\curated\reference\khr_nbc\other_banknote\KHR_15000\028_15000_reverse_new_2019.jpg,15000,200x88,data\reference\khr_nbc\028_15000_reverse_new_2019.jpg
+other_banknote,data\curated\reference\khr_nbc\other_banknote\KHR_200000\029_200000_front_new_2024.jpg,200000,200x90,data\reference\khr_nbc\029_200000_front_new_2024.jpg
+other_banknote,data\curated\reference\khr_nbc\other_banknote\KHR_200000\030_200000_reverse_new_2024.jpg,200000,200x90,data\reference\khr_nbc\030_200000_reverse_new_2024.jpg
+target,data\curated\reference\khr_nbc\target\KHR_20000\031_20000_front.jpg,20000,200x91,data\reference\khr_nbc\031_20000_front.jpg
+target,data\curated\reference\khr_nbc\target\KHR_20000\032_20000_front_2008.jpg,20000,200x90,data\reference\khr_nbc\032_20000_front_2008.jpg
+target,data\curated\reference\khr_nbc\target\KHR_20000\033_20000_front_new_2018.jpg,20000,200x90,data\reference\khr_nbc\033_20000_front_new_2018.jpg
+target,data\curated\reference\khr_nbc\target\KHR_20000\034_20000_reverse.jpg,20000,200x91,data\reference\khr_nbc\034_20000_reverse.jpg
+target,data\curated\reference\khr_nbc\target\KHR_20000\035_20000_reverse_2008.jpg,20000,200x93,data\reference\khr_nbc\035_20000_reverse_2008.jpg
+target,data\curated\reference\khr_nbc\target\KHR_20000\036_20000_reverse_new_2018.jpg,20000,200x90,data\reference\khr_nbc\036_20000_reverse_new_2018.jpg
+target,data\curated\reference\khr_nbc\target\KHR_2000\037_2000_back_2013.jpg,2000,200x90,data\reference\khr_nbc\037_2000_back_2013.jpg
+target,data\curated\reference\khr_nbc\target\KHR_2000\038_2000_back_2022.jpg,2000,200x93,data\reference\khr_nbc\038_2000_back_2022.jpg
+target,data\curated\reference\khr_nbc\target\KHR_2000\039_2000_front.jpg,2000,200x104,data\reference\khr_nbc\039_2000_front.jpg
+target,data\curated\reference\khr_nbc\target\KHR_2000\040_2000_front_2008.jpg,2000,200x92,data\reference\khr_nbc\040_2000_front_2008.jpg
+target,data\curated\reference\khr_nbc\target\KHR_2000\041_2000_front_2013.jpg,2000,200x90,data\reference\khr_nbc\041_2000_front_2013.jpg
+target,data\curated\reference\khr_nbc\target\KHR_2000\042_2000_front_2022.jpg,2000,200x94,data\reference\khr_nbc\042_2000_front_2022.jpg
+target,data\curated\reference\khr_nbc\target\KHR_2000\043_2000_reverse.jpg,2000,200x104,data\reference\khr_nbc\043_2000_reverse.jpg
+target,data\curated\reference\khr_nbc\target\KHR_2000\044_2000_reverse_2008.jpg,2000,200x98,data\reference\khr_nbc\044_2000_reverse_2008.jpg
+other_banknote,data\curated\reference\khr_nbc\other_banknote\KHR_200\045_200_back_2022.jpg,200,200x92,data\reference\khr_nbc\045_200_back_2022.jpg
+other_banknote,data\curated\reference\khr_nbc\other_banknote\KHR_200\046_200_front_2022.jpg,200,200x93,data\reference\khr_nbc\046_200_front_2022.jpg
+other_banknote,data\curated\reference\khr_nbc\other_banknote\KHR_200\047_200_front_new.jpg,200,200x95,data\reference\khr_nbc\047_200_front_new.jpg
+other_banknote,data\curated\reference\khr_nbc\other_banknote\KHR_200\048_200_reverse_new.jpg,200,200x95,data\reference\khr_nbc\048_200_reverse_new.jpg
+other_banknote,data\curated\reference\khr_nbc\other_banknote\KHR_30000\049_30000_front_new_2021.jpg,30000,200x90,data\reference\khr_nbc\049_30000_front_new_2021.jpg
+other_banknote,data\curated\reference\khr_nbc\other_banknote\KHR_30000\050_30000_reverse_new_2021.jpg,30000,200x90,data\reference\khr_nbc\050_30000_reverse_new_2021.jpg
+target,data\curated\reference\khr_nbc\target\KHR_50000\051_50000_front.jpg,50000,200x90,data\reference\khr_nbc\051_50000_front.jpg
+target,data\curated\reference\khr_nbc\target\KHR_50000\052_50000_front_new.jpg,50000,200x92,data\reference\khr_nbc\052_50000_front_new.jpg
+junk,data\curated\reference\khr_nbc\junk\site_assets\053_50000_new_back.jpg,,200x90,data\reference\khr_nbc\053_50000_new_back.jpg
+junk,data\curated\reference\khr_nbc\junk\site_assets\054_50000_new_front.jpg,,200x90,data\reference\khr_nbc\054_50000_new_front.jpg
+target,data\curated\reference\khr_nbc\target\KHR_50000\055_50000_reverse.jpg,50000,200x89,data\reference\khr_nbc\055_50000_reverse.jpg
+target,data\curated\reference\khr_nbc\target\KHR_50000\056_50000_reverse_new.jpg,50000,200x94,data\reference\khr_nbc\056_50000_reverse_new.jpg
+target,data\curated\reference\khr_nbc\target\KHR_5000\057_5000_front.jpg,5000,200x97,data\reference\khr_nbc\057_5000_front.jpg
+target,data\curated\reference\khr_nbc\target\KHR_5000\058_5000_front_new.jpg,5000,200x92,data\reference\khr_nbc\058_5000_front_new.jpg
+target,data\curated\reference\khr_nbc\target\KHR_5000\059_5000_front_new_2017.jpg,5000,200x95,data\reference\khr_nbc\059_5000_front_new_2017.jpg
+target,data\curated\reference\khr_nbc\target\KHR_5000\060_5000_reverse.jpg,5000,200x96,data\reference\khr_nbc\060_5000_reverse.jpg
+target,data\curated\reference\khr_nbc\target\KHR_5000\061_5000_reverse_new.jpg,5000,200x89,data\reference\khr_nbc\061_5000_reverse_new.jpg
+target,data\curated\reference\khr_nbc\target\KHR_5000\062_5000_reverse_new_2017.jpg,5000,200x95,data\reference\khr_nbc\062_5000_reverse_new_2017.jpg
+target,data\curated\reference\khr_nbc\target\KHR_500\063_500_back_new_2015.jpg,500,200x90,data\reference\khr_nbc\063_500_back_new_2015.jpg
+target,data\curated\reference\khr_nbc\target\KHR_500\064_500_front_new.jpg,500,200x91,data\reference\khr_nbc\064_500_front_new.jpg
+target,data\curated\reference\khr_nbc\target\KHR_500\065_500_front_new_2002.jpg,500,200x90,data\reference\khr_nbc\065_500_front_new_2002.jpg
+target,data\curated\reference\khr_nbc\target\KHR_500\066_500_front_new_2015.jpg,500,200x90,data\reference\khr_nbc\066_500_front_new_2015.jpg
+target,data\curated\reference\khr_nbc\target\KHR_500\067_500_reverse_new.jpg,500,200x93,data\reference\khr_nbc\067_500_reverse_new.jpg
+target,data\curated\reference\khr_nbc\target\KHR_500\068_500_reverse_new_2002.jpg,500,200x90,data\reference\khr_nbc\068_500_reverse_new_2002.jpg
+other_banknote,data\curated\reference\khr_nbc\other_banknote\KHR_50\069_50_front_new_2002.jpg,50,200x88,data\reference\khr_nbc\069_50_front_new_2002.jpg
+other_banknote,data\curated\reference\khr_nbc\other_banknote\KHR_50\070_50_reverse_new_2002.jpg,50,200x89,data\reference\khr_nbc\070_50_reverse_new_2002.jpg
+junk,data\curated\reference\khr_nbc\junk\site_assets\071_cambodia.gif,,too small 30x23,data\reference\khr_nbc\071_cambodia.gif
+junk,data\curated\reference\khr_nbc\junk\site_assets\072_english.gif,,too small 30x23,data\reference\khr_nbc\072_english.gif
+junk,data\curated\reference\khr_nbc\junk\site_assets\073_facebook.png,,too small 16x16,data\reference\khr_nbc\073_facebook.png
+junk,data\curated\reference\khr_nbc\junk\site_assets\074_home.svg,,unreadable: cannot identify image file 'D:\\Project\\KhmerCurrencyOCR\\data\\reference\\khr_nbc\\074_home.svg',data\reference\khr_nbc\074_home.svg
+junk,data\curated\reference\khr_nbc\junk\site_assets\075_hotline.png,,86x30,data\reference\khr_nbc\075_hotline.png
+junk,data\curated\reference\khr_nbc\junk\site_assets\076_logoonly.png,,95x95,data\reference\khr_nbc\076_logoonly.png
+junk,data\curated\reference\khr_nbc\junk\site_assets\077_menu.svg,,unreadable: cannot identify image file 'D:\\Project\\KhmerCurrencyOCR\\data\\reference\\khr_nbc\\077_menu.svg',data\reference\khr_nbc\077_menu.svg
+junk,data\curated\reference\khr_nbc\junk\site_assets\078_nbc.png,,345x95,data\reference\khr_nbc\078_nbc.png
+junk,data\curated\reference\khr_nbc\junk\site_assets\079_next.png,,too small 22x22,data\reference\khr_nbc\079_next.png
+junk,data\curated\reference\khr_nbc\junk\site_assets\080_rss.png,,too small 16x16,data\reference\khr_nbc\080_rss.png
+junk,data\curated\reference\khr_nbc\junk\site_assets\081_twitter.png,,too small 16x16,data\reference\khr_nbc\081_twitter.png
+junk,data\curated\reference\khr_nbc\junk\site_assets\082_youtube.png,,too small 16x16,data\reference\khr_nbc\082_youtube.png
