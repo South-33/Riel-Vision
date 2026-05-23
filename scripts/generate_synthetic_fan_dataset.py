@@ -153,6 +153,20 @@ def trim_flat_border(image: Image.Image) -> Image.Image:
 
 
 def note_alpha(image: Image.Image) -> Image.Image:
+    existing = image.convert("RGBA")
+    alpha = existing.getchannel("A")
+    if alpha.getextrema()[0] < 250:
+        arr = np.asarray(alpha)
+        ys, xs = np.where(arr > 16)
+        if len(xs) == 0:
+            return existing
+        pad = 3
+        x1 = max(0, int(xs.min()) - pad)
+        y1 = max(0, int(ys.min()) - pad)
+        x2 = min(existing.width, int(xs.max()) + pad + 1)
+        y2 = min(existing.height, int(ys.max()) + pad + 1)
+        return existing.crop((x1, y1, x2, y2))
+
     rgba = trim_flat_border(image)
     arr = np.asarray(rgba.convert("RGB")).astype(np.int16)
     corners = np.array(
@@ -232,8 +246,8 @@ def make_background(size: int, rng: random.Random) -> Image.Image:
     return Image.fromarray(arr, "RGB").filter(ImageFilter.GaussianBlur(0.4))
 
 
-def add_hand_occluders(canvas: Image.Image, id_mask: np.ndarray, rng: random.Random) -> None:
-    if rng.random() > 0.75:
+def add_hand_occluders(canvas: Image.Image, id_mask: np.ndarray, rng: random.Random, probability: float) -> None:
+    if probability <= 0 or rng.random() > probability:
         return
     occ = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     occ_mask = Image.new("L", canvas.size, 0)
@@ -310,20 +324,33 @@ def make_scene(
     image_size: int,
     rng: random.Random,
     note_cache: dict[Path, Image.Image] | None = None,
+    min_notes: int = 4,
+    max_notes: int = 12,
+    layout_modes: list[str] | None = None,
+    hand_probability: float = 0.25,
 ) -> tuple[Image.Image, list[str]]:
     canvas = make_background(image_size, rng).convert("RGBA")
     id_mask = np.zeros((image_size, image_size), dtype=np.uint16)
     labels: list[tuple[str, int]] = []
-    note_count = rng.randint(4, 12)
+    note_count = rng.randint(min_notes, max_notes)
+    available_modes = layout_modes or ["strip_fan", "tight_fan", "fan", "crossed", "scattered", "row"]
+    default_weights = {
+        "strip_fan": 0.24,
+        "tight_fan": 0.28,
+        "fan": 0.20,
+        "crossed": 0.15,
+        "scattered": 0.09,
+        "row": 0.04,
+    }
     layout_mode = rng.choices(
-        ["strip_fan", "tight_fan", "fan", "crossed", "scattered", "row"],
-        weights=[0.24, 0.28, 0.20, 0.15, 0.09, 0.04],
+        available_modes,
+        weights=[default_weights.get(mode, 0.05) for mode in available_modes],
         k=1,
     )[0]
     if layout_mode == "strip_fan":
-        note_count = rng.randint(10, 20)
+        note_count = rng.randint(max(min_notes, 10), max(max_notes, 20))
     elif layout_mode == "tight_fan":
-        note_count = rng.randint(9, 18)
+        note_count = rng.randint(max(min_notes, 9), max(max_notes, 18))
     center_x = rng.randint(int(image_size * 0.43), int(image_size * 0.57))
     pivot_y = rng.randint(int(image_size * 0.78), int(image_size * 0.96))
 
@@ -417,7 +444,7 @@ def make_scene(
         paste_note(canvas, id_mask, note, instance_id, x, y)
         labels.append((ref.class_name, instance_id))
 
-    add_hand_occluders(canvas, id_mask, rng)
+    add_hand_occluders(canvas, id_mask, rng, hand_probability)
 
     yolo_lines: list[str] = []
     for class_name, instance_id in labels:
@@ -467,6 +494,10 @@ def main() -> None:
     parser.add_argument("--clean", action="store_true", help="Delete an existing output directory before generating.")
     parser.add_argument("--allow-specimen", action="store_true", help="Allow reference images that appear to contain SPECIMEN marks.")
     parser.add_argument("--classes", default="", help="Optional comma-separated canonical classes to generate.")
+    parser.add_argument("--min-notes", type=int, default=4, help="Minimum notes per synthetic scene.")
+    parser.add_argument("--max-notes", type=int, default=12, help="Maximum notes per synthetic scene.")
+    parser.add_argument("--layout-modes", default="", help="Optional comma-separated layout modes: strip_fan,tight_fan,fan,crossed,scattered,row.")
+    parser.add_argument("--hand-prob", type=float, default=0.25, help="Probability of adding synthetic hand/finger occluders.")
     args = parser.parse_args()
 
     rng = random.Random(args.seed)
@@ -474,6 +505,13 @@ def main() -> None:
     unknown = sorted((allowed_classes or set()) - set(CLASS_TO_ID))
     if unknown:
         raise SystemExit(f"Unknown classes in --classes: {unknown}")
+    layout_modes = [item.strip() for item in args.layout_modes.split(",") if item.strip()] or None
+    valid_layout_modes = {"strip_fan", "tight_fan", "fan", "crossed", "scattered", "row"}
+    unknown_layouts = sorted(set(layout_modes or []) - valid_layout_modes)
+    if unknown_layouts:
+        raise SystemExit(f"Unknown layout modes in --layout-modes: {unknown_layouts}")
+    if args.min_notes < 1 or args.max_notes < args.min_notes:
+        raise SystemExit("--min-notes must be >= 1 and --max-notes must be >= --min-notes")
     refs = load_refs(args.source, allowed_classes)
     if not args.allow_specimen:
         before = len(refs)
@@ -498,7 +536,16 @@ def main() -> None:
     attempts = 0
     while i < args.count:
         attempts += 1
-        image, labels = make_scene(refs, args.image_size, rng, note_cache)
+        image, labels = make_scene(
+            refs,
+            args.image_size,
+            rng,
+            note_cache,
+            min_notes=args.min_notes,
+            max_notes=args.max_notes,
+            layout_modes=layout_modes,
+            hand_probability=args.hand_prob,
+        )
         if not labels:
             if attempts > args.count * 5:
                 raise SystemExit("Too many empty synthetic scenes; check reference images.")
