@@ -25,6 +25,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--canvas-height", type=int, default=900, help="Output canvas height.")
     parser.add_argument("--quality", type=int, default=94, help="JPEG quality for upload images.")
     parser.add_argument("--force", action="store_true", help="Clear the output folder before writing.")
+    parser.add_argument("--write-manifest", action="store_true", help="Also write an output CSV mapping uploads to sources.")
     return parser.parse_args()
 
 
@@ -197,13 +198,15 @@ def main() -> None:
         canvas_size=(args.canvas_width, args.canvas_height),
         quality=args.quality,
     )
-    write_csv(out_dir / "manifest.csv", manifest_rows)
+    if args.write_manifest:
+        write_csv(out_dir / "manifest.csv", manifest_rows)
 
     print(f"Wrote {len(manifest_rows)} PicWish upload images to {out_dir}")
     for batch in sorted({row["batch"] for row in manifest_rows}):
         count = sum(1 for row in manifest_rows if row["batch"] == batch)
         print(f"{batch}: {count}")
-    print(f"Manifest: {out_dir / 'manifest.csv'}")
+    if args.write_manifest:
+        print(f"Manifest: {out_dir / 'manifest.csv'}")
 
 
 if __name__ == "__main__":
