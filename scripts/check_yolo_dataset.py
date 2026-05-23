@@ -15,10 +15,13 @@ def parse_args() -> argparse.Namespace:
 
 
 def split_root(dataset_root: Path, split_path: str) -> Path:
-    return dataset_root / split_path
+    path = Path(split_path)
+    if path.is_absolute():
+        return path
+    return dataset_root / path
 
 
-def count_split(dataset_root: Path, split_path: str, class_count: int) -> tuple[int, int, Counter[int], list[str]]:
+def count_split_dir(dataset_root: Path, split_path: str, class_count: int) -> tuple[int, int, Counter[int], list[str]]:
     image_dir = split_root(dataset_root, split_path)
     label_dir = Path(str(image_dir).replace(f"{os.sep}images{os.sep}", f"{os.sep}labels{os.sep}"))
     images = sorted([p for p in image_dir.glob("*") if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}])
@@ -48,6 +51,21 @@ def count_split(dataset_root: Path, split_path: str, class_count: int) -> tuple[
             counts[cls] += 1
 
     return len(images), sum(counts.values()), counts, problems
+
+
+def count_split(dataset_root: Path, split_paths: str | list[str], class_count: int) -> tuple[int, int, Counter[int], list[str]]:
+    paths = split_paths if isinstance(split_paths, list) else [split_paths]
+    total_images = 0
+    total_boxes = 0
+    total_counts: Counter[int] = Counter()
+    all_problems: list[str] = []
+    for split_path in paths:
+        image_count, box_count, counts, problems = count_split_dir(dataset_root, split_path, class_count)
+        total_images += image_count
+        total_boxes += box_count
+        total_counts.update(counts)
+        all_problems.extend(problems)
+    return total_images, total_boxes, total_counts, all_problems
 
 
 def main() -> None:

@@ -28,6 +28,7 @@ Living doc for high-value ideas, experiments, and results. Keep this short: only
 - Pristine clean synthetic smoke (`yolo26n_pristine_clean_synth_smoke_e2_i416_b4_mb20`) wrote correctly under repo `runs/` and reached synthetic-val mAP50 0.764 after 20 train batches; `KHR_20000` recall (0.487) still lags `KHR_50000` (0.714).
 - Rare post-train (`yolo26n_pristine_clean_rare_e4_i416_b8`) is the first completed 20k/50k fine-tune: normal-val mAP50-95 0.926, `KHR_20000` recall 0.990, `KHR_50000` recall 0.566.
 - Rare overlap v1 plus 2-epoch fine-tune (`yolo26n_pristine_overlap_e2_i416_b8`) improved synthetic overlap-val mAP50 from 0.418 to 0.568 and `KHR_50000` overlap recall from 0.262 to 0.439, while normal-val mAP50-95 dipped from 0.926 to 0.920.
+- On rare-overlap synthetic validation, `yolo26n_pristine_overlap_e2_i416_b8` beats older fan checkpoints v3/v4 (mAP50 0.568 vs 0.422/0.446), so pristine overlap composition is worth extending beyond rare notes.
 
 ## Data Gaps
 
