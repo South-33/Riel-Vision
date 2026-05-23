@@ -10,3 +10,4 @@ This is the project's AGENTS.md
 - Background removal can be automated for free using `scripts/process_picwish_batches.py` with the `picwish` PyPI library; keep concurrency under 15 (using `asyncio.Semaphore(10)`) with short sleeps to avoid Cloudflare rate blocks.
 - Current best cutout set comes from scoring PicWish and BEN2 outputs, then selecting via `scripts/select_best_cutouts.py`; use the stricter `data/asset_candidates/rare_pristine_asset_bank_v1/` subset for first synthetic probes.
 - First rare-cutout synthetic stage should be clean curriculum (`data/synthetic/khr_rare_pristine_clean_v1/`): 1-3 notes, no synthetic fingers, no strip/fan chaos; only scale up to harder fan/overlap after this probe is evaluated.
+- Rare KHR research PDFs live under `docs/research/`; use them for version/source checks instead of leaving reference docs in the repo root.
