@@ -25,6 +25,7 @@ Living doc for high-value ideas, experiments, and results. Keep this short: only
 - `khr_rare_v1` adds minimum synthetic coverage for `KHR_20000`/`KHR_50000`, but is only a bridge; catalog masks still create artifacts, so PicWish-quality transparent assets should replace it for serious training.
 - Mixed Asian-currency datasets are useful for general rotation/background augmentation, but should not be counted as proof of Cambodian old/new KHR version coverage.
 - Gold cutouts alone were still too noisy for first-stage synthesis; filtering by alpha rectangularity/component/aspect produced a cleaner `rare_pristine_asset_bank_v1` for curriculum probes.
+- Pristine clean synthetic smoke (`yolo26n_pristine_clean_synth_smoke_e2_i416_b4_mb20`) wrote correctly under repo `runs/` and reached synthetic-val mAP50 0.764 after 20 train batches; `KHR_20000` recall (0.487) still lags `KHR_50000` (0.714).
 
 ## Data Gaps
 
