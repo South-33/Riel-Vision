@@ -167,7 +167,8 @@ def copy_numista_references(out_dir: Path) -> list[dict[str, str]]:
         label = next((part for part in source.parts if part in TARGETS.values()), "")
         if not label:
             continue
-        target = out_dir / label / "numista_reference" / source.name
+        family = source.parent.name
+        target = out_dir / label / "numista_reference" / f"{family}_{source.name}"
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
         rows.append(

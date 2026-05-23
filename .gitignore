@@ -48,3 +48,7 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# LongRun CLI files
+.agent/
+LONGRUN.md
