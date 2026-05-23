@@ -29,6 +29,7 @@ Living doc for high-value ideas, experiments, and results. Keep this short: only
 - Rare post-train (`yolo26n_pristine_clean_rare_e4_i416_b8`) is the first completed 20k/50k fine-tune: normal-val mAP50-95 0.926, `KHR_20000` recall 0.990, `KHR_50000` recall 0.566.
 - Rare overlap v1 plus 2-epoch fine-tune (`yolo26n_pristine_overlap_e2_i416_b8`) improved synthetic overlap-val mAP50 from 0.418 to 0.568 and `KHR_50000` overlap recall from 0.262 to 0.439, while normal-val mAP50-95 dipped from 0.926 to 0.920.
 - On rare-overlap synthetic validation, `yolo26n_pristine_overlap_e2_i416_b8` beats older fan checkpoints v3/v4 (mAP50 0.568 vs 0.422/0.446), so pristine overlap composition is worth extending beyond rare notes.
+- Combining broad fan v3 with pristine rare overlap (`yolo26n_messy_v3_pristine_overlap_e2_i416_b8`) improved both scoreboards: normal-val mAP50-95 0.930 and rare-overlap mAP50 0.584, with `KHR_50000` overlap recall 0.475.
 
 ## Data Gaps
 

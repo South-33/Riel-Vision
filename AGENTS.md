@@ -12,4 +12,5 @@ This is the project's AGENTS.md
 - First rare-cutout synthetic stage should be clean curriculum (`data/synthetic/khr_rare_pristine_clean_v1/`): 1-3 notes, no synthetic fingers, no strip/fan chaos; only scale up to harder fan/overlap after this probe is evaluated.
 - Avoid `--fraction` for mixed CashSnap smoke probes: Ultralytics takes an ordered slice, which can select only empty/background `cashsnap_v1` labels; use synthetic-only YAML or `--max-train-batches` instead.
 - Rare overlap probe data is `data/synthetic/khr_rare_pristine_overlap_v1/` from the pristine asset bank; it improves synthetic overlap validation but slightly trades off normal validation, so evaluate both.
+- Best synthetic scoreboard candidate so far is `runs/cashsnap/yolo26n_messy_v3_pristine_overlap_e2_i416_b8/weights/best.pt`; it combines broad v3 fan data with rare pristine overlap, but still needs real fan/stack validation.
 - Rare KHR research PDFs live under `docs/research/`; use them for version/source checks instead of leaving reference docs in the repo root.
