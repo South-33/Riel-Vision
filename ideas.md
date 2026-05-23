@@ -12,6 +12,8 @@ Living doc for high-value ideas, experiments, and results. Keep this short: only
 - Use real table/concrete/counter backgrounds and realistic phone effects: shadows, blur, compression, exposure shifts, paper wear, and color grading.
 - Create a small real fanned/overlapped validation set before tuning more. One stress image is useful but not enough to tell if a generator really works.
 - Explore YOLO OBB after the synthetic asset bank exists; rotated labels become cheap once masks/corners are known.
+- Try context-first background removal for tight crop failures: send a larger parent-image crop around the YOLO box to the remover, then crop/score the transparent bill afterward.
+- Try local open-source removers after PicWish triage: RMBG-2.0 first, BEN2 second, with fill-holes plus slight dilation so masks do not erase printed details inside the note.
 
 ## Tried And Learned
 

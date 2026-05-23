@@ -26,9 +26,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--quality", type=int, default=94, help="JPEG quality for upload images.")
     parser.add_argument(
         "--mode",
-        choices=["copy", "scene-context", "table"],
+        choices=["copy", "source-context", "scene-context", "table"],
         default="copy",
-        help="Upload image mode: copy originals, blend scene crops, or place every image on a table canvas.",
+        help="Upload image mode: copy originals, crop source context, blend scene crops, or place every image on a table canvas.",
+    )
+    parser.add_argument(
+        "--context-scale",
+        type=float,
+        default=2.4,
+        help="For source-context mode, crop this many YOLO-box widths/heights from the original source image.",
     )
     parser.add_argument("--force", action="store_true", help="Clear the output folder before writing.")
     parser.add_argument("--write-manifest", action="store_true", help="Also write an output CSV mapping uploads to sources.")
@@ -110,6 +116,60 @@ def load_row_image(row: dict[str, str]) -> Image.Image:
         raise SystemExit(f"Missing or unsupported source image: {source}")
     with Image.open(source) as opened:
         return opened.convert("RGBA")
+
+
+def yolo_box_to_xyxy(size: tuple[int, int], yolo_box: str, scale: float) -> tuple[int, int, int, int]:
+    width, height = size
+    x_center, y_center, box_w, box_h = [float(value) for value in yolo_box.split()]
+    crop_w = min(1.0, box_w * scale)
+    crop_h = min(1.0, box_h * scale)
+    left = max(0, int((x_center - crop_w / 2) * width))
+    top = max(0, int((y_center - crop_h / 2) * height))
+    right = min(width, int((x_center + crop_w / 2) * width))
+    bottom = min(height, int((y_center + crop_h / 2) * height))
+    return left, top, right, bottom
+
+
+def format_xyxy(box: tuple[int, int, int, int]) -> str:
+    return " ".join(str(value) for value in box)
+
+
+def source_context_metadata(row: dict[str, str], context_scale: float) -> dict[str, str]:
+    if row.get("kind") != "scene_crop" or not row.get("source_image") or not row.get("source_box_yolo"):
+        return {"context_crop_xyxy": "", "target_box_xyxy": "", "target_box_in_context_xyxy": ""}
+
+    source = ROOT / row["source_image"]
+    if not source.exists() or source.suffix.lower() not in IMAGE_SUFFIXES:
+        raise SystemExit(f"Missing or unsupported source image: {source}")
+    with Image.open(source) as opened:
+        target_box = yolo_box_to_xyxy(opened.size, row["source_box_yolo"], 1.0)
+        context_box = yolo_box_to_xyxy(opened.size, row["source_box_yolo"], context_scale)
+    target_in_context = (
+        max(0, target_box[0] - context_box[0]),
+        max(0, target_box[1] - context_box[1]),
+        max(0, target_box[2] - context_box[0]),
+        max(0, target_box[3] - context_box[1]),
+    )
+    return {
+        "context_crop_xyxy": format_xyxy(context_box),
+        "target_box_xyxy": format_xyxy(target_box),
+        "target_box_in_context_xyxy": format_xyxy(target_in_context),
+    }
+
+
+def load_source_context_image(row: dict[str, str], context_scale: float) -> Image.Image:
+    if row.get("kind") != "scene_crop" or not row.get("source_image") or not row.get("source_box_yolo"):
+        return load_row_image(row)
+
+    source = ROOT / row["source_image"]
+    if not source.exists() or source.suffix.lower() not in IMAGE_SUFFIXES:
+        raise SystemExit(f"Missing or unsupported source image: {source}")
+    with Image.open(source) as opened:
+        image = opened.convert("RGBA")
+        left, top, right, bottom = yolo_box_to_xyxy(image.size, row["source_box_yolo"], context_scale)
+        if right <= left or bottom <= top:
+            raise SystemExit(f"Invalid source-context crop for {source}")
+        return image.crop((left, top, right, bottom))
 
 
 def cover_resize(image: Image.Image, size: tuple[int, int]) -> Image.Image:
@@ -203,6 +263,11 @@ def write_csv(path: Path, rows: list[dict[str, str]]) -> None:
         "source_image",
         "source_box_yolo",
         "crop_box_xyxy",
+        "mode",
+        "context_scale",
+        "context_crop_xyxy",
+        "target_box_xyxy",
+        "target_box_in_context_xyxy",
     ]
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -217,6 +282,7 @@ def make_batches(
     canvas_size: tuple[int, int],
     quality: int,
     mode: str,
+    context_scale: float,
 ) -> list[dict[str, str]]:
     if batch_size < 1:
         raise SystemExit("--batch-size must be at least 1")
@@ -234,14 +300,17 @@ def make_batches(
         if mode == "copy":
             shutil.copy2(source, target)
         else:
-            image = load_row_image(row)
+            image = load_source_context_image(row, context_scale) if mode == "source-context" else load_row_image(row)
             if mode == "scene-context" and row.get("kind") == "scene_crop":
                 upload_image = paste_scene_context(image, canvas_size, index)
+            elif mode == "source-context":
+                upload_image = image.convert("RGB")
             else:
                 canvas = table_background(canvas_size, index)
                 upload_image = paste_with_shadow(canvas, image, index)
             upload_image.save(target, quality=quality, optimize=True)
 
+        context_meta = source_context_metadata(row, context_scale) if mode == "source-context" else {}
         manifest_rows.append(
             {
                 "batch": batch_dir.name,
@@ -253,6 +322,9 @@ def make_batches(
                 "source_image": row.get("source_image", ""),
                 "source_box_yolo": row.get("source_box_yolo", ""),
                 "crop_box_xyxy": row.get("crop_box_xyxy", ""),
+                "mode": mode,
+                "context_scale": f"{context_scale:.3f}" if mode == "source-context" else "",
+                **context_meta,
             }
         )
     return manifest_rows
@@ -275,6 +347,7 @@ def main() -> None:
         canvas_size=(args.canvas_width, args.canvas_height),
         quality=args.quality,
         mode=args.mode,
+        context_scale=args.context_scale,
     )
     if args.write_manifest:
         write_csv(out_dir / "manifest.csv", manifest_rows)
