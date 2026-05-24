@@ -2,5 +2,6 @@ ultralytics>=8.3.0
 pyyaml>=6.0.0
 pillow>=10.0.0
 numpy>=1.26.0
+psutil>=5.9.0
 picwish>=0.6.0
 ben2 @ git+https://github.com/PramaLLC/BEN2.git

@@ -14,3 +14,5 @@ This is the project's AGENTS.md
 - Rare overlap probe data is `data/synthetic/khr_rare_pristine_overlap_v1/` from the pristine asset bank; it improves synthetic overlap validation but slightly trades off normal validation, so evaluate both.
 - Best synthetic scoreboard candidate so far is `runs/cashsnap/yolo26n_messy_v3_pristine_overlap_e2_i416_b8/weights/best.pt`; it combines broad v3 fan data with rare pristine overlap, but still needs real fan/stack validation.
 - Rare KHR research PDFs live under `docs/research/`; use them for version/source checks instead of leaving reference docs in the repo root.
+- Mobile export smoke notes live in `docs/mobile-export.md`; ONNX/NCNN export works from the balanced checkpoint, while TFLite needs a separate Python 3.11/3.12 TensorFlow environment because this repo is currently on Python 3.14.
+- When the user is gaming or asks for headroom, run long jobs through `scripts/run_with_headroom.py --max-percent 90 --resume-percent 82 -- ...`; also prefer small probes (`--batch` 2-4, `--workers` 0-1, `--max-train-batches` when possible).
