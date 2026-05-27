@@ -17,6 +17,7 @@ Capture requirements for new rights-clear phone photos live in `docs/real-fan-ca
 - Source image: https://upload.wikimedia.org/wikipedia/commons/3/30/Cambodian_Riel.jpg
 - Status: candidate, unlabeled.
 - Rights caveat: the Wikimedia page marks the file CC0, but also shows the same 2026 deletion request family related to Cambodian banknote copyright. Use locally until rights are rechecked.
+- Labeling caveat: this is a museum/display mix with several legacy or out-of-class denominations, so do not turn it into a current-KHR scoreboard image except for clear in-scope visible notes.
 - `real_overlap_0003_commons_shop_5k_10k_20k`: real shop photo with visible 5k/10k/20k notes, copied locally to `data/real_fan_benchmark/images/candidates/real_overlap_0003_commons_shop_5k_10k_20k.png`
 - Source page: https://commons.wikimedia.org/wiki/File:Campuchia_-_Ti%E1%BB%81n_Gi%E1%BA%A5y_5000,_10_000,_20_000_rial.png
 - Source image: https://upload.wikimedia.org/wikipedia/commons/5/50/Campuchia_-_Ti%E1%BB%81n_Gi%E1%BA%A5y_5000%2C_10_000%2C_20_000_rial.png
