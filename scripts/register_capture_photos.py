@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INVENTORY = ROOT / "manifests" / "real_partial_capture_inventory.csv"
+DEFAULT_REQUIREMENTS = ROOT / "manifests" / "real_partial_capture_requirements.csv"
 FIELDNAMES = [
     "image_id",
     "local_path",
@@ -26,6 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Register a folder of CashSnap real partial-note captures.")
     parser.add_argument("--images-dir", type=Path, required=True, help="Folder containing phone photos to register.")
     parser.add_argument("--inventory", type=Path, default=DEFAULT_INVENTORY)
+    parser.add_argument("--requirements", type=Path, default=DEFAULT_REQUIREMENTS, help="Capture requirements used to validate scene types.")
     parser.add_argument("--scene-type", help="Scene bucket, e.g. single_khr, simple_overlap, hand_fan.")
     parser.add_argument(
         "--scene-type-from-parent",
@@ -44,6 +46,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--notes", default="", help="Optional shared notes for every row.")
     parser.add_argument("--prefix", default="", help="Optional image_id prefix, e.g. capture_20260527.")
     parser.add_argument("--recursive", action="store_true", help="Scan images-dir recursively.")
+    parser.add_argument("--allow-unknown-scene-type", action="store_true", help="Allow scene_type values absent from the requirements CSV.")
     parser.add_argument("--dry-run", action="store_true", help="Print rows without modifying the inventory.")
     return parser.parse_args()
 
@@ -77,6 +80,17 @@ def read_existing(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
+def allowed_scene_types(requirements: Path) -> set[str]:
+    if not requirements.exists():
+        return set()
+    with requirements.open("r", newline="", encoding="utf-8") as handle:
+        return {
+            row.get("match_value", "").strip()
+            for row in csv.DictReader(handle)
+            if row.get("match_column", "").strip() == "scene_type" and row.get("match_value", "").strip()
+        }
+
+
 def unique_id(base: str, used: set[str]) -> str:
     candidate = base
     index = 2
@@ -102,6 +116,25 @@ def denominations_for(args: argparse.Namespace, scene_type: str) -> str:
     if lower.startswith("thin_slice_khr_"):
         return f"KHR_{lower.rsplit('_', 1)[-1]}"
     return ""
+
+
+def validate_scene_types(args: argparse.Namespace, images_dir: Path, images: list[Path]) -> None:
+    if args.allow_unknown_scene_type:
+        return
+    allowed = allowed_scene_types(resolve(args.requirements))
+    if not allowed:
+        return
+    scene_types = {scene_type_for(args, images_dir, image) for image in images}
+    if args.scene_type and not args.scene_type_from_parent:
+        scene_types.add(args.scene_type)
+    unknown = sorted(scene_type for scene_type in scene_types if scene_type not in allowed)
+    if unknown:
+        allowed_text = ", ".join(sorted(allowed))
+        unknown_text = ", ".join(unknown)
+        raise SystemExit(
+            f"Unknown scene_type value(s): {unknown_text}. "
+            f"Use one of: {allowed_text}. Pass --allow-unknown-scene-type to override."
+        )
 
 
 def make_rows(args: argparse.Namespace, images_dir: Path, images: list[Path], existing: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -147,9 +180,11 @@ def main() -> None:
     images_dir = resolve(args.images_dir)
     if not images_dir.exists() or not images_dir.is_dir():
         raise SystemExit(f"images-dir not found: {args.images_dir}")
+    images = iter_images(images_dir, args.recursive)
+    validate_scene_types(args, images_dir, images)
     inventory = resolve(args.inventory)
     existing = read_existing(inventory)
-    rows = make_rows(args, images_dir, iter_images(images_dir, args.recursive), existing)
+    rows = make_rows(args, images_dir, images, existing)
     print(f"new_rows={len(rows)} inventory={repo_path(inventory)}")
     for row in rows:
         print(",".join(row[field] for field in FIELDNAMES))
