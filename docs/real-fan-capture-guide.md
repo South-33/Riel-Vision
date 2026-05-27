@@ -33,6 +33,8 @@ lr python scripts/register_capture_photos.py --images-dir data/inbox/real_partia
 lr python scripts/check_capture_requirements.py
 ```
 
+When registering recursively from the inbox root, `thin_slice_khr_5000` and `thin_slice_khr_20000` folders automatically fill `denominations` if no shared `--denominations` value is supplied.
+
 ## Label Rules
 
 - One label per visible bill region, not the hidden full bill.

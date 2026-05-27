@@ -101,6 +101,7 @@ def root_guide_text(rows: list[dict[str, str]], out_dir: Path) -> str:
             "After adding photos, register them with:",
             f"lr python scripts/register_capture_photos.py --images-dir {repo_path(out_dir)} --recursive --scene-type-from-parent --dry-run",
             f"lr python scripts/register_capture_photos.py --images-dir {repo_path(out_dir)} --recursive --scene-type-from-parent",
+            "Thin-slice folder names auto-fill their KHR denomination during registration.",
             "",
             "Then check remaining gaps with:",
             "lr python scripts/check_capture_requirements.py",

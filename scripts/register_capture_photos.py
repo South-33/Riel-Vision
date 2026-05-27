@@ -95,6 +95,15 @@ def scene_type_for(args: argparse.Namespace, images_dir: Path, image: Path) -> s
     return image.parent.name
 
 
+def denominations_for(args: argparse.Namespace, scene_type: str) -> str:
+    if args.denominations:
+        return args.denominations
+    lower = scene_type.lower()
+    if lower.startswith("thin_slice_khr_"):
+        return f"KHR_{lower.rsplit('_', 1)[-1]}"
+    return ""
+
+
 def make_rows(args: argparse.Namespace, images_dir: Path, images: list[Path], existing: list[dict[str, str]]) -> list[dict[str, str]]:
     used_ids = {row.get("image_id", "") for row in existing}
     existing_paths = {row.get("local_path", "") for row in existing}
@@ -104,17 +113,18 @@ def make_rows(args: argparse.Namespace, images_dir: Path, images: list[Path], ex
         local_path = repo_path(image)
         if local_path in existing_paths:
             continue
+        scene_type = scene_type_for(args, images_dir, image)
         base = slug(f"{prefix}_{image.stem}" if prefix else image.stem)
         rows.append(
             {
                 "image_id": unique_id(base, used_ids),
                 "local_path": local_path,
-                "scene_type": scene_type_for(args, images_dir, image),
+                "scene_type": scene_type,
                 "rights_status": args.rights_status,
                 "source_credit": args.source_credit,
                 "train_allowed": args.train_allowed,
                 "label_status": args.label_status,
-                "denominations": args.denominations,
+                "denominations": denominations_for(args, scene_type),
                 "notes": args.notes,
             }
         )
