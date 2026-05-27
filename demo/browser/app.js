@@ -269,14 +269,24 @@ async function classifyFragments(detections) {
   if (!detections.length) {
     return detections;
   }
-  const tensor = preprocessClassifierBatch(state.image, detections);
+  const eligible = detections
+    .map((detection, index) => ({ detection, index }))
+    .filter((item) => item.detection.detectorName.startsWith("KHR_"));
+  if (!eligible.length) {
+    return detections;
+  }
+  const tensor = preprocessClassifierBatch(
+    state.image,
+    eligible.map((item) => item.detection),
+  );
   const feeds = { [state.classifierSession.inputNames[0]]: tensor };
   const outputs = await state.classifierSession.run(feeds);
   const logits = outputs[state.classifierSession.outputNames[0]];
   const fragmentClassNames = state.config?.fragment_classifier?.classes ?? ["KHR_1000", "KHR_10000", "KHR_20000", "KHR_5000"];
   const classCount = fragmentClassNames.length;
-  return detections.map((detection, index) => {
-    const probs = softmaxRow(logits.data, index * classCount, classCount);
+  const classified = [...detections];
+  eligible.forEach(({ detection, index }, batchIndex) => {
+    const probs = softmaxRow(logits.data, batchIndex * classCount, classCount);
     let bestIndex = 0;
     for (let i = 1; i < probs.length; i += 1) {
       if (probs[i] > probs[bestIndex]) {
@@ -286,9 +296,8 @@ async function classifyFragments(detections) {
     const fragmentName = fragmentClassNames[bestIndex];
     const fragmentScore = probs[bestIndex];
     const overrideConf = state.config?.fusion?.detector_override_confidence ?? 0.17;
-    const fragmentEligible = detection.detectorName.startsWith("KHR_");
-    const useDetector = !fragmentEligible || detection.detectorScore >= overrideConf;
-    return {
+    const useDetector = detection.detectorScore >= overrideConf;
+    classified[index] = {
       ...detection,
       fragmentName,
       fragmentScore,
@@ -296,6 +305,7 @@ async function classifyFragments(detections) {
       score: useDetector ? detection.detectorScore : fragmentScore,
     };
   });
+  return classified;
 }
 
 function boxIou(a, b) {
@@ -413,6 +423,7 @@ async function runModel() {
     detectorOutputDims: output.dims,
     proposals: proposals.length,
     classified: classified.length,
+    fragmentClassified: classified.filter((detection) => detection.fragmentName).length,
     final: state.detections.length,
   };
   renderDetections();
