@@ -11,18 +11,27 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INVENTORY = ROOT / "manifests" / "real_partial_capture_inventory.csv"
 DEFAULT_REQUIREMENTS = ROOT / "manifests" / "real_partial_capture_requirements.csv"
 DEFAULT_INBOX = ROOT / "data" / "inbox" / "real_partial_photos"
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Check real partial-note capture inventory against CashSnap needs.")
     parser.add_argument("--inventory", type=Path, default=DEFAULT_INVENTORY)
     parser.add_argument("--requirements", type=Path, default=DEFAULT_REQUIREMENTS)
+    parser.add_argument("--inbox", type=Path, default=DEFAULT_INBOX, help="Inbox folder to scan for unregistered images.")
     parser.add_argument("--strict", action="store_true", help="Exit non-zero when requirements are not met.")
     return parser.parse_args()
 
 
 def resolve(path: Path) -> Path:
     return path if path.is_absolute() else ROOT / path
+
+
+def repo_path(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(ROOT).as_posix()
+    except ValueError:
+        return str(path)
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
@@ -63,10 +72,23 @@ def image_ok(row: dict[str, str]) -> tuple[bool, str]:
     return True, ""
 
 
+def inbox_images(inbox: Path) -> list[str]:
+    inbox = resolve(inbox)
+    if not inbox.exists():
+        return []
+    return sorted(
+        repo_path(path)
+        for path in inbox.rglob("*")
+        if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
+    )
+
+
 def main() -> None:
     args = parse_args()
     rows = read_csv(args.inventory)
     requirements = read_csv(args.requirements)
+    registered_paths = {row.get("local_path", "").strip() for row in rows}
+    unregistered_inbox = [path for path in inbox_images(args.inbox) if path not in registered_paths]
     usable_rows: list[dict[str, str]] = []
     errors: list[str] = []
     for row in rows:
@@ -77,7 +99,7 @@ def main() -> None:
             errors.append(f"{row.get('image_id', '<missing image_id>')}: {error}")
 
     unmet = False
-    print(f"inventory_rows={len(rows)} usable_rows={len(usable_rows)}")
+    print(f"inventory_rows={len(rows)} usable_rows={len(usable_rows)} unregistered_inbox_images={len(unregistered_inbox)}")
     for req in requirements:
         count = sum(1 for row in usable_rows if row_matches(row, req["match_column"], req["match_value"]))
         minimum = int(req["min_images"])
@@ -91,7 +113,14 @@ def main() -> None:
         print("Inventory issues:")
         for error in errors:
             print(f"- {error}")
-    if args.strict and (unmet or errors):
+    if unregistered_inbox:
+        print("Unregistered inbox images:")
+        for path in unregistered_inbox[:20]:
+            print(f"- {path}")
+        if len(unregistered_inbox) > 20:
+            print(f"- ... {len(unregistered_inbox) - 20} more")
+        print("Register dropped photos with scripts/register_capture_photos.py before trusting requirement counts.")
+    if args.strict and (unmet or errors or unregistered_inbox):
         raise SystemExit(1)
 
 
