@@ -15,6 +15,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--requirements", type=Path, default=DEFAULT_REQUIREMENTS)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--include-optional", action="store_true", help="Also create optional scene folders.")
+    parser.add_argument("--write-guides", action="store_true", help="Write a short .capture_guide.txt in each folder.")
     parser.add_argument("--dry-run", action="store_true", help="Print folders without creating them.")
     return parser.parse_args()
 
@@ -34,8 +35,9 @@ def is_required(row: dict[str, str]) -> bool:
     return row.get("required", "yes").strip().lower() not in {"0", "false", "no", "optional"}
 
 
-def scene_folders(requirements: Path, include_optional: bool) -> list[str]:
-    folders: list[str] = []
+def scene_requirements(requirements: Path, include_optional: bool) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    seen: set[str] = set()
     with requirements.open("r", newline="", encoding="utf-8") as handle:
         for row in csv.DictReader(handle):
             if row.get("match_column") != "scene_type":
@@ -43,22 +45,61 @@ def scene_folders(requirements: Path, include_optional: bool) -> list[str]:
             if not include_optional and not is_required(row):
                 continue
             folder = row.get("match_value", "").strip()
-            if folder and folder not in folders:
-                folders.append(folder)
-    return folders
+            if folder and folder not in seen:
+                rows.append(row)
+                seen.add(folder)
+    return rows
+
+
+def denomination_hint(scene_type: str) -> str:
+    lower = scene_type.lower()
+    if lower.startswith("thin_slice_khr_"):
+        return f" --denominations \"KHR_{lower.rsplit('_', 1)[-1]}\""
+    if lower == "single_khr":
+        return " --denominations \"KHR_...\""
+    if lower == "mixed_usd_khr":
+        return " --denominations \"KHR_...;USD_...\""
+    return ""
+
+
+def guide_text(row: dict[str, str], folder_path: Path) -> str:
+    scene_type = row["match_value"].strip()
+    register_hint = (
+        "lr python scripts/register_capture_photos.py "
+        f"--images-dir {repo_path(folder_path)} --scene-type {scene_type}"
+        f"{denomination_hint(scene_type)} --dry-run"
+    )
+    return "\n".join(
+        [
+            f"CashSnap capture inbox: {scene_type}",
+            f"Requirement: {row['description']}",
+            f"Minimum usable images: {row['min_images']}",
+            f"Notes: {row.get('notes', '').strip()}",
+            "",
+            "Drop rights-clear phone photos for this scene in this folder.",
+            "Keep faces, IDs, cards, receipts, screens, and location details out of frame.",
+            "",
+            "Registration dry run:",
+            register_hint,
+            "",
+        ]
+    )
 
 
 def main() -> None:
     args = parse_args()
     requirements = resolve(args.requirements)
     out_dir = resolve(args.out_dir)
-    folders = scene_folders(requirements, args.include_optional)
-    print(f"out_dir={repo_path(out_dir)} folders={len(folders)}")
-    for folder in folders:
+    rows = scene_requirements(requirements, args.include_optional)
+    print(f"out_dir={repo_path(out_dir)} folders={len(rows)}")
+    for row in rows:
+        folder = row["match_value"].strip()
         path = out_dir / folder
         print(repo_path(path))
         if not args.dry_run:
             path.mkdir(parents=True, exist_ok=True)
+            if args.write_guides:
+                (path / ".capture_guide.txt").write_text(guide_text(row, path), encoding="utf-8")
 
 
 if __name__ == "__main__":

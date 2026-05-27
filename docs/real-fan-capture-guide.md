@@ -20,11 +20,11 @@ Capture each scene with normal phone distance and lighting:
 - Keep faces, IDs, cards, receipts, screens, GPS signs, and other private details out of frame.
 - Take the photo yourself or record rights/source clearly; do not scrape random copyrighted images into the benchmark.
 - Include at least one image for `KHR_20000` and `KHR_50000` if those bills are available, because they remain weak classes.
-- Track new photos in `manifests/real_partial_capture_inventory.csv` and run `scripts/check_capture_requirements.py` to see which scene/denomination gaps remain; missing scene rows print the matching `data/inbox/real_partial_photos/` drop folder.
+- Track new photos in `manifests/real_partial_capture_inventory.csv` and run `scripts/check_capture_requirements.py` to see which scene/denomination gaps remain; missing scene rows print the matching `data/inbox/real_partial_photos/` drop folder. Use `init_capture_inbox.py --write-guides` when setting up folders so each ignored drop folder includes a small local capture and registration note.
 
 ```powershell
 lr python scripts/init_capture_inbox.py --dry-run
-lr python scripts/init_capture_inbox.py
+lr python scripts/init_capture_inbox.py --write-guides
 lr python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos --scene-type hand_fan --denominations "KHR_5000;KHR_10000" --dry-run
 lr python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos --scene-type hand_fan --denominations "KHR_5000;KHR_10000"
 lr python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos --scene-type thin_slice_khr_5000 --denominations "KHR_5000" --dry-run
