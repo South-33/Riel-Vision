@@ -3,7 +3,7 @@ Duplicate image checker for CashSnap datasets.
 
 Two-pass approach:
   1. Exact duplicates  - SHA-256 hash of raw file bytes (catches identical files)
-  2. Near-duplicates   - perceptual hash (pHash, 8x8 DCT) with Hamming distance <= threshold
+  2. Near-duplicates   - perceptual hash (dHash, 8x8) with Hamming distance <= threshold
                          (catches resized, recompressed, or slightly-cropped copies)
 
 Usage:
@@ -15,7 +15,7 @@ Usage:
 Output:
     data/dedup/duplicate_report.json   - full machine-readable report
     data/dedup/exact_duplicates.csv    - exact dup pairs
-    data/dedup/near_duplicates.csv     - near-dup pairs (cross-dataset only by default)
+    data/dedup/near_duplicates.csv     - near-dup pairs
 """
 from __future__ import annotations
 
@@ -70,38 +70,20 @@ def infer_split(path: Path, dataset_dir: Path) -> str:
     return "unknown"
 
 
-def phash(path: Path) -> int | None:
+def perceptual_hash(path: Path) -> int | None:
     """Return 64-bit perceptual hash as int, or None on failure."""
     try:
         from PIL import Image
-        import struct, math
 
-        img = Image.open(path).convert("L").resize((32, 32), Image.LANCZOS)
-        pixels = list(img.getdata())
-        # DCT-based perceptual hash (8x8 from 32x32 DCT)
-        size = 32
-        dct_size = 8
-        # compute 2D DCT manually (small size so ok)
-        dct = [[0.0] * size for _ in range(size)]
-        for u in range(size):
-            for v in range(size):
-                val = 0.0
-                for x in range(size):
-                    for y in range(size):
-                        val += (pixels[x * size + y]
-                                * math.cos((2 * x + 1) * u * math.pi / (2 * size))
-                                * math.cos((2 * y + 1) * v * math.pi / (2 * size)))
-                cu = (1 / math.sqrt(2)) if u == 0 else 1.0
-                cv = (1 / math.sqrt(2)) if v == 0 else 1.0
-                dct[u][v] = (2 / size) * cu * cv * val
-
-        # Take top-left 8x8 (excluding [0,0] DC component)
-        dct_low = [dct[u][v] for u in range(dct_size) for v in range(dct_size)]
-        avg = (sum(dct_low) - dct_low[0]) / (dct_size * dct_size - 1)
-        bits = [(1 if d > avg else 0) for d in dct_low]
         result = 0
-        for b in bits:
-            result = (result << 1) | b
+        with Image.open(path) as image:
+            img = image.convert("L").resize((9, 8), Image.LANCZOS)
+            data_getter = getattr(img, "get_flattened_data", img.getdata)
+            pixels = list(data_getter())
+        for y in range(8):
+            row = y * 9
+            for x in range(8):
+                result = (result << 1) | int(pixels[row + x] > pixels[row + x + 1])
         return result
     except Exception:
         return None
@@ -109,6 +91,11 @@ def phash(path: Path) -> int | None:
 
 def hamming(a: int, b: int) -> int:
     return bin(a ^ b).count("1")
+
+
+def original_stem(path: Path) -> str:
+    """Return Roboflow source stem before the .rf.<hash> suffix when present."""
+    return path.stem.split(".rf.", 1)[0]
 
 
 def collect_images(dataset_name: str, dataset_dir: Path) -> list[tuple[str, str, Path]]:
@@ -155,6 +142,8 @@ def main() -> None:
                         help="Limit to a configured dataset name; repeat to include more than one")
     parser.add_argument("--list-datasets", action="store_true",
                         help="Print configured dataset names and exit")
+    parser.add_argument("--max-near-images", type=int, default=5000,
+                        help="Refuse near-duplicate pairwise comparison above this image count; use 0 to disable")
     args = parser.parse_args()
 
     if args.list_datasets:
@@ -183,10 +172,13 @@ def main() -> None:
     # -- Pass 1: Exact duplicates -----------------------------------------------
     print("Pass 1: Exact duplicates (SHA-256)...")
     hash_to_images: dict[str, list[tuple[str, str, Path]]] = defaultdict(list)
+    file_hashes: dict[Path, str] = {}
     for i, (ds, split, path) in enumerate(all_images):
         if i % 500 == 0:
             print(f"  Hashing {i}/{len(all_images)}...", end="\r")
-        hash_to_images[sha256(path)].append((ds, split, path))
+        digest = sha256(path)
+        file_hashes[path] = digest
+        hash_to_images[digest].append((ds, split, path))
 
     exact_groups = {h: imgs for h, imgs in hash_to_images.items() if len(imgs) > 1}
     exact_rows = []
@@ -231,16 +223,24 @@ def main() -> None:
     # -- Pass 2: Near-duplicates (perceptual hash) ------------------------------
     near_rows = []
     near_cross_count = 0
+    near_cross_split_count = 0
+    near_same_original_count = 0
+    near_cross_split_same_original_count = 0
 
     if not args.exact_only:
-        print(f"\nPass 2: Near-duplicates (pHash, threshold={args.threshold})...")
+        if args.max_near_images and len(all_images) > args.max_near_images:
+            raise SystemExit(
+                f"Refusing near-duplicate comparison for {len(all_images)} images. "
+                "Use --dataset to narrow the scan or raise --max-near-images intentionally."
+            )
+        print(f"\nPass 2: Near-duplicates (dHash, threshold={args.threshold})...")
         print("  Computing perceptual hashes (this may take a few minutes)...")
 
         phashes: list[tuple[str, str, Path, int]] = []
         for i, (ds, split, path) in enumerate(all_images):
             if i % 200 == 0:
-                print(f"  pHashing {i}/{len(all_images)}...", end="\r")
-            ph = phash(path)
+                print(f"  dHashing {i}/{len(all_images)}...", end="\r")
+            ph = perceptual_hash(path)
             if ph is not None:
                 phashes.append((ds, split, path, ph))
 
@@ -262,33 +262,50 @@ def main() -> None:
                 dist = hamming(ph_a, ph_b)
                 if dist <= args.threshold:
                     # Skip exact duplicates already caught in pass 1
-                    if sha256(path_a) == sha256(path_b):
+                    if file_hashes[path_a] == file_hashes[path_b]:
                         continue
                     near_pairs.append((ds_a, split_a, path_a, ds_b, split_b, path_b, dist))
 
         for ds_a, split_a, path_a, ds_b, split_b, path_b, dist in near_pairs:
             is_cross = ds_a != ds_b
             is_cross_split = (ds_a, split_a) != (ds_b, split_b)
+            source_stem_a = original_stem(path_a)
+            source_stem_b = original_stem(path_b)
+            same_original_stem = source_stem_a == source_stem_b
             if is_cross:
                 near_cross_count += 1
+            if is_cross_split:
+                near_cross_split_count += 1
+            if same_original_stem:
+                near_same_original_count += 1
+            if same_original_stem and is_cross_split:
+                near_cross_split_same_original_count += 1
             near_rows.append({
                 "dataset_a": ds_a,
                 "split_a": split_a,
                 "file_a": str(path_a.relative_to(ROOT)),
+                "source_stem_a": source_stem_a,
                 "dataset_b": ds_b,
                 "split_b": split_b,
                 "file_b": str(path_b.relative_to(ROOT)),
+                "source_stem_b": source_stem_b,
                 "hamming_distance": dist,
                 "cross_dataset": is_cross,
                 "cross_split": is_cross_split,
+                "same_original_stem": same_original_stem,
             })
 
         print(f"\n  Near-duplicate pairs:           {len(near_pairs)}")
         print(f"  Cross-dataset near-dup pairs:   {near_cross_count}")
+        print(f"  Cross-split near-dup pairs:     {near_cross_split_count}")
+        print(f"  Same-original near-dup pairs:   {near_same_original_count}")
+        print(f"  Cross-split same-original pairs: {near_cross_split_same_original_count}")
         write_csv(out_dir / "near_duplicates.csv", near_rows,
                   [
-                      "dataset_a", "split_a", "file_a", "dataset_b", "split_b", "file_b",
+                      "dataset_a", "split_a", "file_a", "source_stem_a",
+                      "dataset_b", "split_b", "file_b", "source_stem_b",
                       "hamming_distance", "cross_dataset", "cross_split",
+                      "same_original_stem",
                   ])
     else:
         print("\nSkipped perceptual hashing (--exact-only)")
@@ -303,6 +320,9 @@ def main() -> None:
         "near_duplicate_threshold": args.threshold,
         "near_duplicate_pairs": len(near_rows),
         "near_cross_dataset_pairs": near_cross_count,
+        "near_cross_split_pairs": near_cross_split_count,
+        "near_same_original_stem_pairs": near_same_original_count,
+        "near_cross_split_same_original_stem_pairs": near_cross_split_same_original_count,
         "outputs": {
             "exact_duplicates_csv": str((out_dir / "exact_duplicates.csv").relative_to(ROOT)),
             "near_duplicates_csv": str((out_dir / "near_duplicates.csv").relative_to(ROOT)),
@@ -315,14 +335,16 @@ def main() -> None:
     print(f"Exact dup groups (cross-ds):    {exact_cross_count}")
     print(f"Exact dup groups (cross-split): {exact_cross_split_count}")
     print(f"Near-dup pairs (cross-ds):      {near_cross_count}")
+    print(f"Near-dup pairs (cross-split):   {near_cross_split_count}")
+    print(f"Near-dup pairs (same original): {near_same_original_count}")
+    print(f"Near cross-split same original: {near_cross_split_same_original_count}")
     print(f"\nReports saved to: {out_dir}")
 
-    if exact_cross_count > 0 or near_cross_count > 0:
-        print("\nACTION: Review cross-dataset duplicates and exclude them from the merge.")
-        print("        Update REMAP in prepare_cashsnap_dataset.py to skip dup files,")
-        print("        or deduplicate at the source level before merging.")
+    if exact_cross_count > 0 or exact_cross_split_count > 0 or near_cross_count > 0 or near_cross_split_count > 0:
+        print("\nACTION: Review cross-dataset or cross-split duplicates before trusting validation splits.")
+        print("        Exclude confirmed leakage from the merge or deduplicate at the source level.")
     else:
-        print("\nNo cross-dataset duplicates found. Safe to merge all sources.")
+        print("\nNo cross-dataset or cross-split duplicates found by the configured checks.")
 
 
 if __name__ == "__main__":
