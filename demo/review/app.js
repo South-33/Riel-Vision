@@ -23,6 +23,8 @@ const state = {
 const manifestPath = document.getElementById("manifestPath");
 const loadButton = document.getElementById("loadButton");
 const exportButton = document.getElementById("exportButton");
+const pairFilter = document.getElementById("pairFilter");
+const sideFilter = document.getElementById("sideFilter");
 const includedOnly = document.getElementById("includedOnly");
 const summary = document.getElementById("summary");
 const grid = document.getElementById("grid");
@@ -74,6 +76,14 @@ function csvEscape(value) {
   return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
+function htmlEscape(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
 function toCsv(headers, rows) {
   return [headers.join(","), ...rows.map((row) => headers.map((header) => csvEscape(row[header])).join(","))].join("\n");
 }
@@ -99,10 +109,42 @@ function rowMeta(row) {
   return { title, detail };
 }
 
+function uniqueValues(key) {
+  return [...new Set(state.rows.map((row) => row[key]).filter(Boolean))].sort();
+}
+
+function setOptions(select, label, values) {
+  select.innerHTML = [
+    `<option value="">${label}</option>`,
+    ...values.map((value) => `<option value="${htmlEscape(value)}">${htmlEscape(value)}</option>`),
+  ].join("");
+  select.disabled = values.length === 0;
+}
+
+function refreshFilters() {
+  setOptions(pairFilter, "All pairs", uniqueValues("failure_pair"));
+  setOptions(sideFilter, "All sides", uniqueValues("side"));
+}
+
+function visibleRows() {
+  return state.rows.filter((row) => {
+    if (includedOnly.checked && !row.review_include) {
+      return false;
+    }
+    if (pairFilter.value && row.failure_pair !== pairFilter.value) {
+      return false;
+    }
+    if (sideFilter.value && row.side !== sideFilter.value) {
+      return false;
+    }
+    return true;
+  });
+}
+
 function render() {
-  const rows = includedOnly.checked ? state.rows.filter((row) => row.review_include) : state.rows;
+  const rows = visibleRows();
   const included = state.rows.filter((row) => row.review_include).length;
-  summary.textContent = `${state.rows.length} rows, ${included} included`;
+  summary.textContent = `${rows.length}/${state.rows.length} rows visible, ${included} included`;
   grid.innerHTML = "";
   for (const row of rows) {
     const card = document.createElement("article");
@@ -154,6 +196,7 @@ async function loadManifest() {
     }
     state.rows = parsed.rows;
     exportButton.disabled = false;
+    refreshFilters();
     render();
   } catch (error) {
     summary.textContent = `Load failed: ${error.message}`;
@@ -174,6 +217,8 @@ function exportCsv() {
 loadButton.addEventListener("click", loadManifest);
 exportButton.addEventListener("click", exportCsv);
 includedOnly.addEventListener("change", render);
+pairFilter.addEventListener("change", render);
+sideFilter.addEventListener("change", render);
 
 const params = new URLSearchParams(window.location.search);
 const initialManifest = params.get("manifest");

@@ -55,7 +55,7 @@ textarea {
 
 .controls {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) auto auto;
+  grid-template-columns: minmax(240px, 1fr) auto minmax(140px, auto) minmax(120px, auto) auto;
   gap: 10px;
   align-items: center;
 }
@@ -124,6 +124,15 @@ button:disabled {
   gap: 8px;
   color: #596674;
   font-size: 12px;
+}
+
+.meta span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.meta span:last-child {
+  text-align: right;
 }
 
 .row {
