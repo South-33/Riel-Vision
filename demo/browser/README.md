@@ -33,6 +33,7 @@ lr python scripts/run_with_headroom.py --interval 2 --max-percent 90 --resume-pe
 ```
 
 This writes per-case screenshots, detection CSVs, and `summary.json` under `.agent/browser_smoke_cases/`. The case runner uses ports starting at `8877` and Edge debug ports starting at `9323` so it can run while the usual `8787` review server is in use.
+Use `python scripts/run_browser_smoke_cases.py --validate-only` for a quick manifest/path check that does not launch Edge.
 
 The demo reads `configs/cashsnap_two_stage_oldcommon_browser_stack.json`, then loads:
 

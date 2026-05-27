@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CASES = ROOT / "manifests" / "browser_smoke_cases.csv"
 DEFAULT_OUT_DIR = ROOT / ".agent" / "browser_smoke_cases"
+NUMERIC_FIELDS = ["min_same_class", "min_any_class", "max_khr_error", "max_usd_error"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -21,6 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--debug-port-base", type=int, default=9323, help="First Edge DevTools port for smoke cases.")
     parser.add_argument("--edge", default="", help="Optional Edge executable path forwarded to the node smoke script.")
     parser.add_argument("--summary-json", type=Path, help="Optional aggregate JSON summary output path.")
+    parser.add_argument("--validate-only", action="store_true", help="Validate the case manifest without launching Edge.")
     parser.add_argument("--no-artifacts", action="store_true", help="Do not write per-case screenshots or detection CSVs.")
     return parser.parse_args()
 
@@ -39,6 +41,33 @@ def repo_path(path: Path) -> str:
 def read_cases(path: Path) -> list[dict[str, str]]:
     with resolve(path).open("r", newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle))
+
+
+def repo_or_url_path(value: str) -> Path:
+    if value.startswith("/"):
+        return ROOT / value.lstrip("/")
+    return resolve(Path(value))
+
+
+def validate_case(case: dict[str, str], index: int) -> None:
+    prefix = f"case row {index + 2}"
+    for field in ["case_id", "image", "labels"]:
+        if not case.get(field, "").strip():
+            raise ValueError(f"{prefix}: missing {field}")
+    image_path = repo_or_url_path(case["image"].strip())
+    if not image_path.exists():
+        raise ValueError(f"{case['case_id']}: image not found: {case['image']}")
+    labels_path = resolve(Path(case["labels"].strip()))
+    if not labels_path.exists():
+        raise ValueError(f"{case['case_id']}: labels not found: {case['labels']}")
+    for field in NUMERIC_FIELDS:
+        value = case.get(field, "").strip()
+        if not value:
+            continue
+        try:
+            float(value)
+        except ValueError as exc:
+            raise ValueError(f"{case['case_id']}: {field} must be numeric, got {value!r}") from exc
 
 
 def add_optional_number(command: list[str], flag: str, value: str) -> None:
@@ -60,9 +89,9 @@ def command_for_case(case: dict[str, str], args: argparse.Namespace, index: int)
         "node",
         "scripts/smoke_browser_demo_cdp.cjs",
         "--image",
-        case["image"],
+        case["image"].strip(),
         "--labels",
-        case["labels"],
+        case["labels"].strip(),
         "--port",
         str(args.port_base + index),
         "--debug-port",
@@ -95,6 +124,11 @@ def main() -> None:
     cases = read_cases(args.cases)
     if not cases:
         raise SystemExit(f"no smoke cases found in {resolve(args.cases).relative_to(ROOT)}")
+    for index, case in enumerate(cases):
+        validate_case(case, index)
+    if args.validate_only:
+        print(f"validated {len(cases)} browser smoke case(s)")
+        return
     if not args.no_artifacts:
         resolve(args.out_dir).mkdir(parents=True, exist_ok=True)
 
