@@ -14,6 +14,7 @@ data/fragment_classifier*/
 data/real_fan_benchmark/
 data/review/
 data/sampled/
+data/inbox/
 
 # Keep manifests and reproducible scripts in git; keep downloaded/generated data local.
 
