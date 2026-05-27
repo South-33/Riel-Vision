@@ -43,6 +43,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-box-area", type=float, default=None, help="Minimum normalized bbox area.")
     parser.add_argument("--max-box-area", type=float, default=None, help="Maximum normalized bbox area.")
     parser.add_argument("--select", choices=["random", "smallest", "largest"], default="random")
+    parser.add_argument(
+        "--canonicalize-roboflow-currency",
+        action="store_true",
+        help="Map raw names like 20000-riel-b to review_class=KHR_20000 while preserving side metadata.",
+    )
     parser.add_argument("--clean", action="store_true")
     return parser.parse_args()
 
@@ -145,6 +150,34 @@ def item_area_frac(item: CropItem) -> float:
     x1, y1, x2, y2 = item.xyxy
     image_w, image_h = item.image_size
     return ((x2 - x1) * (y2 - y1)) / max(1, image_w * image_h)
+
+
+def roboflow_currency_metadata(class_name: str, canonicalize: bool) -> dict[str, str]:
+    if not canonicalize:
+        return {
+            "currency": "",
+            "denomination": "",
+            "side": "",
+            "canonical_class": class_name,
+            "review_class": class_name,
+        }
+    parts = class_name.lower().split("-")
+    side = {"f": "front", "b": "back"}.get(parts[-1] if parts else "", "unknown")
+    amount = next((part for part in parts if part.isdigit()), "")
+    if "riel" in parts:
+        currency = "KHR"
+    elif "us" in parts:
+        currency = "USD"
+    else:
+        currency = ""
+    canonical_class = f"{currency}_{amount}" if currency and amount else class_name
+    return {
+        "currency": currency,
+        "denomination": amount,
+        "side": side,
+        "canonical_class": canonical_class,
+        "review_class": canonical_class,
+    }
 
 
 def read_items(
@@ -264,6 +297,7 @@ def main() -> None:
                         "split": item.split,
                         "class_id": str(item.class_id),
                         "class_name": class_name,
+                        **roboflow_currency_metadata(class_name, args.canonicalize_roboflow_currency),
                         "source_image": str(item.image_path.relative_to(ROOT)),
                         "crop_path": str(crop_path.relative_to(ROOT)),
                         "label_index": str(item.label_index),
@@ -271,7 +305,6 @@ def main() -> None:
                         "padded_xyxy": " ".join(str(value) for value in box),
                         "box_area_frac": f"{((x2 - x1) * (y2 - y1)) / max(1, image_w * image_h):.6f}",
                         "review_include": "",
-                        "review_class": class_name,
                         "review_notes": "",
                     }
                 )
@@ -284,6 +317,10 @@ def main() -> None:
             "split",
             "class_id",
             "class_name",
+            "currency",
+            "denomination",
+            "side",
+            "canonical_class",
             "source_image",
             "crop_path",
             "label_index",
