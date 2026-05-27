@@ -71,6 +71,7 @@ Living doc for high-value ideas, experiments, and results. Keep this short: only
 - Ultralytics ONNX Runtime on the same detector artifact reaches 6/6 detector same-class at `416/conf=0.05`; remaining browser work should inspect classifier crop/preprocessing parity and data quality, not re-export blindly.
 - `scripts/debug_onnx_detector_preprocess.py` shows detector ONNX preprocessing sensitivity on the shop-overlap image: `cv2` resize gives 13 proposals, while PIL-style resize gives 8 and introduces `USD_100`; the browser now uses a custom cv2-like detector resizer.
 - Browser `createImageBitmap(... resizeQuality: "high")` resize was tried and reverted because it worsened the shop-overlap smoke to `KHR 51,000` plus `USD_100`; do not retry that as the parity fix.
+- A custom browser classifier crop resizer was tried and reverted because it worsened the shop-overlap smoke to `KHR 91,000`; keep the detector resizer, but leave classifier crops on canvas until a better parity target exists.
 - Follow-up web/Hugging Face/Roboflow searches after the audit did not find a better KHR partial/fan dataset; stop broad hunting for now and spend effort on curation or rights-clear phone captures.
 
 ## Data Gaps
