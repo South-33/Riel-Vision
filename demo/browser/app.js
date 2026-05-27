@@ -46,6 +46,8 @@ const state = {
   image: null,
   detections: [],
   conf: 0.05,
+  autoRunRequested: false,
+  autoRunDone: false,
 };
 
 const canvas = document.getElementById("imageCanvas");
@@ -82,6 +84,7 @@ async function loadModel() {
     modelStatus.textContent = "Models ready";
     modelStatus.className = "status ready";
     updateRunState();
+    maybeAutoRun();
   } catch (error) {
     modelStatus.textContent = "Model load failed";
     modelStatus.className = "status error";
@@ -91,6 +94,13 @@ async function loadModel() {
 
 function updateRunState() {
   runButton.disabled = !state.detectorSession || !state.classifierSession || !state.image;
+}
+
+function maybeAutoRun() {
+  if (state.autoRunRequested && !state.autoRunDone && state.detectorSession && state.classifierSession && state.image) {
+    state.autoRunDone = true;
+    runModel();
+  }
 }
 
 function repoUrl(path) {
@@ -329,6 +339,25 @@ function renderSummary() {
   }
 }
 
+function setLoadedImage(image) {
+  state.image = image;
+  state.detections = [];
+  emptyState.classList.add("hidden");
+  drawBaseImage();
+  renderSummary();
+  updateRunState();
+  maybeAutoRun();
+}
+
+function loadImageUrl(path) {
+  const image = new Image();
+  image.onload = () => setLoadedImage(image);
+  image.onerror = () => {
+    emptyState.textContent = `Image load failed: ${path}`;
+  };
+  image.src = repoUrl(path);
+}
+
 async function runModel() {
   if (!state.detectorSession || !state.classifierSession || !state.image) {
     return;
@@ -355,12 +384,8 @@ imageInput.addEventListener("change", async (event) => {
   const image = new Image();
   image.onload = () => {
     URL.revokeObjectURL(url);
-    state.image = image;
-    state.detections = [];
-    emptyState.classList.add("hidden");
-    drawBaseImage();
-    renderSummary();
-    updateRunState();
+    state.autoRunRequested = false;
+    setLoadedImage(image);
   };
   image.src = url;
 });
@@ -371,5 +396,14 @@ confSlider.addEventListener("input", () => {
 });
 
 runButton.addEventListener("click", runModel);
+
+const params = new URLSearchParams(window.location.search);
+const sampleImage = params.get("image");
+if (params.get("autorun") === "1") {
+  state.autoRunRequested = true;
+}
+if (sampleImage) {
+  loadImageUrl(sampleImage);
+}
 
 loadModel();
