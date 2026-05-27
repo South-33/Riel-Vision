@@ -14,6 +14,8 @@ Capture each scene with normal phone distance and lighting:
 - 3 thin/edge partial `KHR_5000` slices and 3 thin/edge partial `KHR_20000` slices, with a front/back mix if possible. These directly target the current old/common classifier's high-confidence partial-slice confusions.
 - Optional mixed scenes: KHR plus USD only after the KHR-only set is captured.
 
+For visual examples of the target thin/edge failure shape, regenerate `data/review/cashsnap_p1_oldcommon_partial_focus_review_v1/contact_sheet.jpg` with `scripts/build_partial_focus_review_queue.py --clean`. Use it as capture inspiration only; collect rights-clear photos rather than copying those public-data crops into the benchmark.
+
 ## Capture Rules
 
 - Use current everyday notes first; avoid old collector notes, specimen marks, souvenirs, and museum displays for the main scoreboard.
