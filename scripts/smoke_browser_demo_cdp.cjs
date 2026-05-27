@@ -4,6 +4,21 @@ const { spawn, spawnSync } = require("node:child_process");
 
 const ROOT = path.resolve(__dirname, "..");
 const DEFAULT_EDGE = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
+const CLASS_NAMES = [
+  "USD_1",
+  "USD_5",
+  "USD_10",
+  "USD_20",
+  "USD_50",
+  "USD_100",
+  "KHR_500",
+  "KHR_1000",
+  "KHR_2000",
+  "KHR_5000",
+  "KHR_10000",
+  "KHR_20000",
+  "KHR_50000",
+];
 const VALUES = {
   USD_1: 1,
   USD_5: 5,
@@ -28,6 +43,8 @@ function parseArgs(argv) {
     timeoutMs: 120000,
     screenshot: "",
     outCsv: "",
+    labels: "",
+    matchIou: 0.5,
     edge: process.env.EDGE_PATH || DEFAULT_EDGE,
   };
   for (let index = 2; index < argv.length; index += 1) {
@@ -51,6 +68,12 @@ function parseArgs(argv) {
     } else if (key === "--out-csv") {
       args.outCsv = value;
       index += 1;
+    } else if (key === "--labels") {
+      args.labels = value;
+      index += 1;
+    } else if (key === "--match-iou") {
+      args.matchIou = Number(value);
+      index += 1;
     } else if (key === "--edge") {
       args.edge = value;
       index += 1;
@@ -69,6 +92,8 @@ function printHelp() {
 
 Options:
   --image PATH        Repo-root browser image URL path.
+  --labels PATH       Optional YOLO detect labels for smoke evaluation.
+  --match-iou NUMBER  IoU threshold for --labels evaluation. Default: 0.5.
   --screenshot PATH   Optional PNG screenshot output path.
   --out-csv PATH      Optional CSV output for browser-side detections.
   --port NUMBER       Local static server port. Default: 8787.
@@ -160,7 +185,86 @@ function createCdpClient(ws) {
   };
 }
 
-function summarize(value) {
+function readYoloLabels(labelsPath, imageWidth, imageHeight) {
+  if (!labelsPath) return null;
+  const absolute = path.resolve(ROOT, labelsPath);
+  const text = fs.readFileSync(absolute, "utf8");
+  const labels = [];
+  text.split(/\r?\n/).forEach((line, lineIndex) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) return;
+    const parts = trimmed.split(/\s+/).map(Number);
+    if (parts.length !== 5 || parts.some((part) => Number.isNaN(part))) {
+      throw new Error(`${labelsPath}: line ${lineIndex + 1} must be YOLO detect format`);
+    }
+    const [classId, cx, cy, width, height] = parts;
+    labels.push({
+      classId,
+      name: CLASS_NAMES[classId] || `class_${classId}`,
+      x1: (cx - width / 2) * imageWidth,
+      y1: (cy - height / 2) * imageHeight,
+      x2: (cx + width / 2) * imageWidth,
+      y2: (cy + height / 2) * imageHeight,
+    });
+  });
+  return labels;
+}
+
+function boxIou(left, right) {
+  const x1 = Math.max(left.x1, right.x1);
+  const y1 = Math.max(left.y1, right.y1);
+  const x2 = Math.min(left.x2, right.x2);
+  const y2 = Math.min(left.y2, right.y2);
+  const intersection = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+  const leftArea = Math.max(0, left.x2 - left.x1) * Math.max(0, left.y2 - left.y1);
+  const rightArea = Math.max(0, right.x2 - right.x1) * Math.max(0, right.y2 - right.y1);
+  const union = leftArea + rightArea - intersection;
+  return union ? intersection / union : 0;
+}
+
+function greedyMatch(detections, labels, matchIou, requireSameClass) {
+  const usedLabels = new Set();
+  let matches = 0;
+  [...detections].sort((left, right) => Number(right.score || 0) - Number(left.score || 0)).forEach((detection) => {
+    let bestIndex = -1;
+    let bestIou = 0;
+    labels.forEach((label, index) => {
+      if (usedLabels.has(index)) return;
+      if (requireSameClass && detection.name !== label.name) return;
+      const iou = boxIou(detection, label);
+      if (iou > bestIou) {
+        bestIou = iou;
+        bestIndex = index;
+      }
+    });
+    if (bestIndex >= 0 && bestIou >= matchIou) {
+      usedLabels.add(bestIndex);
+      matches += 1;
+    }
+  });
+  return matches;
+}
+
+function evaluateDetections(value, args) {
+  const labels = readYoloLabels(args.labels, value.imageWidth, value.imageHeight);
+  if (!labels) return null;
+  const detections = value.detections || [];
+  const matchedSameClass = greedyMatch(detections, labels, args.matchIou, true);
+  const matchedAnyClass = greedyMatch(detections, labels, args.matchIou, false);
+  return {
+    labels: path.relative(ROOT, path.resolve(ROOT, args.labels)),
+    matchIou: args.matchIou,
+    gtCount: labels.length,
+    predCount: detections.length,
+    countError: detections.length - labels.length,
+    matchedSameClass,
+    matchedAnyClass,
+    recallSameClass: labels.length ? matchedSameClass / labels.length : 0,
+    recallAnyClass: labels.length ? matchedAnyClass / labels.length : 0,
+  };
+}
+
+function summarize(value, args) {
   const counts = {};
   let khrValue = 0;
   let usdValue = 0;
@@ -179,6 +283,7 @@ function summarize(value) {
     usdValue,
     predClasses: Object.fromEntries(Object.entries(counts).sort(([left], [right]) => left.localeCompare(right))),
     debug: value.debug || {},
+    evaluation: evaluateDetections(value, args),
     detections: value.detections || [],
   };
 }
@@ -189,6 +294,8 @@ async function readBrowserState(send, timeoutMs) {
     status: document.getElementById('modelStatus')?.textContent?.trim(),
     runButton: document.getElementById('runButton')?.textContent?.trim(),
     totalCount: document.getElementById('totalCount')?.textContent?.trim(),
+    imageWidth: typeof state !== 'undefined' && state.image ? state.image.width : 0,
+    imageHeight: typeof state !== 'undefined' && state.image ? state.image.height : 0,
     detections: typeof state !== 'undefined' ? state.detections : null,
     debug: typeof state !== 'undefined' ? state.debug : null
   }))()`;
@@ -294,7 +401,7 @@ async function main() {
     await captureScreenshot(send, args.screenshot);
     writeDetectionCsv(args.outCsv, value.detections || []);
     ws.close();
-    console.log(JSON.stringify(summarize(value), null, 2));
+    console.log(JSON.stringify(summarize(value, args), null, 2));
   } finally {
     killTree(edge);
     killTree(server);
