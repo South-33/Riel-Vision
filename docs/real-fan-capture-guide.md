@@ -1,0 +1,63 @@
+# Real Fan Capture Guide
+
+Goal: collect a small rights-clear benchmark that tests CashSnap on phone photos of current KHR/USD bills without training on those benchmark images.
+
+## Shot List
+
+Capture each scene with normal phone distance and lighting:
+
+- 5 single-note KHR photos: front/back mix, normal table background.
+- 5 simple overlap photos: 2-4 notes, denomination numerals still visible.
+- 5 hand-held fan photos: 6-15 notes, at least some visible slices must show denomination-specific text, numerals, portrait, color, or landmarks.
+- 3 hand-occlusion photos: fingers partly cover notes but do not hide all denomination evidence.
+- 3 partial off-frame photos: notes clipped by the image border.
+- Optional mixed scenes: KHR plus USD only after the KHR-only set is captured.
+
+## Capture Rules
+
+- Use current everyday notes first; avoid old collector notes, specimen marks, souvenirs, and museum displays for the main scoreboard.
+- Keep faces, IDs, cards, receipts, screens, GPS signs, and other private details out of frame.
+- Take the photo yourself or record rights/source clearly; do not scrape random copyrighted images into the benchmark.
+- Include at least one image for `KHR_20000` and `KHR_50000` if those bills are available, because they remain weak classes.
+
+## Label Rules
+
+- One label per visible bill region, not the hidden full bill.
+- Label only if a human can identify the denomination from the visible region.
+- Skip ambiguous backs or tiny slices and note the ambiguity instead of guessing.
+- Keep labels under `data/real_fan_benchmark/labels/val/` and run `scripts/check_real_fan_benchmark.py`.
+- Never train on these benchmark images.
+
+## Proposal Review Loop
+
+Use model proposals as review hints, not as ground truth. Keep draft outputs under `data/real_fan_benchmark/drafts/` and review packs under `data/review/`.
+
+For a folder of new, non-benchmark phone photos, run the full detector -> classifier -> fusion -> review-pack pipeline:
+
+```powershell
+lr python scripts/run_capture_review_pipeline.py --images-dir data/inbox/real_partial_photos --out-dir data/review/real_partial_proposal_review_v1
+```
+
+The pipeline points common ML cache environment variables at the repo-local `.cache_runtime/` folder on `D:` so it does not recreate default Torch/Hugging Face caches on `C:`.
+
+```powershell
+lr python scripts/build_proposal_review_pack.py --item data/real_fan_benchmark/images/candidates/example.jpg data/real_fan_benchmark/drafts/example_proposals.csv --out-dir data/review/example_proposal_review_v1
+```
+
+The generated `review.csv` has blank `review_include`, `review_class`, and `review_notes` columns for human curation. Only reviewed rows should become training or calibration crops, and benchmark images still must not be trained on.
+
+For faster curation, serve the repo and open the static review UI:
+
+```powershell
+lr python -m http.server 8787
+```
+
+Open `http://localhost:8787/demo/review/`, load a review CSV such as `/data/review/real_partial_proposal_review_v1/review_pack/review.csv`, mark usable crops, and export the edited CSV.
+
+After review, convert selected rows from non-benchmark capture packs into an ImageFolder classifier dataset:
+
+```powershell
+lr python scripts/build_fragment_classifier_from_review_pack.py --manifest data/review/example_proposal_review_v1/review.csv --out data/fragment_classifier_real_partial_reviewed_v1 --clean
+```
+
+Use `--include-unreviewed` only for diagnostics or smoke tests, never for final training data.

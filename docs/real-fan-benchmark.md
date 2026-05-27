@@ -2,6 +2,8 @@
 
 Purpose: measure whether CashSnap can count fanned, overlapped, hand-held currency photos, not just curated single-note or synthetic validation scenes.
 
+Capture requirements for new rights-clear phone photos live in `docs/real-fan-capture-guide.md`.
+
 ## Current Seed
 
 - `real_fan_0001_voa_commons`: copied locally to `data/real_fan_benchmark/images/candidates/real_fan_0001_voa_commons.jpg`
@@ -9,11 +11,17 @@ Purpose: measure whether CashSnap can count fanned, overlapped, hand-held curren
 - Source image: https://upload.wikimedia.org/wikipedia/commons/7/77/Banknotes_of_Cambodian_Khmer_Riel.jpg
 - Status: candidate, unlabeled.
 - Rights caveat: the Wikimedia page marks the file public domain as Voice of America material, but also shows a 2026 deletion request related to Cambodian banknote copyright. Keep it as a local benchmark seed unless rights are rechecked.
+- Labeling caveat: many slices show backs or ambiguous fragments, so this is a hard stress image but not a sufficient denomination-counting oracle by itself. Skip any slice a human cannot confidently identify.
 - `real_overlap_0002_commons_museum`: lower-priority real photographed multi-note scene, copied locally to `data/real_fan_benchmark/images/candidates/real_overlap_0002_commons_museum.jpg`
 - Source page: https://commons.wikimedia.org/wiki/File:Cambodian_Riel.jpg
 - Source image: https://upload.wikimedia.org/wikipedia/commons/3/30/Cambodian_Riel.jpg
 - Status: candidate, unlabeled.
 - Rights caveat: the Wikimedia page marks the file CC0, but also shows the same 2026 deletion request family related to Cambodian banknote copyright. Use locally until rights are rechecked.
+- `real_overlap_0003_commons_shop_5k_10k_20k`: real shop photo with visible 5k/10k/20k notes, copied locally to `data/real_fan_benchmark/images/candidates/real_overlap_0003_commons_shop_5k_10k_20k.png`
+- Source page: https://commons.wikimedia.org/wiki/File:Campuchia_-_Ti%E1%BB%81n_Gi%E1%BA%A5y_5000,_10_000,_20_000_rial.png
+- Source image: https://upload.wikimedia.org/wikipedia/commons/5/50/Campuchia_-_Ti%E1%BB%81n_Gi%E1%BA%A5y_5000%2C_10_000%2C_20_000_rial.png
+- Status: candidate, unlabeled.
+- Rights caveat: the Wikimedia page marks the file public domain by self-release, but also shows the same 2026 deletion request family related to Cambodian banknote copyright. Use locally until rights are rechecked.
 
 ## Labeling Rule
 
@@ -26,6 +34,8 @@ Use modal/visible-region boxes for the current YOLO detector:
 
 Do not train on benchmark images. Keep them as validation/test-only assets.
 
+Run `scripts/check_real_fan_benchmark.py` after adding candidates or labels. It verifies local image readability, catches manifest/label-status mismatches, and validates YOLO visible-region label files under `data/real_fan_benchmark/labels/val/` once an image is promoted to `labeled`.
+
 ## Promotion Criteria
 
 Move a candidate image into the benchmark only when:
@@ -33,6 +43,7 @@ Move a candidate image into the benchmark only when:
 - Source and rights are recorded in `manifests/real_fan_benchmark_sources.csv`.
 - Labels are manually checked, not copied directly from model predictions.
 - The image adds coverage: fan, overlap, hand occlusion, off-frame notes, mixed USD/KHR, or rare KHR denominations.
+- The visible regions contain enough denomination evidence for a human to label them; a fan of mostly ambiguous backs is useful as a stress probe, not as the main scoreboard.
 
 ## Current Model Read
 

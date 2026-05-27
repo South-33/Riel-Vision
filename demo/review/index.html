@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CashSnap Review</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p>CashSnap review</p>
+          <h1>Proposal crops</h1>
+        </div>
+        <button id="exportButton" type="button" disabled>Export CSV</button>
+      </header>
+
+      <section class="controls">
+        <input id="manifestPath" type="text" value="/data/review/real_fan_candidate_proposal_review_v1/review.csv" />
+        <button id="loadButton" type="button">Load</button>
+        <label>
+          <input id="includedOnly" type="checkbox" />
+          Included only
+        </label>
+      </section>
+
+      <section class="summary" id="summary">No rows loaded</section>
+      <section class="grid" id="grid"></section>
+    </main>
+    <script src="./app.js"></script>
+  </body>
+</html>

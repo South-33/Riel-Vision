@@ -22,6 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-retries", type=int, default=5, help="Retries per image.")
     parser.add_argument("--sleep-duration", type=float, default=0.1, help="PicWish polling sleep duration.")
     parser.add_argument("--retry-after", type=float, default=0.2, help="PicWish retry-after duration.")
+    parser.add_argument("--quiet-success", action="store_true", help="Do not print one success line per image.")
     return parser.parse_args()
 
 
@@ -31,6 +32,7 @@ async def process_image_with_retry(
     output_path: Path,
     semaphore: asyncio.Semaphore,
     max_retries: int,
+    quiet_success: bool,
 ) -> bool:
     """Process a single image with bounded active PicWish requests."""
     async with semaphore:
@@ -41,7 +43,8 @@ async def process_image_with_retry(
                 result = await pw.remove_background(str(input_path))
                 await result.download(str(output_path))
                 elapsed = time.time() - start_time
-                print(f"[SUCCESS] {input_path.name} processed in {elapsed:.2f}s")
+                if not quiet_success:
+                    print(f"[SUCCESS] {input_path.name} processed in {elapsed:.2f}s")
                 return True
             except Exception as e:
                 if attempt == max_retries:
@@ -102,7 +105,7 @@ async def main() -> None:
 
     start_time = time.time()
     tasks = [
-        process_image_with_retry(pw, src, dst, sem, args.max_retries)
+        process_image_with_retry(pw, src, dst, sem, args.max_retries, args.quiet_success)
         for src, dst in to_process
     ]
     results = await asyncio.gather(*tasks)

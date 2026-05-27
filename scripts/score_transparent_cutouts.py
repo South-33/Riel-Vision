@@ -9,6 +9,11 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
+try:
+    import cv2
+except ImportError:  # pragma: no cover - optional local QA enhancement
+    cv2 = None
+
 
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE_SUFFIXES = {".png", ".webp"}
@@ -47,6 +52,60 @@ def connected_components(mask: np.ndarray) -> list[int]:
     return sorted(sizes, reverse=True)
 
 
+def contour_shape_metrics(mask: np.ndarray) -> dict[str, str]:
+    if cv2 is None:
+        return {
+            "convex_fill_ratio": "",
+            "rotated_rect_fill_ratio": "",
+            "approx_vertices": "",
+        }
+
+    mask_u8 = (mask.astype(np.uint8) * 255)
+    contours, _ = cv2.findContours(mask_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return {
+            "convex_fill_ratio": "0",
+            "rotated_rect_fill_ratio": "0",
+            "approx_vertices": "0",
+        }
+
+    contour = max(contours, key=cv2.contourArea)
+    contour_area = float(cv2.contourArea(contour))
+    hull = cv2.convexHull(contour)
+    hull_area = float(cv2.contourArea(hull))
+    rect = cv2.minAreaRect(contour)
+    rect_width, rect_height = rect[1]
+    rect_area = float(rect_width * rect_height)
+    perimeter = float(cv2.arcLength(hull, True))
+    approx = cv2.approxPolyDP(hull, 0.025 * perimeter, True) if perimeter > 0 else hull
+
+    return {
+        "convex_fill_ratio": f"{contour_area / hull_area:.4f}" if hull_area > 0 else "0",
+        "rotated_rect_fill_ratio": f"{contour_area / rect_area:.4f}" if rect_area > 0 else "0",
+        "approx_vertices": str(int(len(approx))),
+    }
+
+
+def span_metrics(mask: np.ndarray, left: int, top: int, right: int, bottom: int) -> dict[str, str]:
+    cropped = mask[top:bottom, left:right]
+    bbox_width = max(1, right - left)
+    bbox_height = max(1, bottom - top)
+    row_spans: list[float] = []
+    for row in cropped:
+        xs = np.where(row)[0]
+        if len(xs):
+            row_spans.append((int(xs.max()) - int(xs.min()) + 1) / bbox_width)
+    col_spans: list[float] = []
+    for col in cropped.T:
+        ys = np.where(col)[0]
+        if len(ys):
+            col_spans.append((int(ys.max()) - int(ys.min()) + 1) / bbox_height)
+    return {
+        "row_span_p10": f"{np.percentile(row_spans, 10):.4f}" if row_spans else "0",
+        "col_span_p10": f"{np.percentile(col_spans, 10):.4f}" if col_spans else "0",
+    }
+
+
 def score_image(path: Path, alpha_threshold: int) -> dict[str, str]:
     with Image.open(path).convert("RGBA") as image:
         alpha = np.array(image.getchannel("A"))
@@ -63,6 +122,8 @@ def score_image(path: Path, alpha_threshold: int) -> dict[str, str]:
     fill_ratio = area / bbox_area
     image_area_ratio = area / total
     aspect = (right - left) / max(1, bottom - top)
+    shape = contour_shape_metrics(mask)
+    spans = span_metrics(mask, left, top, right, bottom)
 
     comps = connected_components(mask)
     largest = comps[0]
@@ -93,6 +154,8 @@ def score_image(path: Path, alpha_threshold: int) -> dict[str, str]:
         "component_count": str(len(comps)),
         "largest_component_ratio": f"{largest_ratio:.4f}",
         "small_component_count": str(small_component_count),
+        **shape,
+        **spans,
     }
 
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 from collections import Counter
 from pathlib import Path
 
@@ -23,13 +22,38 @@ def split_root(dataset_root: Path, split_path: str) -> Path:
 
 def count_split_dir(dataset_root: Path, split_path: str, class_count: int) -> tuple[int, int, Counter[int], list[str]]:
     image_dir = split_root(dataset_root, split_path)
-    label_dir = Path(str(image_dir).replace(f"{os.sep}images{os.sep}", f"{os.sep}labels{os.sep}"))
     images = sorted([p for p in image_dir.glob("*") if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}])
+    return count_images(images, class_count)
+
+
+def read_split_list(dataset_root: Path, split_path: str) -> list[Path]:
+    list_path = split_root(dataset_root, split_path)
+    images: list[Path] = []
+    for raw_line in list_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        path = Path(line)
+        images.append(path if path.is_absolute() else dataset_root / path)
+    return images
+
+
+def label_path_for_image(image: Path) -> Path:
+    parts = list(image.parts)
+    try:
+        index = parts.index("images")
+    except ValueError:
+        return image.with_suffix(".txt")
+    parts[index] = "labels"
+    return Path(*parts).with_suffix(".txt")
+
+
+def count_images(images: list[Path], class_count: int) -> tuple[int, int, Counter[int], list[str]]:
     counts: Counter[int] = Counter()
     problems: list[str] = []
 
     for image in images:
-        label = label_dir / f"{image.stem}.txt"
+        label = label_path_for_image(image)
         if not label.exists():
             problems.append(f"Missing label: {label}")
             continue
@@ -60,7 +84,11 @@ def count_split(dataset_root: Path, split_paths: str | list[str], class_count: i
     total_counts: Counter[int] = Counter()
     all_problems: list[str] = []
     for split_path in paths:
-        image_count, box_count, counts, problems = count_split_dir(dataset_root, split_path, class_count)
+        resolved = split_root(dataset_root, split_path)
+        if resolved.suffix.lower() == ".txt":
+            image_count, box_count, counts, problems = count_images(read_split_list(dataset_root, split_path), class_count)
+        else:
+            image_count, box_count, counts, problems = count_split_dir(dataset_root, split_path, class_count)
         total_images += image_count
         total_boxes += box_count
         total_counts.update(counts)

@@ -6,6 +6,10 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
+from local_runtime import configure_project_cache
+
+configure_project_cache()
+
 from ultralytics import YOLO
 
 
@@ -23,6 +27,8 @@ def parse_csv_numbers(value: str, caster):
 
 def summarize_detection(result, names: dict[int, str]) -> dict[str, str | int | float]:
     boxes = result.boxes
+    if boxes is None or len(boxes) == 0:
+        boxes = getattr(result, "obb", None)
     if boxes is None or len(boxes) == 0:
         return {
             "detections": 0,

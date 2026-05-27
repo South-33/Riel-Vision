@@ -21,6 +21,10 @@ Key observations:
 - Increasing to `imgsz=960` makes detections worse, not better.
 - Changing NMS IoU from `0.30` through `0.90` does not change the detection counts, so NMS is not the main failure.
 - Left/center/right crops do not recover dense per-slice predictions; the top-fan crop helps confidence slightly but still produces only a few large boxes.
+- Fresh current-KHR reset probes confirm the geometry issue: `current_fan_slice_v1_e5` still has zero hard-fan detections at `conf>=0.05`, and its synthetic labels remain large (`~18-20%` median area).
+- `thin_radial_slice` lowers synthetic median box area to about `5.2%`; detect hybrid training gets one hard-fan detection at `640/conf=0.05`, but it is still an oversized `26%` fan-region box.
+- OBB thin-slice training gives plausible small rotated boxes on the lower-priority overlap candidate, but the class labels are noisy and the hard fan remains unsolved; OBB is a promising probe, not a selected architecture.
+- The hard VOA fan image itself has many backs/ambiguous fragments, so treat it as a stress probe rather than the only denomination-counting scoreboard.
 
 ## Working Hypotheses
 
@@ -36,8 +40,7 @@ Evidence:
 
 Next knockdown test:
 
-- Build a small synthetic `radial_slice_v1` set with many narrow visible slices, pivoted like a hand-held fan, and visible-region labels.
-- Validate against the fixed real fan stress image and the normal CashSnap val/test split.
+- Build or capture a rights-clear real benchmark where visible regions are human-identifiable by denomination, then keep using thin/OBB synthetic probes against that benchmark.
 
 ### H2: Synthetic Appearance Is Still Too Fake
 
@@ -81,20 +84,37 @@ Next knockdown test:
 
 ### H5: Deployment Is Not The Blocking Problem Yet
 
-ONNX/NCNN export already works for the balanced checkpoint. The browser/phone path matters, but the present blocker is recognition quality on real fan geometry.
+ONNX/NCNN export already works for the balanced and circulated-design checkpoints. The browser/phone path matters, but the present blocker is recognition quality on real fan/overlap geometry.
 
 Evidence:
 
 - `docs/mobile-export.md` records ONNX and NCNN export smoke results.
 - The same failure appears before export, directly in PyTorch inference.
+- `yolo26n_cashsnap_current_thin_legacy_v1_e20_i416_b8` exports to ONNX and NCNN and smoke-predicts, but it still misclassifies several old-design notes on `real_overlap_0003_commons_shop_5k_10k_20k`.
 
 Next knockdown test:
 
-- Once real fan recall improves in PyTorch, rerun the same diagnostic script on ONNX/NCNN/mobile exports.
+- Once real fan/overlap denomination recall improves in PyTorch, rerun the same diagnostic script on ONNX/NCNN/mobile exports.
+
+### H6: Current-Only KHR Scope Is Too Narrow For Circulated Old Notes
+
+The clean current-bank reset is the right foundation for first-pass modern KHR support, but real users may photograph older NBC-listed designs still seen in circulation.
+
+Evidence:
+
+- Current-only and current+thin fresh probes count broad regions but heavily confuse the old-design shop overlap candidate.
+- Historical contaminated e2/e4 checkpoints are much better on that candidate, implying broader design coverage matters.
+- A controlled legacy-support rebuild from `target_modern_common + legacy_or_low_priority` NBC cutouts improved draft real-overlap recall, while still not reaching reliable denomination counts.
+
+Next knockdown test:
+
+- Keep current-only and circulated-design experiments separate, then add rights-clear real photos for each visible design family instead of letting old/reference variants leak silently into the primary current model.
 
 ## Immediate Plan
 
-1. Freeze a tiny real benchmark: manually label `real_fan_0001_voa_commons` first using visible-region boxes, then add a few more real phone fan scenes.
-2. Add a radial fan synthetic generator mode that deliberately creates narrow, ordered, hand-held bill slices instead of random overlap piles.
-3. Train a small capped probe from e4 or e2 and evaluate in this order: normal val/test, synthetic radial-slice val, real fan stress diagnostics.
-4. Only then revisit browser/phone-specific optimizations.
+1. Freeze a tiny real benchmark with rights-clear phone photos whose visible bill regions are human-identifiable; keep `real_fan_0001_voa_commons` as a stress probe unless labels can be assigned confidently.
+2. Keep draft-label tooling (`render_yolo_label_preview.py` and `evaluate_real_draft_labels.py`) available for candidate review, but do not train on `data/real_fan_benchmark/`.
+3. Use `scripts/build_current_khr_cutout_bank.py --clean` for first-pass current KHR probes; use a separately named bank when explicitly testing circulated legacy support.
+4. Generate paired detect/OBB probe datasets from clean banks with `scripts/generate_synthetic_fan_dataset.py`; use `thin_radial_slice` for narrow visible-slice geometry and `--label-format obb --save-visible-masks` for the OBB copy.
+5. Train small probes from fresh YOLO26n-family base weights and evaluate in this order: normal val/test, synthetic radial-slice val, real fan/overlap draft diagnostics, export smoke.
+6. Compare e2/e4 only as contaminated historical baselines, not as starting checkpoints.

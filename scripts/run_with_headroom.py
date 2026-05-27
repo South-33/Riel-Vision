@@ -33,6 +33,24 @@ def parse_args() -> argparse.Namespace:
         default=82.0,
         help="Resume at or below this active CPU/GPU load.",
     )
+    parser.add_argument(
+        "--max-ram-percent",
+        type=float,
+        default=90.0,
+        help="Terminate the child if system RAM reaches this percent.",
+    )
+    parser.add_argument(
+        "--max-gpu-mem-percent",
+        type=float,
+        default=90.0,
+        help="Terminate the child if GPU memory reaches this percent.",
+    )
+    parser.add_argument(
+        "--memory-action",
+        choices=["pause", "exit"],
+        default="pause",
+        help="Pause on memory pressure, or exit with code 70 so a wrapper can relaunch smaller.",
+    )
     parser.add_argument("--interval", type=float, default=2.0, help="Seconds between load checks.")
     parser.add_argument("--no-priority", action="store_true", help="Do not lower child process priority.")
     parser.add_argument("command", nargs=argparse.REMAINDER, help="Command to run after --.")
@@ -140,6 +158,27 @@ def resume_tree(proc: psutil.Process) -> None:
             pass
 
 
+def terminate_tree(proc: psutil.Process) -> None:
+    tree = process_tree(proc)
+    for item in tree:
+        try:
+            item.terminate()
+        except psutil.Error:
+            pass
+    _, alive = psutil.wait_procs(tree, timeout=8)
+    for item in alive:
+        try:
+            item.kill()
+        except psutil.Error:
+            pass
+
+
+def memory_over_limit(sample: LoadSample, max_ram: float, max_gpu_mem: float) -> bool:
+    if sample.ram_percent >= max_ram:
+        return True
+    return sample.gpu_mem_percent is not None and sample.gpu_mem_percent >= max_gpu_mem
+
+
 def main() -> int:
     args = parse_args()
     psutil.cpu_percent(interval=None)
@@ -151,11 +190,36 @@ def main() -> int:
         set_low_priority(child_proc)
 
     suspended = False
+    memory_suspended = False
     try:
         while child.poll() is None:
             time.sleep(args.interval)
             sample = sample_load()
             load = throttle_load(sample)
+            memory_high = memory_over_limit(sample, args.max_ram_percent, args.max_gpu_mem_percent)
+
+            if memory_high and args.memory_action == "exit":
+                print(
+                    f"[headroom] Memory limit exceeded at {format_sample(sample)}; "
+                    "asking wrapper to relaunch smaller.",
+                    flush=True,
+                )
+                terminate_tree(child_proc)
+                return 70
+
+            if memory_high and not suspended:
+                print(f"[headroom] Pausing child for memory pressure at {format_sample(sample)}", flush=True)
+                suspend_tree(child_proc)
+                suspended = True
+                memory_suspended = True
+                continue
+
+            if memory_suspended and not memory_high and load <= args.resume_percent:
+                print(f"[headroom] Resuming child after memory pressure at {format_sample(sample)}", flush=True)
+                resume_tree(child_proc)
+                suspended = False
+                memory_suspended = False
+                continue
 
             if not suspended and load >= args.max_percent:
                 print(f"[headroom] Pausing child at {format_sample(sample)}", flush=True)
@@ -163,7 +227,7 @@ def main() -> int:
                 suspended = True
                 continue
 
-            if suspended and load <= args.resume_percent:
+            if suspended and not memory_suspended and load <= args.resume_percent:
                 print(f"[headroom] Resuming child at {format_sample(sample)}", flush=True)
                 resume_tree(child_proc)
                 suspended = False

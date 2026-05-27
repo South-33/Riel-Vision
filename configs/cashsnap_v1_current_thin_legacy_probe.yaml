@@ -1,0 +1,19 @@
+# CashSnap real subset plus current-KHR and explicit circulated-legacy synthetic overlap probe.
+path: D:/Project/KhmerCurrencyOCR
+train: data/sampled/cashsnap_current_thin_legacy_probe_v1/train.txt
+val: data/sampled/cashsnap_current_thin_legacy_probe_v1/val.txt
+
+names:
+  0: USD_1
+  1: USD_5
+  2: USD_10
+  3: USD_20
+  4: USD_50
+  5: USD_100
+  6: KHR_500
+  7: KHR_1000
+  8: KHR_2000
+  9: KHR_5000
+  10: KHR_10000
+  11: KHR_20000
+  12: KHR_50000

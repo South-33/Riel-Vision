@@ -18,9 +18,14 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
+try:
+    import cv2
+except ImportError:  # pragma: no cover - optional OBB export dependency
+    cv2 = None
+
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SOURCE = ROOT / "data" / "reference" / "khr_nbc"
+DEFAULT_SOURCE = ROOT / "data" / "asset_candidates" / "khr_nbc_current_cutout_bank_v1"
 DEFAULT_OUT = ROOT / "data" / "synthetic" / "khr_fan_v1"
 
 CLASS_NAMES = [
@@ -72,6 +77,9 @@ def load_refs(sources: list[Path], allowed_classes: set[str] | None = None) -> l
         for path in sorted(source.rglob("*")):
             if path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp"}:
                 continue
+            lower_parts = {part.lower() for part in path.parts}
+            if "masks" in lower_parts or path.stem.lower().endswith("_mask"):
+                continue
             class_name = parse_note_class(path)
             if class_name and (allowed_classes is None or class_name in allowed_classes) and looks_like_whole_note(path):
                 refs.append(NoteRef(path=path, class_name=class_name))
@@ -98,6 +106,9 @@ def looks_like_whole_note(path: Path) -> bool:
 def specimen_score(path: Path) -> float:
     if "specimen" in path.name.lower():
         return 1.0
+    lower_parts = {part.lower() for part in path.parts}
+    if "khr_nbc_current_cutout_bank_v1" in lower_parts:
+        return 0.0
     try:
         image = Image.open(path).convert("RGB").resize((160, 80))
     except OSError:
@@ -190,11 +201,16 @@ def jitter_note(image: Image.Image, rng: random.Random) -> Image.Image:
     return image
 
 
-def crop_note_strip(image: Image.Image, rng: random.Random) -> Image.Image:
+def crop_note_strip(
+    image: Image.Image,
+    rng: random.Random,
+    min_frac: float = 0.16,
+    max_frac: float = 0.38,
+) -> Image.Image:
     """Keep one vertical slice of a note for extreme partial-visibility scenes."""
     if image.width < 60:
         return image
-    strip_w = int(image.width * rng.uniform(0.16, 0.38))
+    strip_w = int(image.width * rng.uniform(min_frac, max_frac))
     strip_w = max(24, min(strip_w, image.width))
     if rng.random() < 0.5:
         x1 = rng.choice([0, image.width - strip_w])
@@ -313,6 +329,25 @@ def visible_box(id_mask: np.ndarray, instance_id: int) -> tuple[int, int, int, i
     return int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
 
 
+def visible_mask(id_mask: np.ndarray, instance_id: int) -> np.ndarray:
+    return id_mask == instance_id
+
+
+def visible_obb_line(mask: np.ndarray, class_name: str, image_size: int) -> str | None:
+    if cv2 is None:
+        raise RuntimeError("OpenCV is required for --label-format obb")
+    ys, xs = np.where(mask)
+    if len(xs) < 4:
+        return None
+    points = np.column_stack([xs.astype(np.float32), ys.astype(np.float32)])
+    rect = cv2.minAreaRect(points)
+    box = cv2.boxPoints(rect)
+    box[:, 0] = np.clip(box[:, 0] / image_size, 0.0, 1.0)
+    box[:, 1] = np.clip(box[:, 1] / image_size, 0.0, 1.0)
+    coords = " ".join(f"{value:.6f}" for value in box.reshape(-1))
+    return f"{CLASS_TO_ID[class_name]} {coords}"
+
+
 def prepared_note(ref: NoteRef, cache: dict[Path, Image.Image]) -> Image.Image:
     if ref.path not in cache:
         cache[ref.path] = note_alpha(Image.open(ref.path)).copy()
@@ -328,7 +363,9 @@ def make_scene(
     max_notes: int = 12,
     layout_modes: list[str] | None = None,
     hand_probability: float = 0.25,
-) -> tuple[Image.Image, list[str]]:
+    label_format: str = "detect",
+    save_visible_masks: bool = False,
+) -> tuple[Image.Image, list[str], list[tuple[str, np.ndarray]]]:
     canvas = make_background(image_size, rng).convert("RGBA")
     id_mask = np.zeros((image_size, image_size), dtype=np.uint16)
     labels: list[tuple[str, int]] = []
@@ -336,6 +373,7 @@ def make_scene(
     available_modes = layout_modes or [
         "radial_slice",
         "strip_fan",
+        "thin_radial_slice",
         "tight_fan",
         "fan",
         "crossed",
@@ -345,6 +383,7 @@ def make_scene(
     default_weights = {
         "radial_slice": 0.28,
         "strip_fan": 0.24,
+        "thin_radial_slice": 0.18,
         "tight_fan": 0.22,
         "fan": 0.14,
         "crossed": 0.07,
@@ -360,6 +399,8 @@ def make_scene(
         note_count = rng.randint(max(min_notes, 12), max(max_notes, 22))
     elif layout_mode == "strip_fan":
         note_count = rng.randint(max(min_notes, 10), max(max_notes, 20))
+    elif layout_mode == "thin_radial_slice":
+        note_count = rng.randint(max(min_notes, 16), max(max_notes, 28))
     elif layout_mode == "tight_fan":
         note_count = rng.randint(max(min_notes, 9), max(max_notes, 18))
     center_x = rng.randint(int(image_size * 0.43), int(image_size * 0.57))
@@ -372,6 +413,8 @@ def make_scene(
             target_w = int(image_size * rng.uniform(0.72, 1.02))
         elif layout_mode == "strip_fan":
             target_w = int(image_size * rng.uniform(0.72, 0.96))
+        elif layout_mode == "thin_radial_slice":
+            target_w = int(image_size * rng.uniform(0.74, 1.04))
         elif layout_mode == "tight_fan":
             target_w = int(image_size * rng.uniform(0.64, 0.90))
         elif layout_mode == "fan":
@@ -388,6 +431,8 @@ def make_scene(
         note = jitter_note(note, rng)
         if layout_mode == "strip_fan":
             note = crop_note_strip(note, rng)
+        elif layout_mode == "thin_radial_slice":
+            note = crop_note_strip(note, rng, min_frac=0.07, max_frac=0.20)
 
         if layout_mode == "radial_slice":
             if note_count == 1:
@@ -401,6 +446,12 @@ def make_scene(
             else:
                 spread = rng.uniform(78, 126)
                 angle = (-spread / 2) + (spread * i / (note_count - 1)) + rng.uniform(-3, 3)
+        elif layout_mode == "thin_radial_slice":
+            if note_count == 1:
+                angle = rng.uniform(-18, 18)
+            else:
+                spread = rng.uniform(58, 98)
+                angle = (-spread / 2) + (spread * i / (note_count - 1)) + rng.uniform(-2, 2)
         elif layout_mode == "tight_fan":
             if note_count == 1:
                 angle = rng.uniform(-20, 20)
@@ -434,6 +485,12 @@ def make_scene(
             y = int(pivot_y + rng.randint(-16, 14) - note.height)
             if rng.random() < 0.35:
                 y += rng.randint(-55, 35)
+        elif layout_mode == "thin_radial_slice":
+            offset = (i - (note_count - 1) / 2) * rng.uniform(3, 8)
+            x = int(center_x + offset + rng.randint(-4, 4) - note.width / 2)
+            y = int(pivot_y + rng.randint(-8, 8) - note.height)
+            if i < note_count * 0.12 or i > note_count * 0.88:
+                x += rng.choice([-1, 1]) * rng.randint(8, 26)
         elif layout_mode == "tight_fan":
             offset = (i - (note_count - 1) / 2) * rng.uniform(7, 15)
             x = int(center_x + offset + rng.randint(-9, 9) - note.width / 2)
@@ -471,7 +528,8 @@ def make_scene(
 
     add_hand_occluders(canvas, id_mask, rng, hand_probability)
 
-    yolo_lines: list[str] = []
+    label_lines: list[str] = []
+    visible_masks: list[tuple[str, np.ndarray]] = []
     for class_name, instance_id in labels:
         box = visible_box(id_mask, instance_id)
         if not box:
@@ -482,11 +540,20 @@ def make_scene(
         area = w * h
         if area < image_size * image_size * 0.004 or w < 18 or h < 18:
             continue
-        cx = (x1 + x2) / 2 / image_size
-        cy = (y1 + y2) / 2 / image_size
-        bw = w / image_size
-        bh = h / image_size
-        yolo_lines.append(f"{CLASS_TO_ID[class_name]} {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}")
+        mask = visible_mask(id_mask, instance_id)
+        if label_format == "obb":
+            line = visible_obb_line(mask, class_name, image_size)
+            if line is None:
+                continue
+            label_lines.append(line)
+        else:
+            cx = (x1 + x2) / 2 / image_size
+            cy = (y1 + y2) / 2 / image_size
+            bw = w / image_size
+            bh = h / image_size
+            label_lines.append(f"{CLASS_TO_ID[class_name]} {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}")
+        if save_visible_masks:
+            visible_masks.append((class_name, mask.copy()))
 
     rgb = canvas.convert("RGB")
     if rng.random() < 0.45:
@@ -495,7 +562,7 @@ def make_scene(
         rgb = Image.fromarray(np.clip(arr + grain, 0, 255).astype(np.uint8), "RGB")
     if rng.random() < 0.25:
         rgb = ImageOps.autocontrast(rgb, cutoff=rng.uniform(0, 1.5))
-    return rgb, yolo_lines
+    return rgb, label_lines, visible_masks
 
 
 def write_yaml(out: Path) -> None:
@@ -519,12 +586,19 @@ def main() -> None:
     parser.add_argument("--clean", action="store_true", help="Delete an existing output directory before generating.")
     parser.add_argument("--allow-specimen", action="store_true", help="Allow reference images that appear to contain SPECIMEN marks.")
     parser.add_argument("--classes", default="", help="Optional comma-separated canonical classes to generate.")
+    parser.add_argument(
+        "--label-format",
+        choices=["detect", "obb"],
+        default="detect",
+        help="Write axis-aligned YOLO detect labels or YOLO OBB corner labels.",
+    )
+    parser.add_argument("--save-visible-masks", action="store_true", help="Save per-visible-instance binary masks.")
     parser.add_argument("--min-notes", type=int, default=4, help="Minimum notes per synthetic scene.")
     parser.add_argument("--max-notes", type=int, default=12, help="Maximum notes per synthetic scene.")
     parser.add_argument(
         "--layout-modes",
         default="",
-        help="Optional comma-separated layout modes: radial_slice,strip_fan,tight_fan,fan,crossed,scattered,row.",
+        help="Optional comma-separated layout modes: radial_slice,strip_fan,thin_radial_slice,tight_fan,fan,crossed,scattered,row.",
     )
     parser.add_argument("--hand-prob", type=float, default=0.25, help="Probability of adding synthetic hand/finger occluders.")
     args = parser.parse_args()
@@ -538,6 +612,7 @@ def main() -> None:
     valid_layout_modes = {
         "radial_slice",
         "strip_fan",
+        "thin_radial_slice",
         "tight_fan",
         "fan",
         "crossed",
@@ -547,6 +622,8 @@ def main() -> None:
     unknown_layouts = sorted(set(layout_modes or []) - valid_layout_modes)
     if unknown_layouts:
         raise SystemExit(f"Unknown layout modes in --layout-modes: {unknown_layouts}")
+    if args.label_format == "obb" and cv2 is None:
+        raise SystemExit("--label-format obb requires opencv-python/cv2")
     if args.min_notes < 1 or args.max_notes < args.min_notes:
         raise SystemExit("--min-notes must be >= 1 and --max-notes must be >= --min-notes")
     refs = load_refs(args.source, allowed_classes)
@@ -573,7 +650,7 @@ def main() -> None:
     attempts = 0
     while i < args.count:
         attempts += 1
-        image, labels = make_scene(
+        image, labels, visible_masks = make_scene(
             refs,
             args.image_size,
             rng,
@@ -582,6 +659,8 @@ def main() -> None:
             max_notes=args.max_notes,
             layout_modes=layout_modes,
             hand_probability=args.hand_prob,
+            label_format=args.label_format,
+            save_visible_masks=args.save_visible_masks,
         )
         if not labels:
             if attempts > args.count * 5:
@@ -597,6 +676,12 @@ def main() -> None:
         stem = f"khr_fan_{i:06d}"
         image.save(args.out / "images" / split / f"{stem}.jpg", quality=88)
         (args.out / "labels" / split / f"{stem}.txt").write_text("\n".join(labels) + "\n", encoding="utf-8")
+        if args.save_visible_masks:
+            mask_dir = args.out / "masks" / split
+            mask_dir.mkdir(parents=True, exist_ok=True)
+            for mask_index, (class_name, mask) in enumerate(visible_masks, start=1):
+                mask_image = Image.fromarray((mask.astype(np.uint8) * 255), "L")
+                mask_image.save(mask_dir / f"{stem}_{mask_index:02d}_{class_name}.png")
         counts[split] += 1
         boxes[split] += len(labels)
         i += 1

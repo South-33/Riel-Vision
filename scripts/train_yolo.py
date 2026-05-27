@@ -3,6 +3,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from local_runtime import configure_project_cache
+
+configure_project_cache()
+
 from ultralytics import YOLO
 
 
