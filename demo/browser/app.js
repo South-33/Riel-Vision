@@ -114,6 +114,44 @@ function repoUrl(path) {
   return `/${path.replaceAll("\\", "/").replace(/^\/+/, "")}`;
 }
 
+function sourceImageData(image) {
+  const sourceCanvas = document.createElement("canvas");
+  sourceCanvas.width = image.width;
+  sourceCanvas.height = image.height;
+  const sourceCtx = sourceCanvas.getContext("2d", { willReadFrequently: true });
+  sourceCtx.drawImage(image, 0, 0);
+  return sourceCtx.getImageData(0, 0, image.width, image.height).data;
+}
+
+function writeResizedChannelFirst(input, image, sourcePixels, inputSize, resizedWidth, resizedHeight, padX, padY) {
+  const sourceXScale = image.width / resizedWidth;
+  const sourceYScale = image.height / resizedHeight;
+  const channelStride = inputSize * inputSize;
+  input.fill(114 / 255);
+  for (let y = 0; y < resizedHeight; y += 1) {
+    const sourceY = Math.max(0, (y + 0.5) * sourceYScale - 0.5);
+    const y0 = Math.floor(sourceY);
+    const y1 = Math.min(image.height - 1, y0 + 1);
+    const wy = sourceY - y0;
+    for (let x = 0; x < resizedWidth; x += 1) {
+      const sourceX = Math.max(0, (x + 0.5) * sourceXScale - 0.5);
+      const x0 = Math.floor(sourceX);
+      const x1 = Math.min(image.width - 1, x0 + 1);
+      const wx = sourceX - x0;
+      const topOffset = (y0 * image.width + x0) * 4;
+      const topRightOffset = (y0 * image.width + x1) * 4;
+      const bottomOffset = (y1 * image.width + x0) * 4;
+      const bottomRightOffset = (y1 * image.width + x1) * 4;
+      const target = (y + padY) * inputSize + x + padX;
+      for (let channel = 0; channel < 3; channel += 1) {
+        const top = sourcePixels[topOffset + channel] * (1 - wx) + sourcePixels[topRightOffset + channel] * wx;
+        const bottom = sourcePixels[bottomOffset + channel] * (1 - wx) + sourcePixels[bottomRightOffset + channel] * wx;
+        input[target + channel * channelStride] = (top * (1 - wy) + bottom * wy) / 255;
+      }
+    }
+  }
+}
+
 function drawBaseImage() {
   if (!state.image) {
     return;
@@ -133,22 +171,8 @@ function preprocess(image) {
   const resizedHeight = Math.round(image.height * scale);
   const padX = Math.floor((inputSize - resizedWidth) / 2);
   const padY = Math.floor((inputSize - resizedHeight) / 2);
-
-  const prepCanvas = document.createElement("canvas");
-  prepCanvas.width = inputSize;
-  prepCanvas.height = inputSize;
-  const prepCtx = prepCanvas.getContext("2d");
-  prepCtx.fillStyle = "rgb(114,114,114)";
-  prepCtx.fillRect(0, 0, inputSize, inputSize);
-  prepCtx.drawImage(image, padX, padY, resizedWidth, resizedHeight);
-
-  const pixels = prepCtx.getImageData(0, 0, inputSize, inputSize).data;
   const input = new Float32Array(3 * inputSize * inputSize);
-  for (let i = 0; i < inputSize * inputSize; i += 1) {
-    input[i] = pixels[i * 4] / 255;
-    input[i + inputSize * inputSize] = pixels[i * 4 + 1] / 255;
-    input[i + inputSize * inputSize * 2] = pixels[i * 4 + 2] / 255;
-  }
+  writeResizedChannelFirst(input, image, sourceImageData(image), inputSize, resizedWidth, resizedHeight, padX, padY);
 
   return {
     tensor: new ort.Tensor("float32", input, [1, 3, inputSize, inputSize]),

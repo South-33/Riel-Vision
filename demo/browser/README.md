@@ -33,8 +33,8 @@ The demo reads `configs/cashsnap_two_stage_oldcommon_browser_stack.json`, then l
 
 It fuses low-confidence detector proposals with the KHR 1k/5k/10k/20k crop classifier and uses detector-confidence NMS. It is suitable for browser plumbing and review hints, not reliable denomination totals yet.
 
-Smoke note: the autorun shop-overlap URL loads the ONNX stack in Edge and predicts 6 bills, but the denomination total is still wrong (`KHR 56,000`, `USD 0` vs the draft-label total of `KHR 70,000`, `USD 0`). Current browser classes are `KHR_1000:1`, `KHR_5000:1`, `KHR_10000:3`, and `KHR_20000:1`; evaluating `.agent/cashsnap-browser-smoke-cdp.csv` against the draft labels gives `6/6` any-class matches and `3/6` same-class matches. Sweeping detector override thresholds on the browser CSV only improves to `4/6` at `0.03-0.05` and introduces `USD_100`, so treat this as working browser plumbing, not solved counting.
+Smoke note: the autorun shop-overlap URL loads the ONNX stack in Edge and predicts 6 bills, but the denomination total is still wrong (`KHR 76,000`, `USD 0` vs the draft-label total of `KHR 70,000`, `USD 0`). Current browser classes are `KHR_1000:1`, `KHR_5000:1`, `KHR_10000:1`, and `KHR_20000:3`; evaluating `.agent/cashsnap-browser-smoke-cdp.csv` against the draft labels gives `6/6` any-class matches and `4/6` same-class matches. Treat this as improved browser preprocessing parity, not solved counting.
 
-The smoke JSON includes debug counters such as detector output dims, browser proposal count, classified count, and final count. Current debug output is `[1,300,6]`, `11` proposals, `11` classified crops, and `6` final detections.
+The smoke JSON includes debug counters such as detector output dims, browser proposal count, classified count, and final count. Current debug output is `[1,300,6]`, `13` proposals, `13` classified crops, and `6` final detections.
 
 For detector preprocessing parity checks, run `scripts/debug_onnx_detector_preprocess.py`. On the shop-overlap image, the same detector ONNX produces `13` proposals with `--mode cv2` but only `8` with `--mode pil`, with a `USD_100` class appearing in the PIL-style path.
