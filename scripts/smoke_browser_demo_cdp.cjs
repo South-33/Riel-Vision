@@ -43,6 +43,7 @@ function parseArgs(argv) {
     timeoutMs: 120000,
     screenshot: "",
     outCsv: "",
+    outJson: "",
     labels: "",
     matchIou: 0.5,
     minSameClass: null,
@@ -72,6 +73,9 @@ function parseArgs(argv) {
       index += 1;
     } else if (key === "--out-csv") {
       args.outCsv = value;
+      index += 1;
+    } else if (key === "--out-json") {
+      args.outJson = value;
       index += 1;
     } else if (key === "--labels") {
       args.labels = value;
@@ -121,6 +125,7 @@ Options:
   --max-usd-error N   Fail if absolute USD value error is above N. Requires --labels.
   --screenshot PATH   Optional PNG screenshot output path.
   --out-csv PATH      Optional CSV output for browser-side detections.
+  --out-json PATH     Optional JSON output for the smoke summary.
   --port NUMBER       Local static server port. Default: 8787.
   --debug-port NUMBER Edge DevTools port. Default: 9223.
   --timeout-ms NUMBER Autorun wait timeout. Default: 120000.
@@ -480,6 +485,13 @@ function writeDetectionCsv(outputPath, detections) {
   fs.writeFileSync(absolute, `${lines.join("\n")}\n`);
 }
 
+function writeSummaryJson(outputPath, summary) {
+  if (!outputPath) return;
+  const absolute = path.resolve(ROOT, outputPath);
+  fs.mkdirSync(path.dirname(absolute), { recursive: true });
+  fs.writeFileSync(absolute, `${JSON.stringify(summary, null, 2)}\n`);
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (!fs.existsSync(args.edge)) {
@@ -518,6 +530,7 @@ async function main() {
     writeDetectionCsv(args.outCsv, value.detections || []);
     ws.close();
     const summary = summarize(value, args);
+    writeSummaryJson(args.outJson, summary);
     console.log(JSON.stringify(summary, null, 2));
     enforceEvaluation(summary, args);
   } finally {

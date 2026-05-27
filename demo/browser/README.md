@@ -23,7 +23,7 @@ http://localhost:8787/demo/browser/?image=/data/real_fan_benchmark/images/candid
 Or run the headless Edge smoke from the repo root:
 
 ```powershell
-lr python scripts/run_with_headroom.py --interval 2 --max-percent 90 --resume-percent 82 --max-ram-percent 90 --max-gpu-mem-percent 90 -- node scripts/smoke_browser_demo_cdp.cjs --labels data/real_fan_benchmark/drafts/real_overlap_0003_commons_shop_5k_10k_20k.txt --min-same-class 4 --min-any-class 6 --max-count-error 0 --screenshot .agent/cashsnap-browser-smoke-cdp.png --out-csv .agent/cashsnap-browser-smoke-cdp.csv
+lr python scripts/run_with_headroom.py --interval 2 --max-percent 90 --resume-percent 82 --max-ram-percent 90 --max-gpu-mem-percent 90 -- node scripts/smoke_browser_demo_cdp.cjs --labels data/real_fan_benchmark/drafts/real_overlap_0003_commons_shop_5k_10k_20k.txt --min-same-class 4 --min-any-class 6 --max-count-error 0 --screenshot .agent/cashsnap-browser-smoke-cdp.png --out-csv .agent/cashsnap-browser-smoke-cdp.csv --out-json .agent/cashsnap-browser-smoke-cdp.json
 ```
 
 To run every labeled browser smoke case in `manifests/browser_smoke_cases.csv`:
@@ -32,7 +32,7 @@ To run every labeled browser smoke case in `manifests/browser_smoke_cases.csv`:
 lr python scripts/run_with_headroom.py --interval 2 --max-percent 90 --resume-percent 82 --max-ram-percent 90 --max-gpu-mem-percent 90 -- python scripts/run_browser_smoke_cases.py
 ```
 
-This writes per-case screenshots, detection CSVs, and `summary.json` under `.agent/browser_smoke_cases/`. The case runner uses ports starting at `8877` and Edge debug ports starting at `9323` so it can run while the usual `8787` review server is in use.
+This writes per-case screenshots, detection CSVs, JSON summaries, and `summary.json` under `.agent/browser_smoke_cases/`. The case runner uses ports starting at `8877` and Edge debug ports starting at `9323` so it can run while the usual `8787` review server is in use.
 Use `python scripts/run_browser_smoke_cases.py --validate-only` for a quick manifest/path check that does not launch Edge.
 
 The demo reads `configs/cashsnap_two_stage_oldcommon_browser_stack.json`, then loads:

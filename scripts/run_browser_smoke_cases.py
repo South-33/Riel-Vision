@@ -115,6 +115,8 @@ def command_for_case(case: dict[str, str], args: argparse.Namespace, index: int)
                 str(out_dir / f"{case_id}.png"),
                 "--out-csv",
                 str(out_dir / f"{case_id}.csv"),
+                "--out-json",
+                str(out_dir / f"{case_id}.json"),
             ]
         )
     return command
