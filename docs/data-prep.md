@@ -19,7 +19,7 @@
 - `data/fragment_classifier_roboflow_partial_khr_diag_v1/`: ignored diagnostic ImageFolder built from the two unreviewed Roboflow crop packs; a 4-epoch CPU MobileNetV3 smoke exported ONNX but only reached `0.325` best val accuracy, so use it as pipeline evidence only.
 - `data/fragment_classifier_roboflow_partial_khr_oldcommon_eval_v1/`: ignored overlap-only ImageFolder for evaluating the current focused old/common classifier on Roboflow partial crops; it exposes `KHR_20000`/`KHR_5000` -> `KHR_10000` collapse.
 - `docs/roboflow-cuurecy-detection-audit.md`: compact audit summary for the downloaded Roboflow segmentation lead, including duplicate/geometry/visual QA results, review-pack paths, split caveats, and release cautions.
-- `demo/review/` has presets for the main proposal and Roboflow crop/failure packs, and still accepts `?manifest=/path/to/manifest.csv`; use it to curate and export edited CSVs before building trusted fragment-classifier data. Run `scripts/summarize_review_manifests.py` first to see which packs remain unreviewed and where failures cluster.
+- `demo/review/` has presets for the main proposal and Roboflow crop/failure packs, and still accepts `?manifest=/path/to/manifest.csv`; use it to curate and export edited CSVs before building trusted fragment-classifier data. Run `scripts/summarize_review_manifests.py` first, then merge browser exports with `scripts/apply_review_export.py`.
 
 ## Manual Or Blocked Sources
 
@@ -82,3 +82,4 @@ A third focused Roboflow search on 2026-05-27 found a stronger lead: [cuurecy-de
 - `scripts/evaluate_fragment_classifier.py` allows empty ImageFolder classes and can export per-crop predictions, so overlap diagnostics can match a checkpoint class list and produce failure queues for review.
 - `scripts/build_prediction_failure_review_pack.py` turns those per-crop prediction CSVs into review manifests/contact sheets grouped by confusion pair.
 - `scripts/summarize_review_manifests.py` summarizes review rows, selected rows, classes, sides, splits, and failure pairs across the main curation packs; use it before training so blank-review packs do not get mistaken for trusted data.
+- `scripts/apply_review_export.py` merges `demo/review/` exports back into a source manifest by `crop_id` with `crop_path` fallback; use `--dry-run` first and avoid hand-editing long review CSVs.
