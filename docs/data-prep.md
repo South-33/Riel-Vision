@@ -28,6 +28,8 @@ Numista is not bulk-downloaded because licensing appears mixed/unclear. Use it f
 
 Bounded web re-check on 2026-05-27 did not reveal a better public KHR partial-note source. [BankNote-Net](https://github.com/microsoft/banknote-net) provides 24k+ banknote embeddings across 17 currencies and is useful as a USD/universal-currency representation reference, but its listed currencies do not include KHR and it does not provide raw partial-note boxes. [Wikimedia Commons Cambodia banknotes](https://commons.wikimedia.org/wiki/Category:Banknotes_of_Cambodia) has reference/scanned images, not rights-clear phone-photo partial/fan labels. The [Roboflow Cambodia Currency Project](https://universe.roboflow.com/khmer-riel-classification-computer-vision/cambodia-currency-project) remains the main public KHR detection source, but local audits show rare-class scarcity.
 
+Second 2026-05-27 search pass found useful adjacent banknote data, but nothing that changes the KHR path. Roboflow still surfaces Cambodia Currency Project as roughly 552 images with seven KHR classes, while newer generic/foreign banknote sets such as Roboflow banknote detection, [Indian/Thai annotated banknotes](https://pmc.ncbi.nlm.nih.gov/articles/PMC8907680/), and [Mendeley Indian/Thai banknotes](https://data.mendeley.com/datasets/2kfz5yc7pt/1) may help generic folded/occluded banknote robustness only. Do not spend more cycles on broad public dataset search unless a new KHR-specific lead appears; the highest-leverage gap is rights-clear Cambodian phone photos with reviewed partial/fan labels.
+
 ## Prep Rules
 
 - Keep raw downloads unchanged.

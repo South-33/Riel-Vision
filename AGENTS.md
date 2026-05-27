@@ -34,3 +34,4 @@ This is the project's AGENTS.md
 - Shape-filtered PicWish banks (`cashsnap_khr_picwish_shape_*`) are visual-QA aids, not final assets; `shape_skin30_current` training regressed validation and added USD false positives on KHR-only overlap.
 - For partial/fan recognition, consider the detector-plus-fragment-classifier path in `docs/fragment-classifier-plan.md`; it targets denomination ID from visible slices while keeping phone/browser deployment small.
 - Fragment-classifier probes export ONNX, but synthetic old-back oversampling did not transfer; the best shop-overlap diagnostic is old/common KHR real-box classifier + detector-threshold fusion around 0.17 + detector-conf NMS, now 5/6 same-class on draft labels.
+- 2026-05-27 public-data sweep found adjacent folded/occluded banknote datasets but no better KHR partial/fan source beyond Cambodia Currency Project; prioritize rights-clear Cambodian phone captures over more broad dataset hunting.
