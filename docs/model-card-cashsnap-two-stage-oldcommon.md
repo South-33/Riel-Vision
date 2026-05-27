@@ -35,7 +35,7 @@ On draft labels for `real_overlap_0003_commons_shop_5k_10k_20k`, the focused old
 - `5/6` same-class matches
 - `6` predictions for `6` draft visible notes
 
-The deployable browser path should be checked with `scripts/smoke_browser_demo_cdp.cjs`, because Edge ONNX Runtime Web/canvas preprocessing is the deployment truth and can differ from PyTorch-generated proposal CSVs around borderline detector scores. Current Edge autorun smoke on the same shop-overlap image predicts `6` bills with `KHR 56,000`, `USD 0`, and classes `KHR_1000:1;KHR_10000:3;KHR_20000:1;KHR_5000:1`. Evaluating the browser-exported CSV against the draft labels gives `6/6` any-class matches but only `3/6` same-class matches.
+The deployable browser path should be checked with `scripts/smoke_browser_demo_cdp.cjs`, because Edge ONNX Runtime Web/canvas preprocessing is the deployment truth and can differ from PyTorch-generated proposal CSVs around borderline detector scores. Current Edge autorun smoke on the same shop-overlap image predicts `6` bills with `KHR 56,000`, `USD 0`, and classes `KHR_1000:1;KHR_10000:3;KHR_20000:1;KHR_5000:1`. Evaluating the browser-exported CSV against the draft labels gives `6/6` any-class matches but only `3/6` same-class matches. A browser-CSV detector-override sweep only reaches `4/6` same-class at thresholds `0.03-0.05`, while introducing a `USD_100` class, so threshold tuning alone is not a fix.
 
 Broad 14-class fragment classifiers and a 3-class KHR/USD/background gate did not transfer to this real shop-overlap probe; both remained too confused for browser/mobile deployment.
 

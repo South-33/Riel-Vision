@@ -67,6 +67,7 @@ Living doc for high-value ideas, experiments, and results. Keep this short: only
 - Companion Roboflow partial review pack `data/review/roboflow_cuurecy_detection_is_khr_5k_10k_partial_review_v1/` has 189 edge-touching/small-area 5k/10k front/back crops for the old/common KHR confusion path.
 - Unreviewed Roboflow partial-crop classifier smoke exported ONNX but reached only 0.325 best val accuracy, confirming the tooling path works while the data still needs human curation and a cleaner validation split.
 - Current focused old/common classifier scores only 0.615/0.593 val/test on the Roboflow partial overlap subset; `data/review/roboflow_cuurecy_detection_is_oldcommon_highconf_failure_review_v1/` packages 31 high-confidence misses. The queue is mostly tiny visible regions (`KHR_5000 -> KHR_10000` median area 0.022; `KHR_20000` misses median area ~0.034) across fronts and backs, so target rights-clear thin/edge 5k/20k captures next.
+- Browser ONNX stack is deployable-size but not quality-solved: Edge smoke has 6/6 region coverage and only 3/6 same-class on the shop-overlap draft; override-threshold sweep peaks at 4/6 with a USD false class, so do not chase threshold-only fixes.
 - Follow-up web/Hugging Face/Roboflow searches after the audit did not find a better KHR partial/fan dataset; stop broad hunting for now and spend effort on curation or rights-clear phone captures.
 
 ## Data Gaps
