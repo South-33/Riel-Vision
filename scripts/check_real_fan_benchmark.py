@@ -72,6 +72,7 @@ def main() -> None:
 
     sources = read_csv(sources_path)
     tasks = read_csv(tasks_path)
+    source_ids = {row["image_id"] for row in sources}
     task_by_id = {row["image_id"]: row for row in tasks}
     errors: list[str] = []
     labeled = 0
@@ -114,6 +115,13 @@ def main() -> None:
             draft_status = f", draft_boxes={count}"
             errors.extend(label_errors)
         print(f"{image_id}: {width}x{height}, source={row.get('benchmark_status', '')}, labels={status or task_status}{draft_status}")
+
+    for label_path in sorted(label_dir.glob("*.txt")):
+        if label_path.stem not in source_ids:
+            errors.append(f"{label_path.relative_to(ROOT)}: label file has no source manifest row")
+    for draft_label_path in sorted(draft_label_dir.glob("*.txt")):
+        if draft_label_path.stem not in source_ids:
+            errors.append(f"{draft_label_path.relative_to(ROOT)}: draft label file has no source manifest row")
 
     print(f"sources: {len(sources)}")
     print(f"labeled_images: {labeled}")
