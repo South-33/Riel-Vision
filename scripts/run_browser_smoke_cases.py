@@ -17,6 +17,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--timeout-ms", default="120000")
+    parser.add_argument("--port-base", type=int, default=8877, help="First local HTTP port for smoke cases.")
+    parser.add_argument("--debug-port-base", type=int, default=9323, help="First Edge DevTools port for smoke cases.")
     parser.add_argument("--edge", default="", help="Optional Edge executable path forwarded to the node smoke script.")
     parser.add_argument("--summary-json", type=Path, help="Optional aggregate JSON summary output path.")
     parser.add_argument("--no-artifacts", action="store_true", help="Do not write per-case screenshots or detection CSVs.")
@@ -53,7 +55,7 @@ def parse_summary(stdout: str) -> dict:
     return json.loads(stdout[start : end + 1])
 
 
-def command_for_case(case: dict[str, str], args: argparse.Namespace) -> list[str]:
+def command_for_case(case: dict[str, str], args: argparse.Namespace, index: int) -> list[str]:
     command = [
         "node",
         "scripts/smoke_browser_demo_cdp.cjs",
@@ -61,6 +63,10 @@ def command_for_case(case: dict[str, str], args: argparse.Namespace) -> list[str
         case["image"],
         "--labels",
         case["labels"],
+        "--port",
+        str(args.port_base + index),
+        "--debug-port",
+        str(args.debug_port_base + index),
         "--timeout-ms",
         args.timeout_ms,
     ]
@@ -94,9 +100,9 @@ def main() -> None:
 
     failures: list[str] = []
     summaries: list[dict] = []
-    for case in cases:
+    for index, case in enumerate(cases):
         case_id = case["case_id"]
-        command = command_for_case(case, args)
+        command = command_for_case(case, args, index)
         result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
         if result.returncode:
             print(result.stdout, end="")
