@@ -242,9 +242,9 @@ function boxIou(left, right) {
   return union ? intersection / union : 0;
 }
 
-function greedyMatch(detections, labels, matchIou, requireSameClass) {
+function greedyMatchPairs(detections, labels, matchIou, requireSameClass) {
   const usedLabels = new Set();
-  let matches = 0;
+  const matches = [];
   [...detections].sort((left, right) => Number(right.score || 0) - Number(left.score || 0)).forEach((detection) => {
     let bestIndex = -1;
     let bestIou = 0;
@@ -259,10 +259,29 @@ function greedyMatch(detections, labels, matchIou, requireSameClass) {
     });
     if (bestIndex >= 0 && bestIou >= matchIou) {
       usedLabels.add(bestIndex);
-      matches += 1;
+      matches.push({ detection, label: labels[bestIndex], iou: bestIou });
     }
   });
   return matches;
+}
+
+function confusionCounts(matches) {
+  const counts = {};
+  for (const match of matches) {
+    if (match.label.name === match.detection.name) continue;
+    const key = `${match.label.name}->${match.detection.name}`;
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  return Object.fromEntries(Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function matchRows(matches) {
+  return matches.map((match) => ({
+    target: match.label.name,
+    prediction: match.detection.name,
+    iou: Number(match.iou.toFixed(4)),
+    score: Number(Number(match.detection.score || 0).toFixed(4)),
+  }));
 }
 
 function sourceDetections(rawDetections, nameKey, scoreKey) {
@@ -276,8 +295,10 @@ function sourceDetections(rawDetections, nameKey, scoreKey) {
 }
 
 function evaluateSource(detections, labels, matchIou) {
-  const matchedSameClass = greedyMatch(detections, labels, matchIou, true);
-  const matchedAnyClass = greedyMatch(detections, labels, matchIou, false);
+  const sameClassPairs = greedyMatchPairs(detections, labels, matchIou, true);
+  const anyClassPairs = greedyMatchPairs(detections, labels, matchIou, false);
+  const matchedSameClass = sameClassPairs.length;
+  const matchedAnyClass = anyClassPairs.length;
   return {
     predCount: detections.length,
     countError: detections.length - labels.length,
@@ -285,6 +306,8 @@ function evaluateSource(detections, labels, matchIou) {
     matchedAnyClass,
     recallSameClass: labels.length ? matchedSameClass / labels.length : 0,
     recallAnyClass: labels.length ? matchedAnyClass / labels.length : 0,
+    confusions: confusionCounts(anyClassPairs),
+    matchedPairs: matchRows(anyClassPairs),
   };
 }
 
