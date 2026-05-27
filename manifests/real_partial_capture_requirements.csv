@@ -1,0 +1,9 @@
+requirement_id,description,min_images,match_column,match_value,required,notes
+single_khr,"Single current KHR notes, front/back mix",5,scene_type,single_khr,yes,"Normal table/background; useful for sanity and class balance."
+simple_overlap,"Simple overlapping KHR notes with visible denomination evidence",5,scene_type,simple_overlap,yes,"2-4 notes, denomination numerals or distinctive design visible."
+hand_fan,"Hand-held fan photos",5,scene_type,hand_fan,yes,"6-15 notes with at least some human-identifiable visible slices."
+hand_occlusion,"Finger or hand occlusion",3,scene_type,hand_occlusion,yes,"Fingers can cover notes, but denomination evidence must remain visible."
+partial_off_frame,"Notes clipped by the image border",3,scene_type,partial_off_frame,yes,"Tests half/quarter/off-frame behavior."
+weak_khr_20000,"At least one reviewed scene containing KHR_20000",1,denominations,KHR_20000,yes,"Weak class; include real phone-photo coverage."
+weak_khr_50000,"At least one reviewed scene containing KHR_50000",1,denominations,KHR_50000,yes,"Weak class; include real phone-photo coverage."
+mixed_usd_khr_optional,"Optional mixed USD + KHR scenes",2,scene_type,mixed_usd_khr,no,"Do after KHR-only capture is usable."

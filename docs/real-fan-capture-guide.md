@@ -19,6 +19,11 @@ Capture each scene with normal phone distance and lighting:
 - Keep faces, IDs, cards, receipts, screens, GPS signs, and other private details out of frame.
 - Take the photo yourself or record rights/source clearly; do not scrape random copyrighted images into the benchmark.
 - Include at least one image for `KHR_20000` and `KHR_50000` if those bills are available, because they remain weak classes.
+- Track new photos in `manifests/real_partial_capture_inventory.csv` and run `scripts/check_capture_requirements.py` to see which scene/denomination gaps remain.
+
+```powershell
+lr python scripts/check_capture_requirements.py
+```
 
 ## Label Rules
 

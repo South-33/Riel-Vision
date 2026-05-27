@@ -1,0 +1,90 @@
+from __future__ import annotations
+
+import argparse
+import csv
+from pathlib import Path
+
+from PIL import Image
+
+
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_INVENTORY = ROOT / "manifests" / "real_partial_capture_inventory.csv"
+DEFAULT_REQUIREMENTS = ROOT / "manifests" / "real_partial_capture_requirements.csv"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Check real partial-note capture inventory against CashSnap needs.")
+    parser.add_argument("--inventory", type=Path, default=DEFAULT_INVENTORY)
+    parser.add_argument("--requirements", type=Path, default=DEFAULT_REQUIREMENTS)
+    parser.add_argument("--strict", action="store_true", help="Exit non-zero when requirements are not met.")
+    return parser.parse_args()
+
+
+def resolve(path: Path) -> Path:
+    return path if path.is_absolute() else ROOT / path
+
+
+def read_csv(path: Path) -> list[dict[str, str]]:
+    with resolve(path).open("r", newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def split_values(value: str) -> set[str]:
+    return {part.strip() for part in value.replace(";", ",").split(",") if part.strip()}
+
+
+def row_matches(row: dict[str, str], column: str, value: str) -> bool:
+    if column == "denominations":
+        return value in split_values(row.get(column, ""))
+    return row.get(column, "").strip() == value
+
+
+def image_ok(row: dict[str, str]) -> tuple[bool, str]:
+    local_path = row.get("local_path", "").strip()
+    if not local_path:
+        return False, "missing local_path"
+    path = resolve(Path(local_path))
+    if not path.exists():
+        return False, f"missing file {local_path}"
+    try:
+        with Image.open(path) as image:
+            image.verify()
+    except Exception as exc:
+        return False, f"unreadable image {local_path}: {exc}"
+    if row.get("rights_status", "").strip().lower() not in {"own_photo", "rights_clear", "public_domain", "cc0"}:
+        return False, "rights_status not marked usable"
+    return True, ""
+
+
+def main() -> None:
+    args = parse_args()
+    rows = read_csv(args.inventory)
+    requirements = read_csv(args.requirements)
+    usable_rows: list[dict[str, str]] = []
+    errors: list[str] = []
+    for row in rows:
+        ok, error = image_ok(row)
+        if ok:
+            usable_rows.append(row)
+        else:
+            errors.append(f"{row.get('image_id', '<missing image_id>')}: {error}")
+
+    unmet = False
+    print(f"inventory_rows={len(rows)} usable_rows={len(usable_rows)}")
+    for req in requirements:
+        count = sum(1 for row in usable_rows if row_matches(row, req["match_column"], req["match_value"]))
+        minimum = int(req["min_images"])
+        required = req.get("required", "yes").strip().lower() not in {"0", "false", "no", "optional"}
+        status = "ok" if count >= minimum else ("missing" if required else "optional_missing")
+        unmet = unmet or (required and count < minimum)
+        print(f"{status}: {req['requirement_id']} {count}/{minimum} - {req['description']}")
+    if errors:
+        print("Inventory issues:")
+        for error in errors:
+            print(f"- {error}")
+    if args.strict and (unmet or errors):
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()
