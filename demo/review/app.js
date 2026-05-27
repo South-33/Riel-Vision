@@ -15,11 +15,35 @@ const CLASSES = [
   "KHR_50000",
 ];
 
+const PRESET_MANIFESTS = [
+  {
+    label: "Real fan proposal review",
+    path: "/data/review/real_fan_candidate_proposal_review_v1/review.csv",
+  },
+  {
+    label: "Roboflow old/common failures",
+    path: "/data/review/roboflow_cuurecy_detection_is_oldcommon_highconf_failure_review_v1/manifest.csv",
+  },
+  {
+    label: "Roboflow 5k/10k partials",
+    path: "/data/review/roboflow_cuurecy_detection_is_khr_5k_10k_partial_review_v1/manifest.csv",
+  },
+  {
+    label: "Roboflow 20k/50k partials",
+    path: "/data/review/roboflow_cuurecy_detection_is_khr_20k_50k_partial_review_v1/manifest.csv",
+  },
+  {
+    label: "CashSnap old/common crops",
+    path: "/data/review/cashsnap_old_common_khr_crop_review_v1/manifest.csv",
+  },
+];
+
 const state = {
   rows: [],
   headers: [],
 };
 
+const presetManifest = document.getElementById("presetManifest");
 const manifestPath = document.getElementById("manifestPath");
 const loadButton = document.getElementById("loadButton");
 const exportButton = document.getElementById("exportButton");
@@ -105,7 +129,7 @@ function rowMeta(row) {
     row.confidence ? `conf ${row.confidence}` : "",
     row.box_area_frac ? `area ${row.box_area_frac}` : "",
     row.fragment_conf || row.detector_conf || "",
-  ].filter(Boolean).join(" · ");
+  ].filter(Boolean).join(" | ");
   return { title, detail };
 }
 
@@ -124,6 +148,11 @@ function setOptions(select, label, values) {
 function refreshFilters() {
   setOptions(pairFilter, "All pairs", uniqueValues("failure_pair"));
   setOptions(sideFilter, "All sides", uniqueValues("side"));
+}
+
+function refreshPresetSelection() {
+  const match = PRESET_MANIFESTS.find((preset) => preset.path === manifestPath.value);
+  presetManifest.value = match ? match.path : "";
 }
 
 function visibleRows() {
@@ -219,10 +248,25 @@ exportButton.addEventListener("click", exportCsv);
 includedOnly.addEventListener("change", render);
 pairFilter.addEventListener("change", render);
 sideFilter.addEventListener("change", render);
+manifestPath.addEventListener("input", refreshPresetSelection);
+presetManifest.addEventListener("change", () => {
+  if (presetManifest.value) {
+    manifestPath.value = presetManifest.value;
+    loadManifest();
+  }
+});
+
+presetManifest.innerHTML = [
+  `<option value="">Custom manifest</option>`,
+  ...PRESET_MANIFESTS.map((preset) => `<option value="${htmlEscape(preset.path)}">${htmlEscape(preset.label)}</option>`),
+].join("");
 
 const params = new URLSearchParams(window.location.search);
 const initialManifest = params.get("manifest");
 if (initialManifest) {
   manifestPath.value = initialManifest;
+  refreshPresetSelection();
   loadManifest();
+} else {
+  refreshPresetSelection();
 }
