@@ -142,6 +142,20 @@ button:disabled {
   align-items: center;
 }
 
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 20px;
+}
+
+.links a {
+  color: #154b84;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
 textarea {
   min-height: 52px;
   resize: vertical;

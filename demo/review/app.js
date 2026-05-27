@@ -133,6 +133,17 @@ function rowMeta(row) {
   return { title, detail };
 }
 
+function rowLinks(row) {
+  const links = [{ label: "Crop", href: repoUrl(row.crop_path) }];
+  if (row.source_image) {
+    links.push({ label: "Source", href: repoUrl(row.source_image) });
+  }
+  return links
+    .filter((link) => link.href)
+    .map((link) => `<a href="${htmlEscape(link.href)}" target="_blank" rel="noreferrer">${htmlEscape(link.label)}</a>`)
+    .join("");
+}
+
 function uniqueValues(key) {
   return [...new Set(state.rows.map((row) => row[key]).filter(Boolean))].sort();
 }
@@ -180,6 +191,7 @@ function render() {
     card.className = "card";
     const classOptions = CLASSES.map((name) => `<option value="${name}" ${name === predictedClass(row) ? "selected" : ""}>${name || "skip"}</option>`).join("");
     const meta = rowMeta(row);
+    const links = rowLinks(row);
     card.innerHTML = `
       <img src="${repoUrl(row.crop_path)}" alt="" />
       <div class="body">
@@ -187,6 +199,7 @@ function render() {
           <span>${meta.title}</span>
           <span>${meta.detail}</span>
         </div>
+        <div class="links">${links}</div>
         <label class="row">
           <input class="include" type="checkbox" ${row.review_include ? "checked" : ""} />
           <span>Include</span>
