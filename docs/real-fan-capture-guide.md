@@ -24,6 +24,7 @@ Capture each scene with normal phone distance and lighting:
 ```powershell
 lr python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos --scene-type hand_fan --denominations "KHR_5000;KHR_10000" --dry-run
 lr python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos --scene-type hand_fan --denominations "KHR_5000;KHR_10000"
+lr python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos --recursive --scene-type-from-parent --dry-run
 lr python scripts/check_capture_requirements.py
 ```
 

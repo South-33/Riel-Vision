@@ -26,7 +26,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Register a folder of CashSnap real partial-note captures.")
     parser.add_argument("--images-dir", type=Path, required=True, help="Folder containing phone photos to register.")
     parser.add_argument("--inventory", type=Path, default=DEFAULT_INVENTORY)
-    parser.add_argument("--scene-type", required=True, help="Scene bucket, e.g. single_khr, simple_overlap, hand_fan.")
+    parser.add_argument("--scene-type", help="Scene bucket, e.g. single_khr, simple_overlap, hand_fan.")
+    parser.add_argument(
+        "--scene-type-from-parent",
+        action="store_true",
+        help="Use each image's parent folder name as scene_type; useful with recursive intake folders.",
+    )
     parser.add_argument(
         "--rights-status",
         default="own_photo",
@@ -82,7 +87,15 @@ def unique_id(base: str, used: set[str]) -> str:
     return candidate
 
 
-def make_rows(args: argparse.Namespace, images: list[Path], existing: list[dict[str, str]]) -> list[dict[str, str]]:
+def scene_type_for(args: argparse.Namespace, images_dir: Path, image: Path) -> str:
+    if not args.scene_type_from_parent:
+        return args.scene_type
+    if image.parent == images_dir:
+        return images_dir.name
+    return image.parent.name
+
+
+def make_rows(args: argparse.Namespace, images_dir: Path, images: list[Path], existing: list[dict[str, str]]) -> list[dict[str, str]]:
     used_ids = {row.get("image_id", "") for row in existing}
     existing_paths = {row.get("local_path", "") for row in existing}
     rows: list[dict[str, str]] = []
@@ -96,7 +109,7 @@ def make_rows(args: argparse.Namespace, images: list[Path], existing: list[dict[
             {
                 "image_id": unique_id(base, used_ids),
                 "local_path": local_path,
-                "scene_type": args.scene_type,
+                "scene_type": scene_type_for(args, images_dir, image),
                 "rights_status": args.rights_status,
                 "source_credit": args.source_credit,
                 "train_allowed": args.train_allowed,
@@ -119,12 +132,14 @@ def write_inventory(path: Path, existing: list[dict[str, str]], rows: list[dict[
 
 def main() -> None:
     args = parse_args()
+    if not args.scene_type and not args.scene_type_from_parent:
+        raise SystemExit("Either --scene-type or --scene-type-from-parent is required.")
     images_dir = resolve(args.images_dir)
     if not images_dir.exists() or not images_dir.is_dir():
         raise SystemExit(f"images-dir not found: {args.images_dir}")
     inventory = resolve(args.inventory)
     existing = read_existing(inventory)
-    rows = make_rows(args, iter_images(images_dir, args.recursive), existing)
+    rows = make_rows(args, images_dir, iter_images(images_dir, args.recursive), existing)
     print(f"new_rows={len(rows)} inventory={repo_path(inventory)}")
     for row in rows:
         print(",".join(row[field] for field in FIELDNAMES))
