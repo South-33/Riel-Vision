@@ -22,6 +22,7 @@ Fragment classifier classes are only `KHR_1000`, `KHR_5000`, `KHR_10000`, and `K
 Current diagnostic fusion, refreshed on 2026-05-27:
 
 - Detector proposal confidence: `0.05`
+- Fragment crop padding: `0.0`
 - Detector override confidence: `0.17` (`0.175` ties on the current draft)
 - Class-agnostic NMS IoU: `0.85` (`0.75-0.90` ties on the current draft)
 - NMS ranking score: detector confidence

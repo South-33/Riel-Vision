@@ -202,8 +202,9 @@ function preprocessClassifierBatch(image, detections) {
   detections.forEach((detection, batchIndex) => {
     const boxWidth = detection.x2 - detection.x1;
     const boxHeight = detection.y2 - detection.y1;
-    const padX = boxWidth * 0.08;
-    const padY = boxHeight * 0.08;
+    const cropPadding = state.config?.fragment_classifier?.crop_padding ?? 0.08;
+    const padX = boxWidth * cropPadding;
+    const padY = boxHeight * cropPadding;
     const sx = clamp(detection.x1 - padX, 0, image.width);
     const sy = clamp(detection.y1 - padY, 0, image.height);
     const ex = clamp(detection.x2 + padX, 0, image.width);

@@ -28,6 +28,7 @@
     "format": "onnx",
     "path": "runs/fragment_classifier/mobilenet_v3_old_common_khr_realbox_pretrained_balanced_e12/best.onnx",
     "input_size": 224,
+    "crop_padding": 0.0,
     "classes": ["KHR_1000", "KHR_10000", "KHR_20000", "KHR_5000"],
     "normalization": {
       "mean": [0.485, 0.456, 0.406],

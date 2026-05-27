@@ -27,4 +27,4 @@ The demo reads `configs/cashsnap_two_stage_oldcommon_browser_stack.json`, then l
 
 It fuses low-confidence detector proposals with the KHR 1k/5k/10k/20k crop classifier and uses detector-confidence NMS. It is suitable for browser plumbing and review hints, not reliable denomination totals yet.
 
-Smoke note: the autorun shop-overlap URL loads the ONNX stack in Edge and predicts 6 bills, but the denomination total is still wrong (`KHR 52,000`, `USD 0` vs the draft-label total of `KHR 70,000`, `USD 0`). Treat this as working browser plumbing, not solved counting.
+Smoke note: the autorun shop-overlap URL loads the ONNX stack in Edge and predicts 6 bills, but the denomination total is still wrong (`KHR 56,000`, `USD 0` vs the draft-label total of `KHR 70,000`, `USD 0`). Treat this as working browser plumbing, not solved counting.
