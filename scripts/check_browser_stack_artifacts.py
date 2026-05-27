@@ -12,7 +12,7 @@ DEFAULT_CONFIG = ROOT / "configs" / "cashsnap_two_stage_oldcommon_browser_stack.
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Check CashSnap browser/mobile stack artifacts.")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
-    parser.add_argument("--max-total-mb", type=float, default=30.0)
+    parser.add_argument("--max-total-mb", type=float, default=20.0)
     return parser.parse_args()
 
 

@@ -10,6 +10,7 @@ Small phone/browser-oriented diagnostic stack for partial and overlapped KHR ban
 - Detector ONNX: `runs/cashsnap/yolo26n_legacy_clean_plus_realcutout_low_skin_ft_e6_i416_b8/weights/best.onnx`
 - Fragment classifier ONNX: `runs/fragment_classifier/mobilenet_v3_old_common_khr_realbox_pretrained_balanced_e12/best.onnx`
 - Browser demo: `demo/browser/`
+- Size gate: `scripts/check_browser_stack_artifacts.py` defaults to a 20 MB total ONNX artifact budget; current detector + classifier are about 15.1 MB.
 
 ## Classes
 
