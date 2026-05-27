@@ -286,7 +286,8 @@ async function classifyFragments(detections) {
     const fragmentName = fragmentClassNames[bestIndex];
     const fragmentScore = probs[bestIndex];
     const overrideConf = state.config?.fusion?.detector_override_confidence ?? 0.17;
-    const useDetector = detection.detectorScore >= overrideConf;
+    const fragmentEligible = detection.detectorName.startsWith("KHR_");
+    const useDetector = !fragmentEligible || detection.detectorScore >= overrideConf;
     return {
       ...detection,
       fragmentName,
