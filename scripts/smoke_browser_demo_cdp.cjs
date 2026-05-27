@@ -47,6 +47,8 @@ function parseArgs(argv) {
     matchIou: 0.5,
     minSameClass: null,
     minAnyClass: null,
+    maxKhrError: null,
+    maxUsdError: null,
     edge: process.env.EDGE_PATH || DEFAULT_EDGE,
   };
   for (let index = 2; index < argv.length; index += 1) {
@@ -82,6 +84,12 @@ function parseArgs(argv) {
     } else if (key === "--min-any-class") {
       args.minAnyClass = Number(value);
       index += 1;
+    } else if (key === "--max-khr-error") {
+      args.maxKhrError = Number(value);
+      index += 1;
+    } else if (key === "--max-usd-error") {
+      args.maxUsdError = Number(value);
+      index += 1;
     } else if (key === "--edge") {
       args.edge = value;
       index += 1;
@@ -104,6 +112,8 @@ Options:
   --match-iou NUMBER  IoU threshold for --labels evaluation. Default: 0.5.
   --min-same-class N  Fail if labeled final same-class matches are below N.
   --min-any-class N   Fail if labeled final any-class matches are below N.
+  --max-khr-error N   Fail if absolute KHR value error is above N. Requires --labels.
+  --max-usd-error N   Fail if absolute USD value error is above N. Requires --labels.
   --screenshot PATH   Optional PNG screenshot output path.
   --out-csv PATH      Optional CSV output for browser-side detections.
   --port NUMBER       Local static server port. Default: 8787.
@@ -278,10 +288,25 @@ function evaluateSource(detections, labels, matchIou) {
   };
 }
 
+function currencyValues(items, nameKey = "name") {
+  const values = { khrValue: 0, usdValue: 0 };
+  for (const item of items || []) {
+    const name = item[nameKey];
+    if (name?.startsWith("KHR_")) {
+      values.khrValue += VALUES[name] || 0;
+    } else if (name?.startsWith("USD_")) {
+      values.usdValue += VALUES[name] || 0;
+    }
+  }
+  return values;
+}
+
 function evaluateDetections(value, args) {
   const labels = readYoloLabels(args.labels, value.imageWidth, value.imageHeight);
   if (!labels) return null;
   const detections = value.detections || [];
+  const expected = currencyValues(labels);
+  const predicted = currencyValues(detections);
   const sources = {
     final: evaluateSource(sourceDetections(detections, "name", "score"), labels, args.matchIou),
     detector: evaluateSource(sourceDetections(detections, "detectorName", "detectorScore"), labels, args.matchIou),
@@ -291,6 +316,10 @@ function evaluateDetections(value, args) {
     labels: path.relative(ROOT, path.resolve(ROOT, args.labels)),
     matchIou: args.matchIou,
     gtCount: labels.length,
+    gtKhrValue: expected.khrValue,
+    gtUsdValue: expected.usdValue,
+    khrValueError: predicted.khrValue - expected.khrValue,
+    usdValueError: predicted.usdValue - expected.usdValue,
     ...sources.final,
     sources,
   };
@@ -298,21 +327,14 @@ function evaluateDetections(value, args) {
 
 function summarize(value, args) {
   const counts = {};
-  let khrValue = 0;
-  let usdValue = 0;
   for (const detection of value.detections || []) {
     counts[detection.name] = (counts[detection.name] || 0) + 1;
-    if (detection.name.startsWith("KHR_")) {
-      khrValue += VALUES[detection.name] || 0;
-    } else if (detection.name.startsWith("USD_")) {
-      usdValue += VALUES[detection.name] || 0;
-    }
   }
+  const values = currencyValues(value.detections || []);
   return {
     status: value.status,
     totalCount: Number(value.totalCount || 0),
-    khrValue,
-    usdValue,
+    ...values,
     predClasses: Object.fromEntries(Object.entries(counts).sort(([left], [right]) => left.localeCompare(right))),
     debug: value.debug || {},
     evaluation: evaluateDetections(value, args),
@@ -321,9 +343,16 @@ function summarize(value, args) {
 }
 
 function enforceEvaluation(summary, args) {
-  if (args.minSameClass === null && args.minAnyClass === null) return;
+  if (
+    args.minSameClass === null &&
+    args.minAnyClass === null &&
+    args.maxKhrError === null &&
+    args.maxUsdError === null
+  ) {
+    return;
+  }
   if (!summary.evaluation) {
-    throw new Error("--min-same-class/--min-any-class require --labels");
+    throw new Error("--min-same-class/--min-any-class/--max-khr-error/--max-usd-error require --labels");
   }
   const failures = [];
   if (args.minSameClass !== null && summary.evaluation.matchedSameClass < args.minSameClass) {
@@ -331,6 +360,12 @@ function enforceEvaluation(summary, args) {
   }
   if (args.minAnyClass !== null && summary.evaluation.matchedAnyClass < args.minAnyClass) {
     failures.push(`any-class ${summary.evaluation.matchedAnyClass} < ${args.minAnyClass}`);
+  }
+  if (args.maxKhrError !== null && Math.abs(summary.evaluation.khrValueError) > args.maxKhrError) {
+    failures.push(`KHR value error ${summary.evaluation.khrValueError} exceeds +/-${args.maxKhrError}`);
+  }
+  if (args.maxUsdError !== null && Math.abs(summary.evaluation.usdValueError) > args.maxUsdError) {
+    failures.push(`USD value error ${summary.evaluation.usdValueError} exceeds +/-${args.maxUsdError}`);
   }
   if (failures.length) {
     throw new Error(`Browser smoke evaluation failed: ${failures.join("; ")}`);
