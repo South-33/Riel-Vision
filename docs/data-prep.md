@@ -66,7 +66,7 @@ A third focused Roboflow search on 2026-05-27 found a stronger lead: [cuurecy-de
 - Include easy, medium, and hard scenes: flat overlaps, hand-held fans, hand occlusion, partial off-frame notes, mixed KHR/USD, and weak rare classes (`KHR_20000`, `KHR_50000`).
 - Track e2/e4 and future checkpoints on this fixed set before treating synthetic validation gains as real progress.
 - Consider YOLO OBB or segmentation only after the real benchmark exists; rotated/mask labels are promising for fan slices, but they need consistent labels and a comparable scoreboard.
-- `scripts/generate_synthetic_fan_dataset.py` can now write either normal detect labels or OBB corner labels from the same visible masks; keep OBB runs in separate output folders from detect runs.
+- `scripts/generate_synthetic_fan_dataset.py` can now write either normal detect labels or OBB corner labels from the same visible masks; use `--thin-strip-min-frac/--thin-strip-max-frac` to tune narrow `thin_radial_slice` probes and keep OBB runs in separate output folders from detect runs.
 
 ## Current Verification Notes
 

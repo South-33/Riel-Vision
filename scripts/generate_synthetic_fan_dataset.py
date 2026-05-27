@@ -365,6 +365,10 @@ def make_scene(
     hand_probability: float = 0.25,
     label_format: str = "detect",
     save_visible_masks: bool = False,
+    strip_min_frac: float = 0.16,
+    strip_max_frac: float = 0.38,
+    thin_strip_min_frac: float = 0.07,
+    thin_strip_max_frac: float = 0.20,
 ) -> tuple[Image.Image, list[str], list[tuple[str, np.ndarray]]]:
     canvas = make_background(image_size, rng).convert("RGBA")
     id_mask = np.zeros((image_size, image_size), dtype=np.uint16)
@@ -430,9 +434,9 @@ def make_scene(
         )
         note = jitter_note(note, rng)
         if layout_mode == "strip_fan":
-            note = crop_note_strip(note, rng)
+            note = crop_note_strip(note, rng, min_frac=strip_min_frac, max_frac=strip_max_frac)
         elif layout_mode == "thin_radial_slice":
-            note = crop_note_strip(note, rng, min_frac=0.07, max_frac=0.20)
+            note = crop_note_strip(note, rng, min_frac=thin_strip_min_frac, max_frac=thin_strip_max_frac)
 
         if layout_mode == "radial_slice":
             if note_count == 1:
@@ -601,6 +605,10 @@ def main() -> None:
         help="Optional comma-separated layout modes: radial_slice,strip_fan,thin_radial_slice,tight_fan,fan,crossed,scattered,row.",
     )
     parser.add_argument("--hand-prob", type=float, default=0.25, help="Probability of adding synthetic hand/finger occluders.")
+    parser.add_argument("--strip-min-frac", type=float, default=0.16, help="Minimum source-note width kept for strip_fan crops.")
+    parser.add_argument("--strip-max-frac", type=float, default=0.38, help="Maximum source-note width kept for strip_fan crops.")
+    parser.add_argument("--thin-strip-min-frac", type=float, default=0.07, help="Minimum source-note width kept for thin_radial_slice crops.")
+    parser.add_argument("--thin-strip-max-frac", type=float, default=0.20, help="Maximum source-note width kept for thin_radial_slice crops.")
     args = parser.parse_args()
 
     rng = random.Random(args.seed)
@@ -626,6 +634,10 @@ def main() -> None:
         raise SystemExit("--label-format obb requires opencv-python/cv2")
     if args.min_notes < 1 or args.max_notes < args.min_notes:
         raise SystemExit("--min-notes must be >= 1 and --max-notes must be >= --min-notes")
+    if not (0 < args.strip_min_frac <= args.strip_max_frac <= 1):
+        raise SystemExit("--strip-min-frac must be > 0 and <= --strip-max-frac <= 1")
+    if not (0 < args.thin_strip_min_frac <= args.thin_strip_max_frac <= 1):
+        raise SystemExit("--thin-strip-min-frac must be > 0 and <= --thin-strip-max-frac <= 1")
     refs = load_refs(args.source, allowed_classes)
     if not args.allow_specimen:
         before = len(refs)
@@ -661,6 +673,10 @@ def main() -> None:
             hand_probability=args.hand_prob,
             label_format=args.label_format,
             save_visible_masks=args.save_visible_masks,
+            strip_min_frac=args.strip_min_frac,
+            strip_max_frac=args.strip_max_frac,
+            thin_strip_min_frac=args.thin_strip_min_frac,
+            thin_strip_max_frac=args.thin_strip_max_frac,
         )
         if not labels:
             if attempts > args.count * 5:
