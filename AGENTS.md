@@ -35,3 +35,4 @@ This is the project's AGENTS.md
 - For partial/fan recognition, consider the detector-plus-fragment-classifier path in `docs/fragment-classifier-plan.md`; it targets denomination ID from visible slices while keeping phone/browser deployment small.
 - Fragment-classifier probes export ONNX, but synthetic old-back oversampling did not transfer; the best shop-overlap diagnostic is old/common KHR real-box classifier + detector-threshold fusion around 0.17 + detector-conf NMS, now 5/6 same-class on draft labels.
 - 2026-05-27 public-data sweep found adjacent folded/occluded banknote datasets but no better KHR partial/fan source beyond Cambodia Currency Project; prioritize rights-clear Cambodian phone captures over more broad dataset hunting.
+- Khmer OCR cue probe (`scripts/probe_khmer_ocr_cues.py` + `mer`) produced noisy text and wrong/partial denomination digits on shop-overlap crops; treat OCR as optional auxiliary evidence, not the main CashSnap path.

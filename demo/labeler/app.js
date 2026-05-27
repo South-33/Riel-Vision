@@ -37,6 +37,7 @@ const state = {
   naturalHeight: 0,
   selectedId: "",
   drawing: null,
+  pendingLabels: "",
 };
 
 const imagePath = document.getElementById("imagePath");
@@ -208,11 +209,31 @@ function loadImage() {
     state.boxes = [];
     state.selectedId = "";
     render();
+    if (state.pendingLabels) {
+      labelText.value = state.pendingLabels;
+      state.pendingLabels = "";
+      importLabels();
+    }
   };
   image.onerror = () => {
     status.textContent = `Load failed: ${state.imagePath}`;
   };
   image.src = repoUrl(state.imagePath);
+}
+
+async function loadLabelsFromPath(path) {
+  const response = await fetch(repoUrl(path));
+  if (!response.ok) {
+    status.textContent = `Label load failed: HTTP ${response.status}`;
+    return;
+  }
+  const text = await response.text();
+  if (state.naturalWidth) {
+    labelText.value = text;
+    importLabels();
+  } else {
+    state.pendingLabels = text;
+  }
 }
 
 function importLabels() {
@@ -325,9 +346,13 @@ window.addEventListener("resize", renderOverlay);
 
 const params = new URLSearchParams(window.location.search);
 const requestedImage = params.get("image");
+const requestedLabels = params.get("labels");
 if (requestedImage) {
   imagePath.value = requestedImage;
 }
 if (requestedImage || params.get("autoload") === "1") {
   loadImage();
+}
+if (requestedLabels) {
+  loadLabelsFromPath(requestedLabels);
 }

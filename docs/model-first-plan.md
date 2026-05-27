@@ -31,6 +31,7 @@ Why:
 - YOLO26 is the current model family for this project because Ultralytics positions it for edge and low-power deployment, with NMS-free inference and export support that should help browser/mobile experiments.
 - The local environment has loaded `yolo26n.pt` as a detect model and `yolo26n-obb.pt` as an OBB model, so OBB is not blocked by weights availability.
 - The partial/occluded-note target is not ordinary OCR. It is denomination recognition from visible visual evidence. A tiny crop classifier is a better fit than trying to run text OCR on worn Khmer/English numerals that may be absent, blurred, or hidden.
+- A 2026-05-27 Khmer OCR cue probe with `mer` on the six-box shop-overlap draft found some Khmer-like text fragments but no reliable denomination reads from full-note or strip crops. Treat OCR as an auxiliary cue to test after detection/crop localization, not as a replacement for visible-region detection and denomination classification.
 
 Avoid fine-tuning on KHR only after starting from USD data unless USD samples remain in the training set. Otherwise the model can weaken on USD classes.
 
