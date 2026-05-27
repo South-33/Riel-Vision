@@ -86,6 +86,17 @@ function predictedClass(row) {
   return row.review_class || row.fragment_class || row.detector_class || "";
 }
 
+function rowMeta(row) {
+  const title = row.crop_id || row.proposal_index || row.source_image || "";
+  const detail = [
+    row.class_name || row.fragment_class || row.detector_class || "",
+    row.side || "",
+    row.box_area_frac ? `area ${row.box_area_frac}` : "",
+    row.fragment_conf || row.detector_conf || "",
+  ].filter(Boolean).join(" · ");
+  return { title, detail };
+}
+
 function render() {
   const rows = includedOnly.checked ? state.rows.filter((row) => row.review_include) : state.rows;
   const included = state.rows.filter((row) => row.review_include).length;
@@ -95,12 +106,13 @@ function render() {
     const card = document.createElement("article");
     card.className = "card";
     const classOptions = CLASSES.map((name) => `<option value="${name}" ${name === predictedClass(row) ? "selected" : ""}>${name || "skip"}</option>`).join("");
+    const meta = rowMeta(row);
     card.innerHTML = `
       <img src="${repoUrl(row.crop_path)}" alt="" />
       <div class="body">
         <div class="meta">
-          <span>#${row.proposal_index}</span>
-          <span>${row.fragment_class || row.detector_class || ""} ${row.fragment_conf || row.detector_conf || ""}</span>
+          <span>${meta.title}</span>
+          <span>${meta.detail}</span>
         </div>
         <label class="row">
           <input class="include" type="checkbox" ${row.review_include ? "checked" : ""} />
@@ -160,3 +172,10 @@ function exportCsv() {
 loadButton.addEventListener("click", loadManifest);
 exportButton.addEventListener("click", exportCsv);
 includedOnly.addEventListener("change", render);
+
+const params = new URLSearchParams(window.location.search);
+const initialManifest = params.get("manifest");
+if (initialManifest) {
+  manifestPath.value = initialManifest;
+  loadManifest();
+}

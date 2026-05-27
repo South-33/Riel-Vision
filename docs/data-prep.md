@@ -17,6 +17,7 @@
 - `data/review/roboflow_cuurecy_detection_is_khr_5k_10k_partial_review_v1/`: ignored companion crop review pack for edge-touching, smaller-area `5000-riel-b/f` and `10000-riel-b/f` crops. It has 189 crops with canonical `review_class` plus front/back side metadata for old/common fragment-classifier curation.
 - `data/fragment_classifier_roboflow_partial_khr_diag_v1/`: ignored diagnostic ImageFolder built from the two unreviewed Roboflow crop packs; a 4-epoch CPU MobileNetV3 smoke exported ONNX but only reached `0.325` best val accuracy, so use it as pipeline evidence only.
 - `docs/roboflow-cuurecy-detection-audit.md`: compact audit summary for the downloaded Roboflow segmentation lead, including duplicate/geometry/visual QA results, review-pack paths, split caveats, and release cautions.
+- `demo/review/` accepts `?manifest=/path/to/manifest.csv`; use it to curate the Roboflow crop packs and export edited CSVs before building trusted fragment-classifier data.
 
 ## Manual Or Blocked Sources
 
