@@ -37,6 +37,8 @@ On draft labels for `real_overlap_0003_commons_shop_5k_10k_20k`, the focused old
 
 The deployable browser path should be checked with `scripts/smoke_browser_demo_cdp.cjs`, because Edge ONNX Runtime Web/canvas preprocessing is the deployment truth and can differ from PyTorch-generated proposal CSVs around borderline detector scores. Current Edge autorun smoke on the same shop-overlap image predicts `6` bills with `KHR 56,000`, `USD 0`, and classes `KHR_1000:1;KHR_10000:3;KHR_20000:1;KHR_5000:1`. Evaluating the browser-exported CSV against the draft labels gives `6/6` any-class matches but only `3/6` same-class matches. A browser-CSV detector-override sweep only reaches `4/6` same-class at thresholds `0.03-0.05`, while introducing a `USD_100` class, so threshold tuning alone is not a fix.
 
+Browser smoke debug currently reports detector output dims `[1,300,6]`, `11` browser proposals, and `6` final detections. Ultralytics ONNX Runtime on the same detector artifact reaches `6/6` detector same-class recall at `416/conf=0.05`, so investigate browser preprocessing/postprocess parity before blaming the ONNX file itself.
+
 Broad 14-class fragment classifiers and a 3-class KHR/USD/background gate did not transfer to this real shop-overlap probe; both remained too confused for browser/mobile deployment.
 
 Raw detector-only thresholding is not enough. In the same refresh, the detector can reach full same-class recall only at `416/conf=0.03` with `23` predictions for `6` notes, while `416/conf=0.05` gives `5/6` same-class and `14` predictions. Existing Khmer OCR (`mer`) also failed as a shortcut on the same crops, returning scattered text and wrong/partial denomination digits, so OCR remains optional auxiliary evidence rather than the core path.

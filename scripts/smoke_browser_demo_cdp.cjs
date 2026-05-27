@@ -178,6 +178,7 @@ function summarize(value) {
     khrValue,
     usdValue,
     predClasses: Object.fromEntries(Object.entries(counts).sort(([left], [right]) => left.localeCompare(right))),
+    debug: value.debug || {},
     detections: value.detections || [],
   };
 }
@@ -188,7 +189,8 @@ async function readBrowserState(send, timeoutMs) {
     status: document.getElementById('modelStatus')?.textContent?.trim(),
     runButton: document.getElementById('runButton')?.textContent?.trim(),
     totalCount: document.getElementById('totalCount')?.textContent?.trim(),
-    detections: typeof state !== 'undefined' ? state.detections : null
+    detections: typeof state !== 'undefined' ? state.detections : null,
+    debug: typeof state !== 'undefined' ? state.debug : null
   }))()`;
   const started = Date.now();
   let value = null;

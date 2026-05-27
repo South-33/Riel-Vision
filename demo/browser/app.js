@@ -54,6 +54,7 @@ const state = {
   conf: 0.05,
   autoRunRequested: false,
   autoRunDone: false,
+  debug: {},
 };
 
 const canvas = document.getElementById("imageCanvas");
@@ -381,7 +382,14 @@ async function runModel() {
   const outputs = await state.detectorSession.run(feeds);
   const output = outputs[state.detectorSession.outputNames[0]];
   const proposals = parseOutput(output, meta);
-  state.detections = nms(await classifyFragments(proposals));
+  const classified = await classifyFragments(proposals);
+  state.detections = nms(classified);
+  state.debug = {
+    detectorOutputDims: output.dims,
+    proposals: proposals.length,
+    classified: classified.length,
+    final: state.detections.length,
+  };
   renderDetections();
   runButton.textContent = "Run";
   updateRunState();
