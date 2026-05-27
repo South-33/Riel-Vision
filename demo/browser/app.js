@@ -15,6 +15,12 @@ const DEFAULT_CLASS_NAMES = [
   "KHR_50000",
 ];
 const VALUES = {
+  USD_1: 1,
+  USD_5: 5,
+  USD_10: 10,
+  USD_20: 20,
+  USD_50: 50,
+  USD_100: 100,
   KHR_500: 500,
   KHR_1000: 1000,
   KHR_2000: 2000,
@@ -321,13 +327,18 @@ function renderDetections() {
 
 function renderSummary() {
   const counts = new Map();
-  let value = 0;
+  let khrValue = 0;
+  let usdValue = 0;
   for (const detection of state.detections) {
     counts.set(detection.name, (counts.get(detection.name) || 0) + 1);
-    value += VALUES[detection.name] || 0;
+    if (detection.name.startsWith("USD_")) {
+      usdValue += VALUES[detection.name] || 0;
+    } else if (detection.name.startsWith("KHR_")) {
+      khrValue += VALUES[detection.name] || 0;
+    }
   }
   totalCount.textContent = String(state.detections.length);
-  totalValue.textContent = `KHR ${value.toLocaleString()}`;
+  totalValue.innerHTML = `<span class="currency-line">KHR ${khrValue.toLocaleString()}</span><span class="currency-line">USD ${usdValue.toLocaleString()}</span>`;
   countsList.innerHTML = "";
   for (const [name, count] of [...counts.entries()].sort()) {
     const classNames = state.config?.detector?.classes ?? DEFAULT_CLASS_NAMES;

@@ -194,6 +194,14 @@ canvas {
   font-size: 30px;
 }
 
+.metric strong .currency-line {
+  display: block;
+  color: var(--ink);
+  font-size: 28px;
+  line-height: 1.18;
+  text-transform: none;
+}
+
 .note {
   border-left: 5px solid var(--warn);
   background: #fff4d7;
