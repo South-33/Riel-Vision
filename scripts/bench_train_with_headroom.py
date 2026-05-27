@@ -71,6 +71,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resume-percent", type=float, default=82.0)
     parser.add_argument("--max-ram-percent", type=float, default=90.0)
     parser.add_argument("--max-gpu-mem-percent", type=float, default=90.0)
+    parser.add_argument(
+        "--min-free-ram-gb",
+        type=float,
+        default=4.0,
+        help="Refuse to launch training below this available system RAM floor. Use 0 to disable.",
+    )
     parser.add_argument("--interval", type=float, default=2.0)
     return parser.parse_args()
 
@@ -247,6 +253,15 @@ def main() -> int:
     print("[bench-headroom] command:", " ".join(command), flush=True)
     if args.dry_run:
         return 0
+    free_ram_gb = ram.available / (1024**3)
+    if args.min_free_ram_gb > 0 and free_ram_gb < args.min_free_ram_gb:
+        print(
+            "[bench-headroom] refusing to launch: "
+            f"ram_free={free_ram_gb:.1f}GB is below --min-free-ram-gb={args.min_free_ram_gb:.1f}GB. "
+            "Free RAM or pass --min-free-ram-gb 0 to override.",
+            flush=True,
+        )
+        return 70
 
     attempts = 0
     exist_ok = args.exist_ok
