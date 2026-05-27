@@ -77,4 +77,4 @@ Browser smoke demo:
 lr python -m http.server 8787
 ```
 
-Open `http://localhost:8787/demo/browser/`. The page loads the preferred ONNX alpha from `runs/cashsnap/yolo26n_cashsnap_current_thin_legacy_clean_v1_e20_i416_b8/weights/best.onnx`, runs it with ONNX Runtime Web, and draws/counts detections on an uploaded image. Local HTTP checks for the page and model path returned `200`.
+Open `http://localhost:8787/demo/browser/`. The page loads `configs/cashsnap_two_stage_oldcommon_browser_stack.json`, runs the detector plus old/common fragment classifier with ONNX Runtime Web, and draws/counts detections on an uploaded image. Use the headroom-wrapped `scripts/smoke_browser_demo_cdp.cjs` command in `demo/browser/README.md` for repeatable Edge checks; current shop-overlap smoke is 6 bills, KHR 76,000, 6/6 any-class, and 4/6 same-class.
