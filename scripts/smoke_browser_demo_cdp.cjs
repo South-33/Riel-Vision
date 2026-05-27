@@ -245,22 +245,44 @@ function greedyMatch(detections, labels, matchIou, requireSameClass) {
   return matches;
 }
 
-function evaluateDetections(value, args) {
-  const labels = readYoloLabels(args.labels, value.imageWidth, value.imageHeight);
-  if (!labels) return null;
-  const detections = value.detections || [];
-  const matchedSameClass = greedyMatch(detections, labels, args.matchIou, true);
-  const matchedAnyClass = greedyMatch(detections, labels, args.matchIou, false);
+function sourceDetections(rawDetections, nameKey, scoreKey) {
+  return rawDetections
+    .filter((detection) => detection[nameKey])
+    .map((detection) => ({
+      ...detection,
+      name: detection[nameKey],
+      score: Number(detection[scoreKey] || 0),
+    }));
+}
+
+function evaluateSource(detections, labels, matchIou) {
+  const matchedSameClass = greedyMatch(detections, labels, matchIou, true);
+  const matchedAnyClass = greedyMatch(detections, labels, matchIou, false);
   return {
-    labels: path.relative(ROOT, path.resolve(ROOT, args.labels)),
-    matchIou: args.matchIou,
-    gtCount: labels.length,
     predCount: detections.length,
     countError: detections.length - labels.length,
     matchedSameClass,
     matchedAnyClass,
     recallSameClass: labels.length ? matchedSameClass / labels.length : 0,
     recallAnyClass: labels.length ? matchedAnyClass / labels.length : 0,
+  };
+}
+
+function evaluateDetections(value, args) {
+  const labels = readYoloLabels(args.labels, value.imageWidth, value.imageHeight);
+  if (!labels) return null;
+  const detections = value.detections || [];
+  const sources = {
+    final: evaluateSource(sourceDetections(detections, "name", "score"), labels, args.matchIou),
+    detector: evaluateSource(sourceDetections(detections, "detectorName", "detectorScore"), labels, args.matchIou),
+    fragment: evaluateSource(sourceDetections(detections, "fragmentName", "fragmentScore"), labels, args.matchIou),
+  };
+  return {
+    labels: path.relative(ROOT, path.resolve(ROOT, args.labels)),
+    matchIou: args.matchIou,
+    gtCount: labels.length,
+    ...sources.final,
+    sources,
   };
 }
 
