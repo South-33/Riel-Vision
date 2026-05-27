@@ -119,7 +119,10 @@ def main() -> None:
             print(f"- {path}")
         if len(unregistered_inbox) > 20:
             print(f"- ... {len(unregistered_inbox) - 20} more")
-        print("Register dropped photos with scripts/register_capture_photos.py before trusting requirement counts.")
+        inbox_path = repo_path(resolve(args.inbox))
+        print("Register dropped photos before trusting requirement counts:")
+        print(f"lr python scripts/register_capture_photos.py --images-dir {inbox_path} --recursive --scene-type-from-parent --dry-run")
+        print(f"lr python scripts/register_capture_photos.py --images-dir {inbox_path} --recursive --scene-type-from-parent")
     if args.strict and (unmet or errors or unregistered_inbox):
         raise SystemExit(1)
 
