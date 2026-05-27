@@ -14,6 +14,7 @@
 - `data/raw_datasets/roboflow_cuurecy_detection_is/`: Roboflow YOLOv8 segmentation export downloaded on 2026-05-27. It has 2,329 images and 5,689 labels across 22 KHR/USD front/back classes; preliminary contact sheets show real phone, partial, hand-held, and overlap views. Exact duplicate/split-leakage and label-geometry audits passed under the headroom harness. Near dHash audit found 6,432 lookalike pairs and 3,003 cross-split pairs at threshold 4, but 0 same-original Roboflow stems; curate splits before validation claims.
 - `data/processed/roboflow_cuurecy_detection_is/manifest.csv`: ignored generated object manifest from `scripts/build_cuurecy_detection_manifest.py`; it preserves split, image path, raw class, canonical denomination, front/back side, edge-touch, tiny-mask, bbox, and polygon-area metadata without copying images.
 - `data/review/roboflow_cuurecy_detection_is_khr_20k_50k_partial_review_v1/`: ignored focused crop review pack for edge-touching, smaller-area `20000-riel-b/f` and `50000-riel-b/f` segmentation crops. It has 185 crops and contact sheets; `review_class` is canonicalized to `KHR_20000`/`KHR_50000` while `side` preserves front/back.
+- `data/review/roboflow_cuurecy_detection_is_khr_5k_10k_partial_review_v1/`: ignored companion crop review pack for edge-touching, smaller-area `5000-riel-b/f` and `10000-riel-b/f` crops. It has 189 crops with canonical `review_class` plus front/back side metadata for old/common fragment-classifier curation.
 
 ## Manual Or Blocked Sources
 

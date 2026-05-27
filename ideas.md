@@ -64,6 +64,7 @@ Living doc for high-value ideas, experiments, and results. Keep this short: only
 - Existing Khmer OCR is not a shortcut on the real shop-overlap draft: `mer` returns scattered text and wrong/partial digits from note crops, so keep OCR as an optional cue after detection rather than replacing the visual classifier path.
 - Roboflow `cuurecy-detection-is` downloaded successfully to `data/raw_datasets/roboflow_cuurecy_detection_is/`: 2,329 images and 5,689 YOLOv8 segmentation labels across KHR/USD front/back classes. Exact duplicate/split-leakage found 0 groups, dHash found 3,003 cross-split lookalikes but 0 same-original stems, geometry audit found no malformed mask rows, and the manifest has 5,067 core CashSnap objects plus front/back/partial metadata.
 - Focused Roboflow partial review pack `data/review/roboflow_cuurecy_detection_is_khr_20k_50k_partial_review_v1/` has 185 edge-touching/small-area 20k/50k front/back crops with canonical `review_class` and side metadata. Contact sheets show useful real partial/back fragments, but repeated layouts mean review/curation is needed before classifier training.
+- Companion Roboflow partial review pack `data/review/roboflow_cuurecy_detection_is_khr_5k_10k_partial_review_v1/` has 189 edge-touching/small-area 5k/10k front/back crops for the old/common KHR confusion path.
 
 ## Data Gaps
 
