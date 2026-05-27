@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -33,6 +34,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--nms-iou", type=float, default=0.85)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--limit", type=int, default=0)
+    parser.add_argument(
+        "--recursive",
+        action="store_true",
+        help="Scan images-dir recursively, preserving parent folders in output names.",
+    )
     return parser.parse_args()
 
 
@@ -56,9 +62,15 @@ def run(cmd: list[str], env: dict[str, str]) -> None:
     subprocess.run(cmd, cwd=ROOT, env=env, check=True)
 
 
-def image_paths(images_dir: Path, limit: int) -> list[Path]:
-    paths = sorted(path for path in images_dir.iterdir() if path.suffix.lower() in IMAGE_SUFFIXES)
+def image_paths(images_dir: Path, limit: int, recursive: bool) -> list[Path]:
+    pattern = "**/*" if recursive else "*"
+    paths = sorted(path for path in images_dir.glob(pattern) if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES)
     return paths[:limit] if limit else paths
+
+
+def output_stem(images_dir: Path, image_path: Path, recursive: bool) -> str:
+    source = image_path.relative_to(images_dir).with_suffix("") if recursive else Path(image_path.stem)
+    return re.sub(r"[^A-Za-z0-9]+", "_", "_".join(source.parts)).strip("_") or "image"
 
 
 def main() -> None:
@@ -74,8 +86,8 @@ def main() -> None:
     env = project_env()
 
     pairs: list[tuple[Path, Path]] = []
-    for image_path in image_paths(images_dir, args.limit):
-        stem = image_path.stem.replace(" ", "_")
+    for image_path in image_paths(images_dir, args.limit, args.recursive):
+        stem = output_stem(images_dir, image_path, args.recursive)
         raw_csv = raw_dir / f"{stem}_raw.csv"
         raw_preview = preview_dir / f"{stem}_raw.jpg"
         fused_csv = fused_dir / f"{stem}_fused.csv"

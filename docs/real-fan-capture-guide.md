@@ -47,7 +47,7 @@ Use model proposals as review hints, not as ground truth. Keep draft outputs und
 For a folder of new, non-benchmark phone photos, run the full detector -> classifier -> fusion -> review-pack pipeline:
 
 ```powershell
-lr python scripts/run_capture_review_pipeline.py --images-dir data/inbox/real_partial_photos --out-dir data/review/real_partial_proposal_review_v1
+lr python scripts/run_capture_review_pipeline.py --images-dir data/inbox/real_partial_photos --recursive --out-dir data/review/real_partial_proposal_review_v1
 ```
 
 The pipeline points common ML cache environment variables at the repo-local `.cache_runtime/` folder on `D:` so it does not recreate default Torch/Hugging Face caches on `C:`.
