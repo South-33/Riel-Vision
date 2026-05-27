@@ -45,6 +45,8 @@ function parseArgs(argv) {
     outCsv: "",
     labels: "",
     matchIou: 0.5,
+    minSameClass: null,
+    minAnyClass: null,
     edge: process.env.EDGE_PATH || DEFAULT_EDGE,
   };
   for (let index = 2; index < argv.length; index += 1) {
@@ -74,6 +76,12 @@ function parseArgs(argv) {
     } else if (key === "--match-iou") {
       args.matchIou = Number(value);
       index += 1;
+    } else if (key === "--min-same-class") {
+      args.minSameClass = Number(value);
+      index += 1;
+    } else if (key === "--min-any-class") {
+      args.minAnyClass = Number(value);
+      index += 1;
     } else if (key === "--edge") {
       args.edge = value;
       index += 1;
@@ -94,6 +102,8 @@ Options:
   --image PATH        Repo-root browser image URL path.
   --labels PATH       Optional YOLO detect labels for smoke evaluation.
   --match-iou NUMBER  IoU threshold for --labels evaluation. Default: 0.5.
+  --min-same-class N  Fail if labeled final same-class matches are below N.
+  --min-any-class N   Fail if labeled final any-class matches are below N.
   --screenshot PATH   Optional PNG screenshot output path.
   --out-csv PATH      Optional CSV output for browser-side detections.
   --port NUMBER       Local static server port. Default: 8787.
@@ -310,6 +320,23 @@ function summarize(value, args) {
   };
 }
 
+function enforceEvaluation(summary, args) {
+  if (args.minSameClass === null && args.minAnyClass === null) return;
+  if (!summary.evaluation) {
+    throw new Error("--min-same-class/--min-any-class require --labels");
+  }
+  const failures = [];
+  if (args.minSameClass !== null && summary.evaluation.matchedSameClass < args.minSameClass) {
+    failures.push(`same-class ${summary.evaluation.matchedSameClass} < ${args.minSameClass}`);
+  }
+  if (args.minAnyClass !== null && summary.evaluation.matchedAnyClass < args.minAnyClass) {
+    failures.push(`any-class ${summary.evaluation.matchedAnyClass} < ${args.minAnyClass}`);
+  }
+  if (failures.length) {
+    throw new Error(`Browser smoke evaluation failed: ${failures.join("; ")}`);
+  }
+}
+
 async function readBrowserState(send, timeoutMs) {
   await send("Runtime.enable");
   const expression = `(() => JSON.stringify({
@@ -423,7 +450,9 @@ async function main() {
     await captureScreenshot(send, args.screenshot);
     writeDetectionCsv(args.outCsv, value.detections || []);
     ws.close();
-    console.log(JSON.stringify(summarize(value, args), null, 2));
+    const summary = summarize(value, args);
+    console.log(JSON.stringify(summary, null, 2));
+    enforceEvaluation(summary, args);
   } finally {
     killTree(edge);
     killTree(server);
