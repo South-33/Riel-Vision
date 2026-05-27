@@ -61,7 +61,7 @@ def main() -> None:
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
     )
-    dataset = datasets.ImageFolder(resolve(args.data) / args.split, transform=transform)
+    dataset = datasets.ImageFolder(resolve(args.data) / args.split, transform=transform, allow_empty=True)
     if dataset.classes != class_names:
         raise SystemExit(f"dataset classes differ from checkpoint: {dataset.classes} != {class_names}")
     device = choose_device(args.device)

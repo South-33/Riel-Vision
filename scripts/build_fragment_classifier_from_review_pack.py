@@ -24,6 +24,8 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Use all rows when review_include is blank. Useful only for diagnostics.",
     )
+    parser.add_argument("--classes", default="", help="Optional comma-separated review classes to keep.")
+    parser.add_argument("--ensure-classes", default="", help="Optional comma-separated class folders to create in every split.")
     parser.add_argument("--clean", action="store_true")
     return parser.parse_args()
 
@@ -64,6 +66,8 @@ def main() -> None:
         safe_clean(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     include_values = {value.strip().lower() for value in args.include_values.split(",") if value.strip()}
+    keep_classes = {value.strip() for value in args.classes.split(",") if value.strip()}
+    ensure_classes = {value.strip() for value in args.ensure_classes.split(",") if value.strip()}
 
     rows: list[dict[str, str]] = []
     for manifest_text in args.manifest:
@@ -83,6 +87,8 @@ def main() -> None:
         class_name = row_class_name(row)
         if not class_name:
             continue
+        if keep_classes and class_name not in keep_classes:
+            continue
         key = (split, class_name)
         index = counters.get(key, 0)
         counters[key] = index + 1
@@ -98,6 +104,10 @@ def main() -> None:
             "review_notes": row.get("review_notes", ""),
         }
         written_rows.append(written)
+
+    for split in ["train", "val", "test"]:
+        for class_name in sorted(ensure_classes | keep_classes):
+            (out_dir / split / class_name).mkdir(parents=True, exist_ok=True)
 
     if written_rows:
         with (out_dir / "manifest.csv").open("w", newline="", encoding="utf-8") as handle:
