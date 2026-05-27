@@ -55,6 +55,12 @@ Export state:
 - Detector NCNN export succeeded: `best_ncnn_model/`, about `9.2 MB`; Ultralytics disables the YOLO26 end-to-end branch for NCNN.
 - Classifier ONNX export exists at `runs/fragment_classifier/mobilenet_v3_old_common_khr_realbox_pretrained_balanced_e12/best.onnx`, about `6.1 MB`, with class order in `classes.json`.
 
+Check current browser-stack artifact paths and total ONNX size with:
+
+```powershell
+lr python scripts/check_browser_stack_artifacts.py
+```
+
 Current diagnostic fusion recipe:
 
 ```powershell
