@@ -114,3 +114,5 @@ The current best shop-overlap diagnostic is not a larger synthetic detector. It 
 - calibrated fusion: detector overrides at about `det_conf >= 0.17`, then class-agnostic NMS ranked by detector confidence
 
 On the draft shop overlap label set, this gives 6 predictions for 6 draft notes, 6/6 any-class region coverage, and 5/6 same-class recall. Treat this as a diagnostic direction, not a production result, because it is calibrated on one draft image.
+
+Raw detector refresh on 2026-05-27 reinforces the same conclusion. Against the six-box `real_overlap_0003` draft labels, `yolo26n_legacy_clean_plus_realcutout_low_skin_ft_e6_i416_b8` reaches 5/6 same-class and 6/6 any-class at `416/conf=0.05`, but with 14 predictions and heavy class duplication; at `416/conf=0.03` it reaches 6/6 same-class only by overpredicting 23 boxes. The cleaner alpha `yolo26n_cashsnap_current_thin_legacy_clean_v1_e20_i416_b8` tops out at 3/6 same-class in the same sweep. Keep using detector proposals plus calibration/classifier evidence instead of treating raw detector thresholding as solved.
