@@ -86,12 +86,38 @@ def guide_text(row: dict[str, str], folder_path: Path) -> str:
     )
 
 
+def root_guide_text(rows: list[dict[str, str]], out_dir: Path) -> str:
+    folder_lines = [f"- {row['match_value']}: {row['description']} ({row['min_images']} usable)" for row in rows]
+    return "\n".join(
+        [
+            "CashSnap real partial-photo inbox",
+            "",
+            "Drop rights-clear phone photos into the scene folders below.",
+            "Keep faces, IDs, cards, receipts, screens, and location details out of frame.",
+            "",
+            "Folders:",
+            *folder_lines,
+            "",
+            "After adding photos, register them with:",
+            f"lr python scripts/register_capture_photos.py --images-dir {repo_path(out_dir)} --recursive --scene-type-from-parent --dry-run",
+            f"lr python scripts/register_capture_photos.py --images-dir {repo_path(out_dir)} --recursive --scene-type-from-parent",
+            "",
+            "Then check remaining gaps with:",
+            "lr python scripts/check_capture_requirements.py",
+            "",
+        ]
+    )
+
+
 def main() -> None:
     args = parse_args()
     requirements = resolve(args.requirements)
     out_dir = resolve(args.out_dir)
     rows = scene_requirements(requirements, args.include_optional)
     print(f"out_dir={repo_path(out_dir)} folders={len(rows)}")
+    if not args.dry_run and args.write_guides:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / ".capture_guide.txt").write_text(root_guide_text(rows, out_dir), encoding="utf-8")
     for row in rows:
         folder = row["match_value"].strip()
         path = out_dir / folder
