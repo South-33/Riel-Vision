@@ -144,7 +144,13 @@ def main() -> None:
             print(result.stderr, end="")
             failures.append(f"{case_id}: exit {result.returncode}")
             continue
-        summary = parse_summary(result.stdout)
+        try:
+            summary = parse_summary(result.stdout)
+        except ValueError as exc:
+            print(result.stdout, end="")
+            print(result.stderr, end="")
+            failures.append(f"{case_id}: {exc}")
+            continue
         summary["caseId"] = case_id
         summary["notes"] = case.get("notes", "")
         summaries.append(summary)
