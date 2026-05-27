@@ -10,6 +10,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INVENTORY = ROOT / "manifests" / "real_partial_capture_inventory.csv"
 DEFAULT_REQUIREMENTS = ROOT / "manifests" / "real_partial_capture_requirements.csv"
+DEFAULT_INBOX = ROOT / "data" / "inbox" / "real_partial_photos"
 
 
 def parse_args() -> argparse.Namespace:
@@ -37,6 +38,12 @@ def row_matches(row: dict[str, str], column: str, value: str) -> bool:
     if column == "denominations":
         return value in split_values(row.get(column, ""))
     return row.get(column, "").strip() == value
+
+
+def hint_for_requirement(req: dict[str, str]) -> str:
+    if req["match_column"] == "scene_type":
+        return f"drop_folder={(DEFAULT_INBOX / req['match_value']).relative_to(ROOT).as_posix()}"
+    return ""
 
 
 def image_ok(row: dict[str, str]) -> tuple[bool, str]:
@@ -77,7 +84,9 @@ def main() -> None:
         required = req.get("required", "yes").strip().lower() not in {"0", "false", "no", "optional"}
         status = "ok" if count >= minimum else ("missing" if required else "optional_missing")
         unmet = unmet or (required and count < minimum)
-        print(f"{status}: {req['requirement_id']} {count}/{minimum} - {req['description']}")
+        hint = hint_for_requirement(req)
+        suffix = f" ({hint})" if hint and count < minimum else ""
+        print(f"{status}: {req['requirement_id']} {count}/{minimum} - {req['description']}{suffix}")
     if errors:
         print("Inventory issues:")
         for error in errors:
