@@ -69,6 +69,8 @@ Purpose: keep dataset research actionable. Do not download large datasets just b
 
 ## Current Recommendation
 
+Current web re-check on 2026-05-30 did not surface a better public KHR partial/fan source. Roboflow search still centers on Cambodia Currency Project / Khmer-US-currency style projects and generic banknote datasets, while recent adjacent papers such as the Kazakh banknote image dataset are useful for transfer thinking only. Keep the next cycle focused on reviewed KHR phone captures and curated Roboflow partial crops.
+
 Do not spend the next cycle downloading broad public banknote datasets. The best path is:
 
 1. Use the local Numista scan bank for controlled synthetic texture coverage.
