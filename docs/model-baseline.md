@@ -144,6 +144,8 @@ Added a two-stage diagnostic path:
 
 Pretrained MobileNetV3 on `data/fragment_classifier_cashsnap_realfrag_v1/` reached held-out test accuracy `0.922`, but old-overlap two-stage predictions remained USD-biased. Adding legacy NBC fragments in `data/fragment_classifier_cashsnap_realfrag_plus_legacy_v1/` produced `runs/fragment_classifier/mobilenet_v3_realfrag_plus_legacy_pretrained_balanced_e8/` with held-out test accuracy `0.910`. On `real_overlap_0003_commons_shop_5k_10k_20k`, class-agnostic YOLO proposals plus this classifier reduced duplicate predictions and correctly recovered the top-left old `KHR_20000`, but same-class draft recall is still only `1/6`; the right-side `KHR_20000` back is still confused with `KHR_1000`, and lower notes remain confused. This branch is promising for phone/browser because `best.onnx` exports, but it needs targeted old front/back fragment data before it can replace detector-only denomination labels.
 
+The repaired P1 old/common partial-focus queue confirms the same data bottleneck. Evaluating `mobilenet_v3_old_common_khr_realbox_pretrained_balanced_e12` on `data/fragment_classifier_p1_oldcommon_focus_unreviewed_diag_v2` gives val accuracy `0.088` and test accuracy `0.067`; `KHR_5000` and `KHR_20000` mostly collapse into `KHR_10000`. This is not a trusted benchmark because the queue is unreviewed, but it is a useful failure-localization diagnostic.
+
 ## Rare KHR Coverage Probe
 
 The original merged train split has only `17` `KHR_20000` boxes and `18` `KHR_50000` boxes. Based on the rare-KHR research PDFs, the minimum visual families to cover are:
