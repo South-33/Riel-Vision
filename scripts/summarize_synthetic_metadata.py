@@ -75,6 +75,9 @@ def main() -> None:
     layout_counts: Counter[str] = Counter()
     split_counts: Counter[str] = Counter()
     background_counts: Counter[str] = Counter()
+    hand_scene_counts: Counter[str] = Counter()
+    hand_occluder_counts: list[float] = []
+    hand_occluded_note_pixels: list[float] = []
     visible_area_by_tier: dict[str, list[float]] = defaultdict(list)
     visibility_ratio_by_tier: dict[str, list[float]] = defaultdict(list)
 
@@ -82,6 +85,11 @@ def main() -> None:
         scenes += 1
         split_counts[str(scene.get("split", "unknown"))] += 1
         background_counts[str(scene.get("background", "unknown"))] += 1
+        hand_applied = bool(scene.get("hand_occluder_applied", False))
+        hand_scene_counts["applied" if hand_applied else "none"] += 1
+        if hand_applied:
+            hand_occluder_counts.append(float(scene.get("hand_occluder_count", 0)))
+            hand_occluded_note_pixels.append(float(scene.get("hand_occluded_note_pixels", 0)))
         for instance in scene.get("instances", []):
             instances += 1
             class_name = str(instance.get("class_name", "unknown"))
@@ -106,6 +114,10 @@ def main() -> None:
     print(f"evidence_tiers: {dict(sorted(tier_counts.items()))}")
     print(f"drop_reasons: {dict(sorted(drop_counts.items()))}")
     print(f"layouts: {dict(sorted(layout_counts.items()))}")
+    print(f"hand_occluders: {dict(sorted(hand_scene_counts.items()))}")
+    if hand_occluder_counts:
+        print(f"hand_occluder_count_quantiles: {quantiles(hand_occluder_counts)}")
+        print(f"hand_occluded_note_pixels_quantiles: {quantiles(hand_occluded_note_pixels)}")
     if background_counts:
         print(f"backgrounds: {dict(background_counts.most_common(12))}")
     print(f"classes_all: {dict(sorted(class_counts.items()))}")

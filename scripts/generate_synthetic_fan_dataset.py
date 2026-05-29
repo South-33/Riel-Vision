@@ -391,9 +391,16 @@ def add_hand_occluders(
     rng: random.Random,
     probability: float,
     grip_center: tuple[int, int] | None = None,
-) -> None:
+) -> dict[str, object]:
+    base_info: dict[str, object] = {
+        "hand_occluder_applied": False,
+        "hand_occluder_count": 0,
+        "hand_occluder_pixels": 0,
+        "hand_occluded_note_pixels": 0,
+        "hand_grip_aligned": grip_center is not None,
+    }
     if probability <= 0 or rng.random() > probability:
-        return
+        return base_info
     occ = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     occ_mask = Image.new("L", canvas.size, 0)
     skin_palettes = [
@@ -438,7 +445,15 @@ def add_hand_occluders(
         occ_mask.paste(alpha, (px, py), alpha)
     canvas.alpha_composite(occ)
     occ_arr = np.asarray(occ_mask) > 24
+    occluded_note_pixels = int((occ_arr & (id_mask > 0)).sum())
     id_mask[occ_arr] = 0
+    return {
+        **base_info,
+        "hand_occluder_applied": True,
+        "hand_occluder_count": count,
+        "hand_occluder_pixels": int(occ_arr.sum()),
+        "hand_occluded_note_pixels": occluded_note_pixels,
+    }
 
 
 def add_note_shadow(
@@ -912,7 +927,7 @@ def make_scene(
 
     fan_layouts = {"radial_slice", "strip_fan", "thin_radial_slice", "tight_fan", "fan"}
     grip_center = (center_x, pivot_y) if layout_mode in fan_layouts else None
-    add_hand_occluders(canvas, id_mask, rng, hand_probability, grip_center=grip_center)
+    scene_info.update(add_hand_occluders(canvas, id_mask, rng, hand_probability, grip_center=grip_center))
     canvas, id_mask, camera_info = apply_scene_camera_geometry(
         canvas,
         id_mask,
