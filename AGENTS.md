@@ -52,7 +52,9 @@ This is the project's AGENTS.md
 - Scan-based cutouts can be rebuilt with `scripts/build_numista_cutout_bank.py` to `data/asset_candidates/numista_current_cutout_bank_v1/`; prefer this over specimen-marked NBC assets for clean texture probes.
 - Numista is the best current scan source in this repo; the useful in-circulation bills were already downloaded, so use/rebuild the Numista scan bank before searching for another clean scan atlas.
 - `build_numista_cutout_bank.py` defaults to rectangular scan alpha because Numista scans are tight; KHR 500 red/pink audit flags are expected design color, not specimen marks.
+- `KHR_50` is outside the current 13-class CashSnap schema; ignore 50 riel Numista raw folders unless the user explicitly expands the denomination set.
 - Use `docs/synthetic-harness-runbook.md` for the current scan-bank audit -> real-background extraction -> 2.5D smoke -> modest scale-up flow; it includes metadata/crop QA before training.
+- Current corrected Numista base-domain probe data is `data/synthetic/cashsnap_scan_2p5d_base_phone_v1/` with mixed config `configs/cashsnap_v1_scan_2p5d_base_probe.yaml`; generated after rectangular-alpha rebuild and label-safe camera geometry smoke.
 - Background patch mining from labeled banknote datasets is not automatic-clean; use detector rejection plus contact-sheet QA, and do not pass `--background-dir` to training data until the sheet has no note fragments.
 - First scan-2.5D probe artifact is `data/synthetic/cashsnap_scan_2p5d_fan_v1/` (2,000 procedural-background scenes) plus `configs/cashsnap_v1_scan_2p5d_probe.yaml`; use it as a geometry probe, not final photoreal data.
 - Scan-2.5D e4 probe improves permissive real-overlap region coverage but not denomination identity (`640/conf=0.05`: 6/6 any-class, 2/6 same-class, 17 preds); the old/common-focus variant loses coverage and adds `KHR_500`/`KHR_1000` false positives, so do not scale either exact recipe blindly.
