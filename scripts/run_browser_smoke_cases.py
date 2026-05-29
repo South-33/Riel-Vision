@@ -21,6 +21,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--port-base", type=int, default=8877, help="First local HTTP port for smoke cases.")
     parser.add_argument("--debug-port-base", type=int, default=9323, help="First Edge DevTools port for smoke cases.")
     parser.add_argument("--edge", default="", help="Optional Edge executable path forwarded to the node smoke script.")
+    parser.add_argument("--proposal-conf", default="", help="Optional browser detector proposal confidence override.")
+    parser.add_argument("--detector-override", default="", help="Optional detector-vs-fragment fusion threshold override.")
+    parser.add_argument("--nms-iou", default="", help="Optional fusion NMS IoU override.")
+    parser.add_argument("--crop-padding", default="", help="Optional fragment crop padding override.")
     parser.add_argument("--summary-json", type=Path, help="Optional aggregate JSON summary output path.")
     parser.add_argument("--validate-only", action="store_true", help="Validate the case manifest without launching Edge.")
     parser.add_argument("--no-artifacts", action="store_true", help="Do not write per-case screenshots or detection CSVs.")
@@ -106,6 +110,14 @@ def command_for_case(case: dict[str, str], args: argparse.Namespace, index: int)
     add_optional_number(command, "--max-usd-error", case.get("max_usd_error", ""))
     if args.edge:
         command.extend(["--edge", args.edge])
+    if args.proposal_conf:
+        command.extend(["--proposal-conf", args.proposal_conf])
+    if args.detector_override:
+        command.extend(["--detector-override", args.detector_override])
+    if args.nms_iou:
+        command.extend(["--nms-iou", args.nms_iou])
+    if args.crop_padding:
+        command.extend(["--crop-padding", args.crop_padding])
     if not args.no_artifacts:
         out_dir = resolve(args.out_dir)
         case_id = case["case_id"]

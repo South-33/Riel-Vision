@@ -21,7 +21,7 @@ The browser fusion path skips this KHR-only fragment classifier for detector pro
 
 ## Fusion
 
-Current diagnostic fusion, refreshed on 2026-05-27:
+Current diagnostic fusion, refreshed on 2026-05-30:
 
 - Detector proposal confidence: `0.05`
 - Fragment crop padding: `0.0`
@@ -37,7 +37,11 @@ On draft labels for `real_overlap_0003_commons_shop_5k_10k_20k`, the focused old
 - `5/6` same-class matches
 - `6` predictions for `6` draft visible notes
 
-The deployable browser path should be checked with `scripts/smoke_browser_demo_cdp.cjs`, because Edge ONNX Runtime Web/canvas preprocessing is the deployment truth and can differ from PyTorch-generated proposal CSVs around borderline detector scores. Current Edge autorun smoke on the same shop-overlap image predicts `6` bills with `KHR 76,000`, `USD 0`, and classes `KHR_1000:1;KHR_10000:1;KHR_20000:3;KHR_5000:1`. Run the smoke with `--labels data/real_fan_benchmark/drafts/real_overlap_0003_commons_shop_5k_10k_20k.txt`; its JSON now reports `6/6` any-class matches, `4/6` same-class matches, expected label totals, value errors, and matched-pair confusion counts after the custom detector resizer, plus per-source recall showing final/detector labels at `4/6` and fragment-only labels at `3/6`.
+The deployable browser path should be checked with `scripts/smoke_browser_demo_cdp.cjs`, because Edge ONNX Runtime Web/canvas preprocessing is the deployment truth and can differ from PyTorch-generated proposal CSVs around borderline detector scores. Current Edge smoke-suite refresh on the same shop-overlap image predicts `6` bills with `KHR 76,000`, `USD 0`, and classes `KHR_1000:1;KHR_10000:1;KHR_20000:3;KHR_5000:1`. Run the smoke with `--labels data/real_fan_benchmark/drafts/real_overlap_0003_commons_shop_5k_10k_20k.txt`; its JSON reports `6/6` any-class matches, `4/6` same-class matches, a `+6000` KHR value error, and matched-pair confusions `KHR_10000->KHR_1000` plus `KHR_5000->KHR_20000`, plus per-source recall showing final/detector labels at `4/6` and fragment-only labels at `3/6`.
+
+The 2026-05-30 `scripts/run_browser_smoke_cases.py` suite also passed the USD_1 and detector-only `KHR_500`, `KHR_2000`, and `KHR_50000` sanity cases, so the current KHR-only fragment classifier is not overwriting denominations outside its class list in those guards.
+
+Temporary browser override `--detector-override 0.20` keeps the shop-overlap count and 4/6 same-class score but changes the value error from `+6000` KHR to `-4000` KHR by turning the weak false `KHR_20000` into `KHR_10000`; the same override still passes the USD_1 and detector-only KHR guard cases. Do not change the default config from one image; use the smoke-runner override flags for calibration sweeps once more labeled real cases exist.
 
 Browser smoke debug currently reports detector output dims `[1,300,6]`, `13` browser proposals, and `6` final detections. Ultralytics ONNX Runtime on the same detector artifact reaches `6/6` detector same-class recall at `416/conf=0.05`, so remaining browser work should focus on classifier/crop parity and data quality rather than blaming the ONNX file itself.
 

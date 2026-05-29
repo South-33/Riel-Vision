@@ -77,15 +77,21 @@ def main() -> None:
             rows.append(row)
     written_rows: list[dict[str, str]] = []
     counters: dict[tuple[str, str], int] = {}
+    skipped_missing = 0
+    skipped_unselected = 0
+    skipped_no_class = 0
     for row in rows:
         if not selected(row, include_values, args.include_unreviewed):
+            skipped_unselected += 1
             continue
         source = resolve(row["crop_path"])
         if source.suffix.lower() not in IMAGE_SUFFIXES or not source.exists():
+            skipped_missing += 1
             continue
         split = row.get("split", "train").strip() or "train"
         class_name = row_class_name(row)
         if not class_name:
+            skipped_no_class += 1
             continue
         if keep_classes and class_name not in keep_classes:
             continue
@@ -115,6 +121,10 @@ def main() -> None:
             writer.writeheader()
             writer.writerows(written_rows)
     print(f"wrote {len(written_rows)} reviewed crops to {out_dir.relative_to(ROOT)}")
+    print(
+        f"skipped_unselected={skipped_unselected} "
+        f"skipped_missing_or_invalid={skipped_missing} skipped_no_class={skipped_no_class}"
+    )
     for (split, class_name), count in sorted(counters.items()):
         print(f"{split} {class_name}: {count}")
 

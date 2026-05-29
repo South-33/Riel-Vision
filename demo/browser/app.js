@@ -77,6 +77,7 @@ async function loadModel() {
       throw new Error(`Config HTTP ${configResponse.status}`);
     }
     state.config = await configResponse.json();
+    applyConfigOverrides();
     state.conf = state.config.detector.proposal_confidence ?? state.conf;
     confSlider.value = String(state.conf);
     confValue.textContent = state.conf.toFixed(2);
@@ -96,6 +97,34 @@ async function loadModel() {
     modelStatus.textContent = "Model load failed";
     modelStatus.className = "status error";
     console.error(error);
+  }
+}
+
+function queryNumber(name) {
+  const raw = params.get(name);
+  if (raw === null || raw.trim() === "") {
+    return null;
+  }
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+function applyConfigOverrides() {
+  const proposalConf = queryNumber("proposalConf") ?? queryNumber("conf");
+  const detectorOverride = queryNumber("detectorOverride");
+  const nmsIou = queryNumber("nmsIou");
+  const cropPadding = queryNumber("cropPadding");
+  if (proposalConf !== null) {
+    state.config.detector.proposal_confidence = proposalConf;
+  }
+  if (detectorOverride !== null) {
+    state.config.fusion.detector_override_confidence = detectorOverride;
+  }
+  if (nmsIou !== null) {
+    state.config.fusion.nms_iou = nmsIou;
+  }
+  if (cropPadding !== null) {
+    state.config.fragment_classifier.crop_padding = cropPadding;
   }
 }
 

@@ -10,6 +10,7 @@ data/asset_candidates/
 data/picwish_upload_batches/
 data/picwish_upload_batches*/
 data/synthetic/
+data/backgrounds/
 data/fragment_classifier*/
 data/real_fan_benchmark/
 data/review/

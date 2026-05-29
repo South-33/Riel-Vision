@@ -64,8 +64,12 @@ def summarize_manifest(path: Path, top: int) -> None:
     rows = read_rows(path)
     included = sum(1 for row in rows if selected(row))
     blanks = sum(1 for row in rows if not row.get("review_include", "").strip())
+    crop_rows = [row for row in rows if row.get("crop_path", "").strip()]
+    missing_crops = sum(1 for row in crop_rows if not resolve(Path(row["crop_path"])).exists())
     print(f"{repo_path(path)}")
     print(f"  rows={len(rows)} included={included} blank_review_include={blanks}")
+    if crop_rows:
+        print(f"  crop_paths={len(crop_rows)} missing_crop_paths={missing_crops}")
     summarize_counter(
         "classes",
         Counter(first_value(row, ["review_class", "target", "canonical_class", "class_name", "fragment_class", "detector_class"]) for row in rows),

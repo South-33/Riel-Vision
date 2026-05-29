@@ -124,6 +124,14 @@ Added stricter transparent-cutout QA metrics to `scripts/score_transparent_cutou
 
 Continuation `runs/cashsnap/yolo26n_legacy_clean_shape_skin30_current_ft_e4_i416_headroom/weights/best.pt` completed through the headroom harness (`batch=1/workers=0`) and reached mixed validation mAP50-95 `0.443`. It is not an upgrade: on the draft overlap image, `416/conf=0.05` gets only `2/6` same-class and `3/6` any-class matches with `11` predictions; `640/conf=0.03` reaches `6/6` any-class but only `3/6` same-class and predicts six `USD_100` false positives. Conclusion: automatic shape filtering improves the asset bank but still needs human review or stronger contamination controls before training.
 
+## Scan 2.5D Synthetic Probe
+
+Built `data/synthetic/cashsnap_scan_2p5d_fan_v1/` from Numista scan cutouts with visible-region labels, unknown-fragment crops, soft shadows, hand primitives, class-balanced sampling, and per-note perspective warps. The 2,000-scene artifact has 9,623 exported denomination labels and 9,372 `banknote_unknown` crops; backgrounds are procedural because mining `cashsnap_v1` for real backgrounds leaked note fragments during contact-sheet QA.
+
+Fresh YOLO26n probe `runs/cashsnap/yolo26n_cashsnap_scan_2p5d_probe_e4_i416_b2/weights/best.pt` trained 4 epochs through the headroom harness. Mixed validation improved over the run but stayed weak (`mAP50=0.185`, `mAP50-95=0.132`), so it is not an alpha. On `real_overlap_0003_commons_shop_5k_10k_20k`, it reaches useful region coverage only at permissive thresholds (`640/conf=0.05`: 6/6 any-class, 2/6 same-class, 17 predictions; `640/conf=0.03`: 6/6 any-class, 3/6 same-class, 23 predictions). Conclusion: scan 2.5D geometry increases proposal coverage but does not solve denomination identity or false positives; next work should improve real/photoreal texture, finger realism, and verifier calibration rather than scaling this exact recipe blindly.
+
+Follow-up old/common-focus probe `data/synthetic/cashsnap_scan_2p5d_oldcommon_focus_v1/` used a Numista 1990+ KHR bank filtered to `KHR_5000`, `KHR_10000`, and `KHR_20000`. Fresh run `runs/cashsnap/yolo26n_cashsnap_scan_2p5d_oldcommon_probe_e3_i416_b2/weights/best.pt` reached mixed validation `mAP50=0.160`, `mAP50-95=0.111`. On the same shop-overlap draft it did not beat the broader scan-2.5D probe: best 416px result was `2/6` same-class and `2/6` any-class at `conf=0.03`/`0.05`, while 640px introduced many `KHR_500`/`KHR_1000` false positives and stayed at `1/6` same-class. Conclusion: old/common design pressure alone is insufficient; the missing signal is phone-domain partial texture and calibrated fragment identity, not just more scan-sourced overlap geometry.
+
 ## Fragment Classifier Branch
 
 Added a two-stage diagnostic path:

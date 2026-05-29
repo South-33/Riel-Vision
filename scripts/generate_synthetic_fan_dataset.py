@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
 
 try:
     import cv2
@@ -26,7 +26,7 @@ except ImportError:  # pragma: no cover - optional OBB export dependency
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SOURCE = ROOT / "data" / "asset_candidates" / "khr_nbc_current_cutout_bank_v1"
+DEFAULT_SOURCE = ROOT / "data" / "asset_candidates" / "numista_current_cutout_bank_v1"
 DEFAULT_OUT = ROOT / "data" / "synthetic" / "khr_fan_v1"
 
 CLASS_NAMES = [
@@ -60,6 +60,11 @@ TARGET_KHR = {
 class NoteRef:
     path: Path
     class_name: str
+
+
+@dataclass(frozen=True)
+class BackgroundRef:
+    path: Path
 
 
 @dataclass(frozen=True)
@@ -116,6 +121,23 @@ def load_refs(sources: list[Path], allowed_classes: set[str] | None = None) -> l
     return refs
 
 
+def load_background_refs(sources: list[Path]) -> list[BackgroundRef]:
+    refs: list[BackgroundRef] = []
+    skip_dirs = {"labels", "masks", "crops", "metadata"}
+    skip_stems = {"contact_sheet", "suspect_contact"}
+    for source in sources:
+        for path in sorted(source.rglob("*")):
+            if path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp"}:
+                continue
+            if path.stem.lower() in skip_stems:
+                continue
+            lower_parts = {part.lower() for part in path.parts}
+            if lower_parts & skip_dirs:
+                continue
+            refs.append(BackgroundRef(path=path))
+    return refs
+
+
 def looks_like_whole_note(path: Path) -> bool:
     try:
         with Image.open(path) as image:
@@ -134,18 +156,10 @@ def looks_like_whole_note(path: Path) -> bool:
 def specimen_score(path: Path) -> float:
     if "specimen" in path.name.lower():
         return 1.0
-    try:
-        image = Image.open(path).convert("RGB").resize((160, 80))
-    except OSError:
-        return 1.0
-    arr = np.asarray(image).astype(np.int16)
-    red = arr[:, :, 0]
-    green = arr[:, :, 1]
-    blue = arr[:, :, 2]
-    strong_red = (red > 125) & ((red - green) > 45) & ((red - blue) > 45)
-    # SPECIMEN stamps create a large red connected-looking footprint. Normal
-    # note artwork can be red too, so keep the threshold conservative.
-    return float(strong_red.mean())
+    # Color alone is not a reliable specimen signal: valid KHR 500 scans are
+    # pink/red, while some NBC specimen stamps are not separable by a simple
+    # red-pixel threshold. Use audit_cutout_bank.py for visual QA instead.
+    return 0.0
 
 
 def looks_like_specimen(path: Path) -> bool:
@@ -226,6 +240,54 @@ def jitter_note(image: Image.Image, rng: random.Random) -> Image.Image:
     return image
 
 
+def perspective_coeffs(
+    output_points: list[tuple[float, float]],
+    input_points: list[tuple[float, float]],
+) -> list[float]:
+    matrix = []
+    vector = []
+    for (x_out, y_out), (x_in, y_in) in zip(output_points, input_points):
+        matrix.append([x_out, y_out, 1, 0, 0, 0, -x_in * x_out, -x_in * y_out])
+        matrix.append([0, 0, 0, x_out, y_out, 1, -y_in * x_out, -y_in * y_out])
+        vector.extend([x_in, y_in])
+    coeffs = np.linalg.lstsq(np.asarray(matrix), np.asarray(vector), rcond=None)[0]
+    return [float(value) for value in coeffs]
+
+
+def perspective_warp_note(image: Image.Image, rng: random.Random, probability: float) -> Image.Image:
+    if probability <= 0 or rng.random() > probability:
+        return image
+    rgba = image.convert("RGBA")
+    w, h = rgba.size
+    if w < 32 or h < 16:
+        return rgba
+    pad = max(6, int(max(w, h) * 0.08))
+    out_w = w + pad * 2
+    out_h = h + pad * 2
+    strength_x = min(w * rng.uniform(0.025, 0.10), pad * 0.95)
+    strength_y = min(h * rng.uniform(0.035, 0.16), pad * 0.95)
+    dest = [
+        (pad + rng.uniform(-strength_x, strength_x), pad + rng.uniform(-strength_y, strength_y)),
+        (pad + w + rng.uniform(-strength_x, strength_x), pad + rng.uniform(-strength_y, strength_y)),
+        (pad + w + rng.uniform(-strength_x, strength_x), pad + h + rng.uniform(-strength_y, strength_y)),
+        (pad + rng.uniform(-strength_x, strength_x), pad + h + rng.uniform(-strength_y, strength_y)),
+    ]
+    source = [(0.0, 0.0), (float(w), 0.0), (float(w), float(h)), (0.0, float(h))]
+    coeffs = perspective_coeffs(dest, source)
+    warped = rgba.transform(
+        (out_w, out_h),
+        Image.Transform.PERSPECTIVE,
+        coeffs,
+        resample=Image.Resampling.BICUBIC,
+        fillcolor=(0, 0, 0, 0),
+    )
+    alpha = np.asarray(warped.getchannel("A"))
+    ys, xs = np.where(alpha > 8)
+    if len(xs) == 0:
+        return rgba
+    return warped.crop((int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1))
+
+
 def crop_note_strip(
     image: Image.Image,
     rng: random.Random,
@@ -269,7 +331,7 @@ def suppress_red_stamp(image: Image.Image) -> Image.Image:
     return Image.fromarray(arr, "RGBA")
 
 
-def make_background(size: int, rng: random.Random) -> Image.Image:
+def make_procedural_background(size: int, rng: random.Random) -> Image.Image:
     base = np.zeros((size, size, 3), dtype=np.uint8)
     color = np.array(
         [
@@ -287,6 +349,41 @@ def make_background(size: int, rng: random.Random) -> Image.Image:
     return Image.fromarray(arr, "RGB").filter(ImageFilter.GaussianBlur(0.4))
 
 
+def make_image_background(path: Path, size: int, rng: random.Random) -> Image.Image:
+    with Image.open(path) as image:
+        rgb = ImageOps.exif_transpose(image).convert("RGB")
+    bg = ImageOps.fit(
+        rgb,
+        (size, size),
+        method=Image.Resampling.BICUBIC,
+        centering=(rng.random(), rng.random()),
+    )
+    if rng.random() < 0.55:
+        bg = ImageEnhance.Brightness(bg).enhance(rng.uniform(0.82, 1.18))
+    if rng.random() < 0.55:
+        bg = ImageEnhance.Contrast(bg).enhance(rng.uniform(0.82, 1.22))
+    if rng.random() < 0.35:
+        bg = ImageEnhance.Color(bg).enhance(rng.uniform(0.78, 1.22))
+    if rng.random() < 0.18:
+        bg = bg.filter(ImageFilter.GaussianBlur(rng.uniform(0.15, 0.65)))
+    return bg
+
+
+def make_background(
+    size: int,
+    rng: random.Random,
+    backgrounds: list[BackgroundRef] | None = None,
+) -> tuple[Image.Image, str]:
+    if backgrounds and rng.random() < 0.9:
+        for _ in range(3):
+            ref = rng.choice(backgrounds)
+            try:
+                return make_image_background(ref.path, size, rng), metadata_path(ref.path)
+            except OSError:
+                continue
+    return make_procedural_background(size, rng), "procedural"
+
+
 def add_hand_occluders(
     canvas: Image.Image,
     id_mask: np.ndarray,
@@ -298,34 +395,40 @@ def add_hand_occluders(
         return
     occ = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     occ_mask = Image.new("L", canvas.size, 0)
-    count = rng.randint(1, 4)
-    for _ in range(count):
+    skin_palettes = [
+        (226, 174, 137),
+        (198, 132, 91),
+        (154, 96, 68),
+        (113, 73, 55),
+    ]
+    base_skin = tuple(max(35, min(245, channel + rng.randint(-12, 12))) for channel in rng.choice(skin_palettes))
+    count = rng.randint(1, 3 if grip_center else 4)
+    for index in range(count):
         if grip_center is None:
             x = rng.randint(int(canvas.width * 0.15), int(canvas.width * 0.85))
             y = rng.randint(int(canvas.height * 0.35), int(canvas.height * 0.92))
             angle = rng.uniform(-25, 25)
         else:
             grip_x, grip_y = grip_center
-            x = int(rng.gauss(grip_x, canvas.width * 0.06))
-            y = int(rng.gauss(grip_y - canvas.height * 0.05, canvas.height * 0.045))
+            spacing = canvas.width * rng.uniform(0.035, 0.065)
+            x = int(rng.gauss(grip_x + (index - (count - 1) / 2) * spacing, canvas.width * 0.025))
+            y = int(rng.gauss(grip_y - canvas.height * 0.06, canvas.height * 0.032))
             x = max(int(canvas.width * 0.08), min(int(canvas.width * 0.92), x))
             y = max(int(canvas.height * 0.48), min(int(canvas.height * 0.98), y))
-            angle = rng.uniform(-18, 18)
-        w = rng.randint(28, 58)
-        h = rng.randint(105, 190)
+            angle = rng.uniform(-10, 10) + (index - (count - 1) / 2) * rng.uniform(5, 12)
+        w = rng.randint(26, 44)
+        h = rng.randint(115, 190)
         finger = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        color = (
-            rng.randint(145, 215),
-            rng.randint(95, 165),
-            rng.randint(65, 130),
-            rng.randint(215, 245),
-        )
-        yy, xx = np.ogrid[:h, :w]
-        cx, cy = w / 2, h / 2
-        ellipse = (((xx - cx) / (w / 2)) ** 2 + ((yy - cy) / (h / 2)) ** 2) <= 1
-        arr = np.zeros((h, w, 4), dtype=np.uint8)
-        arr[ellipse] = color
-        finger = Image.fromarray(arr, "RGBA").filter(ImageFilter.GaussianBlur(1.2))
+        draw = ImageDraw.Draw(finger)
+        alpha = rng.randint(222, 244)
+        fill = tuple(max(30, min(245, channel + rng.randint(-8, 8))) for channel in base_skin) + (alpha,)
+        draw.rounded_rectangle((2, 2, w - 3, h - 3), radius=w // 2, fill=fill)
+        highlight = tuple(max(40, min(255, channel + 24)) for channel in fill[:3]) + (rng.randint(35, 70),)
+        draw.rounded_rectangle((int(w * 0.30), int(h * 0.10), int(w * 0.48), int(h * 0.82)), radius=max(2, w // 10), fill=highlight)
+        if rng.random() < 0.72:
+            nail = tuple(max(70, min(255, channel + 32)) for channel in fill[:3]) + (rng.randint(95, 145),)
+            draw.ellipse((int(w * 0.22), int(h * 0.03), int(w * 0.78), int(h * 0.20)), fill=nail)
+        finger = finger.filter(ImageFilter.GaussianBlur(rng.uniform(0.35, 0.9)))
         finger = finger.rotate(angle, expand=True, resample=Image.Resampling.BICUBIC)
         px = x - finger.width // 2
         py = y - finger.height // 2
@@ -434,8 +537,16 @@ def make_scene(
     unknown_visible_area_frac: float = 0.012,
     unknown_visible_ratio: float = 0.18,
     drop_unknown_denom_labels: bool = False,
-) -> tuple[Image.Image, list[str], list[tuple[str, np.ndarray]], list[dict[str, object]]]:
-    canvas = make_background(image_size, rng).convert("RGBA")
+    balance_classes: bool = False,
+    backgrounds: list[BackgroundRef] | None = None,
+    perspective_probability: float = 0.35,
+) -> tuple[Image.Image, list[str], list[tuple[str, np.ndarray]], list[dict[str, object]], dict[str, object]]:
+    background, background_path = make_background(image_size, rng, backgrounds)
+    canvas = background.convert("RGBA")
+    scene_info: dict[str, object] = {
+        "background": background_path,
+        "perspective_probability": perspective_probability,
+    }
     id_mask = np.zeros((image_size, image_size), dtype=np.uint16)
     placed_notes: list[PlacedNote] = []
     note_count = rng.randint(min_notes, max_notes)
@@ -474,9 +585,17 @@ def make_scene(
         note_count = rng.randint(max(min_notes, 9), max(max_notes, 18))
     center_x = rng.randint(int(image_size * 0.43), int(image_size * 0.57))
     pivot_y = rng.randint(int(image_size * 0.78), int(image_size * 0.96))
+    refs_by_class: dict[str, list[NoteRef]] = {}
+    if balance_classes:
+        for ref in refs:
+            refs_by_class.setdefault(ref.class_name, []).append(ref)
+        balanced_classes = sorted(refs_by_class)
 
     for i in range(note_count):
-        ref = rng.choice(refs)
+        if balance_classes:
+            ref = rng.choice(refs_by_class[rng.choice(balanced_classes)])
+        else:
+            ref = rng.choice(refs)
         note = prepared_note(ref, note_cache) if note_cache is not None else note_alpha(Image.open(ref.path))
         if layout_mode == "radial_slice":
             target_w = int(image_size * rng.uniform(0.72, 1.02))
@@ -502,6 +621,7 @@ def make_scene(
             note = crop_note_strip(note, rng, min_frac=strip_min_frac, max_frac=strip_max_frac)
         elif layout_mode == "thin_radial_slice":
             note = crop_note_strip(note, rng, min_frac=thin_strip_min_frac, max_frac=thin_strip_max_frac)
+        note = perspective_warp_note(note, rng, perspective_probability)
 
         if layout_mode == "radial_slice":
             if note_count == 1:
@@ -693,7 +813,7 @@ def make_scene(
         rgb = Image.fromarray(np.clip(arr + grain, 0, 255).astype(np.uint8), "RGB")
     if rng.random() < 0.25:
         rgb = ImageOps.autocontrast(rgb, cutoff=rng.uniform(0, 1.5))
-    return rgb, label_lines, visible_masks, records
+    return rgb, label_lines, visible_masks, records, scene_info
 
 
 def write_yaml(out: Path) -> None:
@@ -705,9 +825,27 @@ def write_yaml(out: Path) -> None:
     )
 
 
+def padded_crop_box(box: list[int], image_size: int, pad_frac: float) -> tuple[int, int, int, int]:
+    x1, y1, x2, y2 = box
+    pad = int(max(x2 - x1, y2 - y1) * pad_frac)
+    return (
+        max(0, x1 - pad),
+        max(0, y1 - pad),
+        min(image_size, x2 + pad),
+        min(image_size, y2 + pad),
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", type=Path, nargs="+", default=[DEFAULT_SOURCE])
+    parser.add_argument(
+        "--background-dir",
+        type=Path,
+        nargs="+",
+        default=[],
+        help="Optional directories of note-free real background images/patches.",
+    )
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--count", type=int, default=1000)
     parser.add_argument("--image-size", type=int, default=640)
@@ -715,7 +853,7 @@ def main() -> None:
     parser.add_argument("--val-frac", type=float, default=0.1)
     parser.add_argument("--test-frac", type=float, default=0.1)
     parser.add_argument("--clean", action="store_true", help="Delete an existing output directory before generating.")
-    parser.add_argument("--allow-specimen", action="store_true", help="Allow reference images that appear to contain SPECIMEN marks.")
+    parser.add_argument("--allow-specimen", action="store_true", help="Allow reference images with SPECIMEN in the filename.")
     parser.add_argument("--classes", default="", help="Optional comma-separated canonical classes to generate.")
     parser.add_argument(
         "--label-format",
@@ -724,6 +862,9 @@ def main() -> None:
         help="Write axis-aligned YOLO detect labels or YOLO OBB corner labels.",
     )
     parser.add_argument("--save-visible-masks", action="store_true", help="Save per-visible-instance binary masks.")
+    parser.add_argument("--save-visible-crops", action="store_true", help="Save padded visible-instance crops for fragment verifier training.")
+    parser.add_argument("--crop-pad-frac", type=float, default=0.12, help="Padding fraction for --save-visible-crops.")
+    parser.add_argument("--crop-include-unknown", action="store_true", help="Also save banknote_unknown crops for unknown/rejection calibration.")
     parser.add_argument("--no-metadata", action="store_true", help="Do not write per-image instance metadata JSONL files.")
     parser.add_argument(
         "--unknown-visible-area-frac",
@@ -755,6 +896,8 @@ def main() -> None:
     parser.add_argument("--thin-strip-min-frac", type=float, default=0.07, help="Minimum source-note width kept for thin_radial_slice crops.")
     parser.add_argument("--thin-strip-max-frac", type=float, default=0.20, help="Maximum source-note width kept for thin_radial_slice crops.")
     parser.add_argument("--note-shadow-prob", type=float, default=0.0, help="Probability that each upper note casts a soft contact shadow.")
+    parser.add_argument("--balance-classes", action="store_true", help="Sample a class uniformly first, then sample a reference asset from that class.")
+    parser.add_argument("--perspective-prob", type=float, default=0.35, help="Probability of applying a mild local perspective warp to each note.")
     args = parser.parse_args()
 
     rng = random.Random(args.seed)
@@ -790,7 +933,16 @@ def main() -> None:
         raise SystemExit("--unknown-visible-ratio must be between 0 and 1")
     if not (0 <= args.note_shadow_prob <= 1):
         raise SystemExit("--note-shadow-prob must be between 0 and 1")
+    if args.crop_pad_frac < 0:
+        raise SystemExit("--crop-pad-frac must be >= 0")
+    if not (0 <= args.perspective_prob <= 1):
+        raise SystemExit("--perspective-prob must be between 0 and 1")
     refs = load_refs(args.source, allowed_classes)
+    backgrounds = load_background_refs(args.background_dir) if args.background_dir else []
+    if args.background_dir:
+        print(f"background refs: {len(backgrounds)}")
+        if not backgrounds:
+            raise SystemExit(f"No background images found in {args.background_dir}")
     if not args.allow_specimen:
         before = len(refs)
         refs = filter_specimen_refs(refs)
@@ -822,7 +974,7 @@ def main() -> None:
     attempts = 0
     while i < args.count:
         attempts += 1
-        image, labels, visible_masks, records = make_scene(
+        image, labels, visible_masks, records, scene_info = make_scene(
             refs,
             args.image_size,
             rng,
@@ -841,6 +993,9 @@ def main() -> None:
             unknown_visible_area_frac=args.unknown_visible_area_frac,
             unknown_visible_ratio=args.unknown_visible_ratio,
             drop_unknown_denom_labels=args.drop_unknown_denom_labels,
+            balance_classes=args.balance_classes,
+            backgrounds=backgrounds,
+            perspective_probability=args.perspective_prob,
         )
         if not labels:
             if attempts > args.count * 5:
@@ -867,6 +1022,7 @@ def main() -> None:
                         "split": split,
                         "image_size": args.image_size,
                         "label_format": args.label_format,
+                        **scene_info,
                         "instances": records,
                     },
                     sort_keys=True,
@@ -879,6 +1035,22 @@ def main() -> None:
             for mask_index, (class_name, mask) in enumerate(visible_masks, start=1):
                 mask_image = Image.fromarray((mask.astype(np.uint8) * 255), "L")
                 mask_image.save(mask_dir / f"{stem}_{mask_index:02d}_{class_name}.png")
+        if args.save_visible_crops:
+            for crop_index, record in enumerate(records, start=1):
+                tier = str(record.get("evidence_tier", ""))
+                if tier == "identifiable" and record.get("exported_label"):
+                    crop_class = str(record["class_name"])
+                elif tier == "banknote_unknown" and args.crop_include_unknown:
+                    crop_class = "banknote_unknown"
+                else:
+                    continue
+                box = record.get("bbox_xyxy")
+                if not isinstance(box, list) or len(box) != 4:
+                    continue
+                crop_dir = args.out / "crops" / split / crop_class
+                crop_dir.mkdir(parents=True, exist_ok=True)
+                crop_box = padded_crop_box([int(value) for value in box], args.image_size, args.crop_pad_frac)
+                image.crop(crop_box).save(crop_dir / f"{stem}_{crop_index:02d}_{crop_class}.jpg", quality=90)
         counts[split] += 1
         boxes[split] += len(labels)
         i += 1

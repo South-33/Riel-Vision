@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -26,6 +27,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--country", choices=["Cambodia", "United States", "all"], default="all")
     parser.add_argument("--include-out-of-circulation", action="store_true")
+    parser.add_argument("--classes", default="", help="Optional comma-separated canonical CashSnap classes to include.")
+    parser.add_argument("--min-year", type=int, help="Skip notes whose parsed max year is below this year.")
     parser.add_argument("--clean", action="store_true", help="Delete the existing output directory first.")
     return parser.parse_args()
 
@@ -48,6 +51,19 @@ def class_name_for(row: dict[str, object]) -> str | None:
         class_name = f"USD_{denomination}"
         return class_name if class_name in CLASS_NAMES else None
     return None
+
+
+def max_year_for(row: dict[str, object]) -> int | None:
+    fields = [str(row.get("years", "")), str(row.get("title", ""))]
+    features = row.get("features", {})
+    if isinstance(features, dict):
+        fields.extend(
+            str(value)
+            for key, value in features.items()
+            if "year" in str(key).lower() or "date" in str(key).lower()
+        )
+    years = [int(value) for field in fields for value in re.findall(r"\b(19\d{2}|20\d{2})\b", field)]
+    return max(years) if years else None
 
 
 def alpha_metrics(image: Image.Image) -> dict[str, str]:
@@ -127,6 +143,11 @@ def main() -> None:
 
     with metadata_path.open("r", encoding="utf-8") as handle:
         metadata = json.load(handle)
+    allowed_classes = {item.strip() for item in args.classes.split(",") if item.strip()} or None
+    if allowed_classes:
+        unknown = sorted(allowed_classes - set(CLASS_NAMES))
+        if unknown:
+            raise SystemExit(f"Unknown classes in --classes: {unknown}")
 
     rows: list[dict[str, str]] = []
     for note_id, note in sorted(metadata.items()):
@@ -136,6 +157,11 @@ def main() -> None:
             continue
         class_name = class_name_for(note)
         if not class_name:
+            continue
+        if allowed_classes and class_name not in allowed_classes:
+            continue
+        note_year = max_year_for(note)
+        if args.min_year is not None and (note_year is None or note_year < args.min_year):
             continue
         files = note.get("files", {})
         if not isinstance(files, dict):
@@ -175,6 +201,7 @@ def main() -> None:
                     "status": str(note.get("circulation_status", "")),
                     "title": str(note.get("title", "")),
                     "years": str(note.get("years", "")),
+                    "max_year": str(note_year or ""),
                 }
             )
 
@@ -182,7 +209,7 @@ def main() -> None:
     make_contact_sheet(
         [ROOT / row["asset_path"] for row in rows],
         out_dir / "contact_sheet.jpg",
-        "Numista current cutout bank",
+        "Numista cutout bank",
     )
 
     print(f"Wrote {len(rows)} cutouts to {out_dir}")

@@ -1,11 +1,11 @@
 # 3D Scene Banknote Composition Pipeline
 
-## 🎯 Goal
+## Goal
 To build a programmatic, highly parameterized **3D banknote composition engine** that generates infinite, photorealistic, and automatically labeled datasets. The pipeline's core focus is solving complex visual tasks—specifically **highly overlapped banknotes, chaotic fan arrangements, and perspective-warped partial views**—which are notoriously difficult to label manually or capture in real life.
 
 ---
 
-## 💡 Core Philosophy & Main Ideas
+## Core Philosophy & Main Ideas
 
 1. **Scans as Perfect Textures**: 
    High-resolution scans of banknotes (front and back, such as the ultra-high-resolution Numista scans) are treated as pixel-perfect diffuse textures. We map these textures onto simple, mathematically controllable 3D paper models.
@@ -22,11 +22,11 @@ To build a programmatic, highly parameterized **3D banknote composition engine**
 
 ---
 
-## 🛠️ Technology Stack Evaluation
+## Technology Stack Evaluation
 
 To implement this programmatic pipeline within the agent sandbox, we evaluate three major approaches based on speed, quality, and sandboxed execution:
 
-| Criteria | 💻 Option A: Headless Three.js (Node.js + Puppeteer) | 🎨 Option B: Blender Python API (`bpy` headless) | 🐍 Option C: Pyrender / Trimesh (Pure Python) |
+| Criteria | Option A: Headless Three.js (Node.js + Puppeteer) | Option B: Blender Python API (`bpy` headless) | Option C: Pyrender / Trimesh (Pure Python) |
 | :--- | :--- | :--- | :--- |
 | **Rendering Quality** | High (WebGL, Custom Shaders, PBR) | Extreme (Cycles Path Tracing / Eevee) | Moderate (OpenGL Rasterization) |
 | **Speed** | Very Fast (GPU-accelerated, parallelizable) | Slow (Path-tracing is heavy, Eevee is faster) | Fast (OpenGL-based) |
@@ -35,11 +35,11 @@ To implement this programmatic pipeline within the agent sandbox, we evaluate th
 | **Sandbox Feasibility**| **Excellent** (Uses pnpm/npm, headless rendering) | **Difficult** (Disk space and binary constraints) | **Good** (Can hit OpenGL headless issues on Windows) |
 
 > [!NOTE]  
-> **Recommended Path**: **Headless Three.js** or a **Custom WebGL/Canvas renderer** running under Node.js + Puppeteer is the most robust and portable choice. It avoids complex binary installation conflicts in space-constrained sandboxes, leverages GPU acceleration via headless Chrome, and supports modern features like physical lighting, post-processing filters, and custom shaders.
+> This is the original 3D pipeline proposal. The current decision memo in `docs/synthetic-strategy-evaluation.md` is more conservative: keep the renderer-agnostic 2.5D harness as the main path, and promote WebGL/3D only after a small Windows-stable proof produces exact ID masks and beats matched 2.5D data on reviewed real partial-note benchmarks.
 
 ---
 
-## 🔄 The 5-Phase Pipeline Architecture
+## The 5-Phase Pipeline Architecture
 
 ```mermaid
 graph TD
@@ -98,7 +98,7 @@ To bridge the gap between clean 3D renders and raw phone camera shots (the **dom
 
 ---
 
-## 📋 Implementation Roadmap
+## Implementation Roadmap
 
 - [ ] **Milestone 1: Proof-of-Concept WebGL Renderer**
   - Set up a headless Node.js runner with Three.js and a minimal custom WebGL rendering environment.

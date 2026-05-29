@@ -24,6 +24,7 @@ def parse_args() -> argparse.Namespace:
         default=[],
         help="Extra YOLO dataset root to include; expects images/train and images/val.",
     )
+    parser.add_argument("--no-default-synthetic", action="store_true", help="Only include roots passed with --extra-synthetic-root.")
     parser.add_argument("--clean", action="store_true", help="Replace existing list files.")
     return parser.parse_args()
 
@@ -143,10 +144,11 @@ def main() -> None:
         max(0, args.cashsnap_val_count - val_background_count),
         rng,
     ) + sample(val_backgrounds, val_background_count, rng)
-    synthetic_roots = [
+    default_synthetic_roots = [] if args.no_default_synthetic else [
         ROOT / "data" / "synthetic" / "khr_current_clean_v1",
         ROOT / "data" / "synthetic" / "khr_current_thin_radial_slice_probe_v1",
-    ] + [resolve_path(path) for path in args.extra_synthetic_root]
+    ]
+    synthetic_roots = default_synthetic_roots + [resolve_path(path) for path in args.extra_synthetic_root]
     synthetic_train = [image for root in synthetic_roots for image in images_under(root / "images" / "train")]
     synthetic_val = [image for root in synthetic_roots for image in images_under(root / "images" / "val")]
 

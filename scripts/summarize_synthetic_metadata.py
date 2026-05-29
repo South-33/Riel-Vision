@@ -46,6 +46,16 @@ def metadata_paths(root: Path) -> list[Path]:
     return sorted(root.glob("*.jsonl"))
 
 
+def crop_counts(root: Path) -> Counter[str]:
+    counts: Counter[str] = Counter()
+    crop_root = root / "crops"
+    if not crop_root.exists():
+        return counts
+    for path in crop_root.rglob("*.jpg"):
+        counts[path.parent.name] += 1
+    return counts
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("path", type=Path, help="Synthetic dataset root, metadata directory, or JSONL file.")
@@ -64,12 +74,14 @@ def main() -> None:
     exported_class_counts: Counter[str] = Counter()
     layout_counts: Counter[str] = Counter()
     split_counts: Counter[str] = Counter()
+    background_counts: Counter[str] = Counter()
     visible_area_by_tier: dict[str, list[float]] = defaultdict(list)
     visibility_ratio_by_tier: dict[str, list[float]] = defaultdict(list)
 
     for _, scene in iter_metadata(paths):
         scenes += 1
         split_counts[str(scene.get("split", "unknown"))] += 1
+        background_counts[str(scene.get("background", "unknown"))] += 1
         for instance in scene.get("instances", []):
             instances += 1
             class_name = str(instance.get("class_name", "unknown"))
@@ -94,8 +106,13 @@ def main() -> None:
     print(f"evidence_tiers: {dict(sorted(tier_counts.items()))}")
     print(f"drop_reasons: {dict(sorted(drop_counts.items()))}")
     print(f"layouts: {dict(sorted(layout_counts.items()))}")
+    if background_counts:
+        print(f"backgrounds: {dict(background_counts.most_common(12))}")
     print(f"classes_all: {dict(sorted(class_counts.items()))}")
     print(f"classes_exported: {dict(sorted(exported_class_counts.items()))}")
+    crops = crop_counts(args.path)
+    if crops:
+        print(f"crops: {dict(sorted(crops.items()))}")
     print("visible_area_frac_quantiles:")
     for tier, values in sorted(visible_area_by_tier.items()):
         print(f"  {tier}: {quantiles(values)}")

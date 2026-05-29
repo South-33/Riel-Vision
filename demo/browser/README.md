@@ -34,6 +34,7 @@ lr python scripts/run_with_headroom.py --interval 2 --max-percent 90 --resume-pe
 
 This writes per-case screenshots, detection CSVs, JSON summaries, and `summary.json` under `.agent/browser_smoke_cases/`. The case runner uses ports starting at `8877` and Edge debug ports starting at `9323` so it can run while the usual `8787` review server is in use.
 Use `python scripts/run_browser_smoke_cases.py --validate-only` for a quick manifest/path check that does not launch Edge.
+For calibration probes, both smoke runners accept temporary browser-side overrides: `--proposal-conf`, `--detector-override`, `--nms-iou`, and `--crop-padding`. These are URL/query overrides for experiments; change `configs/cashsnap_two_stage_oldcommon_browser_stack.json` only after a setting survives the full smoke suite and more than one real labeled case.
 The manifest currently includes the KHR shop-overlap case, a USD_1 front/back sanity case, and KHR_500/KHR_2000/KHR_50000 detector-only sanity cases that guard against fragment-classifier overrides outside its class list.
 
 The demo reads `configs/cashsnap_two_stage_oldcommon_browser_stack.json`, then loads:

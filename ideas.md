@@ -79,6 +79,10 @@ Living doc for high-value ideas, experiments, and results. Keep this short: only
 - Unreviewed P1 old/common focus classifier smoke (`mobilenet_v3_p1_oldcommon_focus_unreviewed_diag_e2`) exported ONNX but is not useful yet: val accuracy 0.529, test 8/15, and all test `KHR_20000` collapsed to `KHR_5000`; curate/rebalance before training.
 - For the next real data pass, run `lr python scripts/check_capture_requirements.py`; it now prints priority-ranked `data/inbox/real_partial_photos/` gaps, especially hand fan and thin-slice `KHR_5000`/`KHR_20000`.
 - Follow-up web/Hugging Face/Roboflow searches after the audit did not find a better KHR partial/fan dataset; a resumed targeted search again only surfaced Cambodia Currency Project plus adjacent non-KHR BankNote-Net/Indian-Thai/YOLOv11 mixed-currency work, so stop broad hunting for now and spend effort on curation or rights-clear phone captures.
+- Scan 2.5D Numista geometry probes are useful as region-coverage experiments but not as final data: broad scan 2.5D got 6/6 any-class only at permissive 640px settings and old/common focus lost coverage while adding `KHR_500`/`KHR_1000` false positives.
+- The current 2D-vs-3D decision is in `docs/synthetic-strategy-evaluation.md`: continue the 2.5D evidence harness plus real reviewed fragments, and promote WebGL/3D only after a small Windows-stable ID-pass proof beats matched 2.5D data on real labels.
+- Rebuilt P1 old/common partial-focus review queue now has 103 existing crops with zero missing paths after recovering stale high-confidence failure rows from `source_crop`; it covers `KHR_5000`/`KHR_10000`/`KHR_20000` front/back curation targets.
+- Browser calibration hooks now exist (`--proposal-conf`, `--detector-override`, `--nms-iou`, `--crop-padding`). `--detector-override 0.20` reduces the shop-overlap value error from `+6000` to `-4000` KHR while keeping 4/6 same-class and passing guard cases, but do not change defaults from one draft-labeled image.
 
 ## Data Gaps
 

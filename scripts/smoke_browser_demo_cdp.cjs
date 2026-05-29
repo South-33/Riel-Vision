@@ -46,6 +46,10 @@ function parseArgs(argv) {
     outJson: "",
     labels: "",
     matchIou: 0.5,
+    proposalConf: "",
+    detectorOverride: "",
+    nmsIou: "",
+    cropPadding: "",
     minSameClass: null,
     minAnyClass: null,
     maxCountError: null,
@@ -83,6 +87,18 @@ function parseArgs(argv) {
     } else if (key === "--match-iou") {
       args.matchIou = Number(value);
       index += 1;
+    } else if (key === "--proposal-conf") {
+      args.proposalConf = value;
+      index += 1;
+    } else if (key === "--detector-override") {
+      args.detectorOverride = value;
+      index += 1;
+    } else if (key === "--nms-iou") {
+      args.nmsIou = value;
+      index += 1;
+    } else if (key === "--crop-padding") {
+      args.cropPadding = value;
+      index += 1;
     } else if (key === "--min-same-class") {
       args.minSameClass = Number(value);
       index += 1;
@@ -118,6 +134,10 @@ Options:
   --image PATH        Repo-root browser image URL path.
   --labels PATH       Optional YOLO detect labels for smoke evaluation.
   --match-iou NUMBER  IoU threshold for --labels evaluation. Default: 0.5.
+  --proposal-conf N   Override browser detector proposal confidence.
+  --detector-override N Override detector-vs-fragment threshold.
+  --nms-iou N         Override browser fusion NMS IoU.
+  --crop-padding N    Override fragment crop padding fraction.
   --min-same-class N  Fail if labeled final same-class matches are below N.
   --min-any-class N   Fail if labeled final any-class matches are below N.
   --max-count-error N Fail if absolute final count error is above N. Requires --labels.
@@ -492,6 +512,17 @@ function writeSummaryJson(outputPath, summary) {
   fs.writeFileSync(absolute, `${JSON.stringify(summary, null, 2)}\n`);
 }
 
+function browserUrl(args) {
+  const params = new URLSearchParams();
+  params.set("image", args.image);
+  params.set("autorun", "1");
+  if (args.proposalConf) params.set("proposalConf", args.proposalConf);
+  if (args.detectorOverride) params.set("detectorOverride", args.detectorOverride);
+  if (args.nmsIou) params.set("nmsIou", args.nmsIou);
+  if (args.cropPadding) params.set("cropPadding", args.cropPadding);
+  return `http://127.0.0.1:${args.port}/demo/browser/?${params.toString()}`;
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (!fs.existsSync(args.edge)) {
@@ -509,7 +540,7 @@ async function main() {
   let edge = null;
   try {
     await waitForHttp(`http://127.0.0.1:${args.port}/demo/browser/index.html`, 15000);
-    const url = `http://127.0.0.1:${args.port}/demo/browser/?image=${args.image}&autorun=1`;
+    const url = browserUrl(args);
     edge = spawn(
       args.edge,
       [

@@ -31,6 +31,7 @@ FIELDNAMES = [
     "side",
     "box_area_frac",
     "crop_path",
+    "source_crop",
     "source_image",
     "review_include",
     "review_class",
@@ -103,6 +104,7 @@ def normalize_row(row: dict[str, str], manifest: Path, reason: str) -> dict[str,
         "side": row.get("side", ""),
         "box_area_frac": row.get("box_area_frac", ""),
         "crop_path": row.get("crop_path", ""),
+        "source_crop": row.get("source_crop", ""),
         "source_image": row.get("source_image", ""),
         "review_include": "",
         "review_class": review_class,
@@ -142,6 +144,35 @@ def select_rows(manifests: list[Path], max_per_class_side: int, max_failure_rows
     return deduped
 
 
+def existing_crop_path(row: dict[str, str]) -> tuple[str, bool]:
+    crop_path = row.get("crop_path", "").strip()
+    if crop_path and resolve(Path(crop_path)).exists():
+        return crop_path, False
+    source_crop = row.get("source_crop", "").strip()
+    if source_crop and resolve(Path(source_crop)).exists():
+        return source_crop, True
+    return crop_path or source_crop, False
+
+
+def keep_existing_crop_rows(rows: list[dict[str, str]]) -> tuple[list[dict[str, str]], int, int]:
+    kept: list[dict[str, str]] = []
+    missing = 0
+    recovered = 0
+    for row in rows:
+        crop_path, used_source_crop = existing_crop_path(row)
+        if not crop_path:
+            missing += 1
+            continue
+        if used_source_crop:
+            row["crop_path"] = crop_path
+            recovered += 1
+        if not resolve(Path(crop_path)).exists():
+            missing += 1
+            continue
+        kept.append(row)
+    return kept, missing, recovered
+
+
 def write_contact_sheet(rows: list[dict[str, str]], out_path: Path, thumb: int, limit: int = 96) -> None:
     selected = rows[:limit]
     if not selected:
@@ -152,6 +183,8 @@ def write_contact_sheet(rows: list[dict[str, str]], out_path: Path, thumb: int, 
     draw = ImageDraw.Draw(sheet)
     for index, row in enumerate(selected):
         image_path = resolve(Path(row["crop_path"]))
+        if not image_path.exists():
+            continue
         with Image.open(image_path).convert("RGB") as image:
             image = ImageOps.contain(image, (thumb, thumb))
             tile = Image.new("RGB", (thumb, thumb), (244, 244, 244))
@@ -183,12 +216,17 @@ def main() -> None:
         raise SystemExit(f"Missing manifest: {repo_path(missing[0])}")
 
     rows = select_rows(manifests, args.max_per_class_side, args.max_failure_rows)
+    rows, missing_crops, recovered_crops = keep_existing_crop_rows(rows)
     with (out_dir / "manifest.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=FIELDNAMES)
         writer.writeheader()
         writer.writerows(rows)
     write_contact_sheet(rows, out_dir / "contact_sheet.jpg", args.thumb)
     print(f"wrote {len(rows)} focused rows to {repo_path(out_dir / 'manifest.csv')}")
+    if missing_crops:
+        print(f"skipped_missing_crops={missing_crops}")
+    if recovered_crops:
+        print(f"recovered_source_crops={recovered_crops}")
 
 
 if __name__ == "__main__":
