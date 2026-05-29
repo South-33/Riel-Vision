@@ -396,7 +396,9 @@ def add_hand_occluders(
         "hand_occluder_applied": False,
         "hand_occluder_count": 0,
         "hand_occluder_pixels": 0,
+        "hand_occluder_area_frac": 0.0,
         "hand_occluded_note_pixels": 0,
+        "hand_occluded_note_area_frac": 0.0,
         "hand_grip_aligned": grip_center is not None,
     }
     if probability <= 0 or rng.random() > probability:
@@ -445,14 +447,18 @@ def add_hand_occluders(
         occ_mask.paste(alpha, (px, py), alpha)
     canvas.alpha_composite(occ)
     occ_arr = np.asarray(occ_mask) > 24
+    image_pixels = max(1, occ_arr.size)
     occluded_note_pixels = int((occ_arr & (id_mask > 0)).sum())
+    occluder_pixels = int(occ_arr.sum())
     id_mask[occ_arr] = 0
     return {
         **base_info,
         "hand_occluder_applied": True,
         "hand_occluder_count": count,
-        "hand_occluder_pixels": int(occ_arr.sum()),
+        "hand_occluder_pixels": occluder_pixels,
+        "hand_occluder_area_frac": occluder_pixels / image_pixels,
         "hand_occluded_note_pixels": occluded_note_pixels,
+        "hand_occluded_note_area_frac": occluded_note_pixels / image_pixels,
     }
 
 

@@ -77,7 +77,9 @@ def main() -> None:
     background_counts: Counter[str] = Counter()
     hand_scene_counts: Counter[str] = Counter()
     hand_occluder_counts: list[float] = []
+    hand_occluder_area_fracs: list[float] = []
     hand_occluded_note_pixels: list[float] = []
+    hand_occluded_note_area_fracs: list[float] = []
     visible_area_by_tier: dict[str, list[float]] = defaultdict(list)
     visibility_ratio_by_tier: dict[str, list[float]] = defaultdict(list)
 
@@ -89,7 +91,9 @@ def main() -> None:
         hand_scene_counts["applied" if hand_applied else "none"] += 1
         if hand_applied:
             hand_occluder_counts.append(float(scene.get("hand_occluder_count", 0)))
+            hand_occluder_area_fracs.append(float(scene.get("hand_occluder_area_frac", 0)))
             hand_occluded_note_pixels.append(float(scene.get("hand_occluded_note_pixels", 0)))
+            hand_occluded_note_area_fracs.append(float(scene.get("hand_occluded_note_area_frac", 0)))
         for instance in scene.get("instances", []):
             instances += 1
             class_name = str(instance.get("class_name", "unknown"))
@@ -117,7 +121,9 @@ def main() -> None:
     print(f"hand_occluders: {dict(sorted(hand_scene_counts.items()))}")
     if hand_occluder_counts:
         print(f"hand_occluder_count_quantiles: {quantiles(hand_occluder_counts)}")
+        print(f"hand_occluder_area_frac_quantiles: {quantiles(hand_occluder_area_fracs)}")
         print(f"hand_occluded_note_pixels_quantiles: {quantiles(hand_occluded_note_pixels)}")
+        print(f"hand_occluded_note_area_frac_quantiles: {quantiles(hand_occluded_note_area_fracs)}")
     if background_counts:
         print(f"backgrounds: {dict(background_counts.most_common(12))}")
     print(f"classes_all: {dict(sorted(class_counts.items()))}")
