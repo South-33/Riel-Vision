@@ -18,6 +18,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cashsnap-val-count", type=int, default=600)
     parser.add_argument("--cashsnap-background-count", type=int, default=160)
     parser.add_argument(
+        "--synthetic-train-count",
+        type=int,
+        default=None,
+        help="Optional cap for synthetic train images after roots are combined. Defaults to all.",
+    )
+    parser.add_argument(
+        "--synthetic-val-count",
+        type=int,
+        default=None,
+        help="Optional cap for synthetic val images after roots are combined. Defaults to all.",
+    )
+    parser.add_argument(
         "--extra-synthetic-root",
         action="append",
         type=Path,
@@ -151,6 +163,10 @@ def main() -> None:
     synthetic_roots = default_synthetic_roots + [resolve_path(path) for path in args.extra_synthetic_root]
     synthetic_train = [image for root in synthetic_roots for image in images_under(root / "images" / "train")]
     synthetic_val = [image for root in synthetic_roots for image in images_under(root / "images" / "val")]
+    if args.synthetic_train_count is not None:
+        synthetic_train = balanced_foreground_sample(synthetic_train, args.synthetic_train_count, rng)
+    if args.synthetic_val_count is not None:
+        synthetic_val = balanced_foreground_sample(synthetic_val, args.synthetic_val_count, rng)
 
     train = cashsnap_train + synthetic_train
     val = cashsnap_val + synthetic_val
