@@ -9,8 +9,8 @@ runs/cashsnap/yolo26n_messy_v3_pristine_overlap_e2_i416_b8/weights/best.pt
 Export commands:
 
 ```powershell
-lr python scripts/export_yolo.py --model runs/cashsnap/yolo26n_messy_v3_pristine_overlap_e2_i416_b8/weights/best.pt --format onnx --imgsz 416 --simplify --opset 12
-lr python scripts/export_yolo.py --model runs/cashsnap/yolo26n_messy_v3_pristine_overlap_e2_i416_b8/weights/best.pt --format ncnn --imgsz 416
+rl python scripts/export_yolo.py --model runs/cashsnap/yolo26n_messy_v3_pristine_overlap_e2_i416_b8/weights/best.pt --format onnx --imgsz 416 --simplify --opset 12
+rl python scripts/export_yolo.py --model runs/cashsnap/yolo26n_messy_v3_pristine_overlap_e2_i416_b8/weights/best.pt --format ncnn --imgsz 416
 ```
 
 Observed outputs:
@@ -58,7 +58,7 @@ Export state:
 Check current browser-stack artifact paths and total ONNX size with:
 
 ```powershell
-lr python scripts/check_browser_stack_artifacts.py
+rl python scripts/check_browser_stack_artifacts.py
 ```
 
 Current check reports `15.09 MB` total for the detector plus old/common fragment classifier ONNX files.
@@ -66,7 +66,7 @@ Current check reports `15.09 MB` total for the detector plus old/common fragment
 Current diagnostic fusion recipe:
 
 ```powershell
-lr python scripts/fuse_two_stage_csv.py --csv data/real_fan_benchmark/drafts/two_stage_realcutout_oldcommon_realboxcls_i416_c0p05_agnostic_pad0.csv --out data/real_fan_benchmark/drafts/two_stage_realcutout_oldcommon_realboxcls_fuse_det0p17_nms0p85_detconf.csv --det-threshold 0.17 --nms-iou 0.85 --nms-score-column detector_conf --image data/real_fan_benchmark/images/candidates/real_overlap_0003_commons_shop_5k_10k_20k.png --out-preview data/real_fan_benchmark/previews/two_stage_realcutout_oldcommon_realboxcls_fuse_det0p17_nms0p85_detconf.jpg
+rl python scripts/fuse_two_stage_csv.py --csv data/real_fan_benchmark/drafts/two_stage_realcutout_oldcommon_realboxcls_i416_c0p05_agnostic_pad0.csv --out data/real_fan_benchmark/drafts/two_stage_realcutout_oldcommon_realboxcls_fuse_det0p17_nms0p85_detconf.csv --det-threshold 0.17 --nms-iou 0.85 --nms-score-column detector_conf --image data/real_fan_benchmark/images/candidates/real_overlap_0003_commons_shop_5k_10k_20k.png --out-preview data/real_fan_benchmark/previews/two_stage_realcutout_oldcommon_realboxcls_fuse_det0p17_nms0p85_detconf.jpg
 ```
 
 On the draft-labeled `real_overlap_0003_commons_shop_5k_10k_20k` probe this reaches `5/6` same-class matches and `6/6` any-class matches after detector-threshold fusion and detector-confidence NMS. Treat this as a promising calibration point, not a production benchmark, because it is tuned against one draft-labeled real image.
@@ -74,7 +74,7 @@ On the draft-labeled `real_overlap_0003_commons_shop_5k_10k_20k` probe this reac
 Browser smoke demo:
 
 ```powershell
-lr python -m http.server 8787
+rl python -m http.server 8787
 ```
 
 Open `http://localhost:8787/demo/browser/`. The page loads `configs/cashsnap_two_stage_oldcommon_browser_stack.json`, runs the detector plus old/common fragment classifier with ONNX Runtime Web, and draws/counts detections on an uploaded image. Use the headroom-wrapped `scripts/smoke_browser_demo_cdp.cjs --labels ...` command in `demo/browser/README.md` for repeatable Edge checks with inline draft-label evaluation; the 2026-05-30 browser smoke suite passes the USD_1 and detector-only KHR sanity cases, while the shop-overlap case remains 6 bills, KHR 76,000, 6/6 any-class, 4/6 same-class, and a `+6000` KHR value error against draft labels.

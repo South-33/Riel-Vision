@@ -20,7 +20,7 @@ CPU/GPU utilization can be throttled live by pausing and resuming the child proc
 Example:
 
 ```powershell
-lr python scripts\bench_train_with_headroom.py `
+rl python scripts\bench_train_with_headroom.py `
   --model runs/cashsnap/yolo26n_cashsnap_current_thin_legacy_clean_v1_e20_i416_b8/weights/best.pt `
   --data configs/cashsnap_v1_current_thin_realcutout_low_skin_probe.yaml `
   --epochs 6 `
@@ -36,7 +36,7 @@ lr python scripts\bench_train_with_headroom.py `
 Run a dry plan first:
 
 ```powershell
-lr python scripts\bench_train_with_headroom.py --data configs/cashsnap_v1_current_thin_realcutout_low_skin_probe.yaml --name dry_run --dry-run --quiet
+rl python scripts\bench_train_with_headroom.py --data configs/cashsnap_v1_current_thin_realcutout_low_skin_probe.yaml --name dry_run --dry-run --quiet
 ```
 
 Use `--batch` or `--workers` to override auto choices only when the machine is idle. Use `--plots` only when plots are needed; leaving it off is safer for RAM. Use `--min-free-ram-gb 0` only for a deliberate diagnostic after checking the machine is safe to load.

@@ -255,7 +255,7 @@ The first WebGL/3D proof should render only:
 - `D:\Download\Banknote Detection Research Handoff.pdf`
 - `D:\Download\Practical Research Handoff for Partial Khmer Riel Banknote Detection and Identification.pdf`
 - `docs/3d-scene-composition-pipeline.md`
-- `docs/synthetic-compositor-plan.md`
+- `docs/archive/synthetic-compositor-plan.md`
 - `docs/fan-failure-analysis.md`
 - `docs/fragment-classifier-plan.md`
 - `docs/real-fan-benchmark.md`

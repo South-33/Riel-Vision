@@ -25,14 +25,14 @@ For visual examples of the target thin/edge failure shape, regenerate `data/revi
 - Track new photos in `manifests/real_partial_capture_inventory.csv` and run `scripts/check_capture_requirements.py` to see priority-ranked scene/denomination gaps; it also reports dropped inbox images that still need registration. Missing scene rows print the matching `data/inbox/real_partial_photos/` drop folder. Use `init_capture_inbox.py --write-guides` when setting up folders so the root inbox and each ignored drop folder include local capture and registration notes.
 
 ```powershell
-lr python scripts/init_capture_inbox.py --dry-run
-lr python scripts/init_capture_inbox.py --write-guides
-lr python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos --scene-type hand_fan --denominations "KHR_5000;KHR_10000" --dry-run
-lr python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos --scene-type hand_fan --denominations "KHR_5000;KHR_10000"
-lr python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos/thin_slice_khr_5000 --scene-type thin_slice_khr_5000 --dry-run
-lr python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos/thin_slice_khr_20000 --scene-type thin_slice_khr_20000 --dry-run
-lr python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos --recursive --scene-type-from-parent --dry-run
-lr python scripts/check_capture_requirements.py
+rl python scripts/init_capture_inbox.py --dry-run
+rl python scripts/init_capture_inbox.py --write-guides
+rl python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos --scene-type hand_fan --denominations "KHR_5000;KHR_10000" --dry-run
+rl python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos --scene-type hand_fan --denominations "KHR_5000;KHR_10000"
+rl python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos/thin_slice_khr_5000 --scene-type thin_slice_khr_5000 --dry-run
+rl python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos/thin_slice_khr_20000 --scene-type thin_slice_khr_20000 --dry-run
+rl python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos --recursive --scene-type-from-parent --dry-run
+rl python scripts/check_capture_requirements.py
 ```
 
 Registration validates scene types against `manifests/real_partial_capture_requirements.csv`; pass `--allow-unknown-scene-type` only for unusual captures. When registering recursively from the inbox root, `thin_slice_khr_5000` and `thin_slice_khr_20000` folders automatically fill `denominations` if no shared `--denominations` value is supplied.
@@ -54,13 +54,13 @@ Use model proposals as review hints, not as ground truth. Keep draft outputs und
 For a folder of new, non-benchmark phone photos, run the full detector -> classifier -> fusion -> review-pack pipeline:
 
 ```powershell
-lr python scripts/run_capture_review_pipeline.py --images-dir data/inbox/real_partial_photos --recursive --out-dir data/review/real_partial_proposal_review_v1
+rl python scripts/run_capture_review_pipeline.py --images-dir data/inbox/real_partial_photos --recursive --out-dir data/review/real_partial_proposal_review_v1
 ```
 
 The pipeline points common ML cache environment variables at the repo-local `.cache_runtime/` folder on `D:` so it does not recreate default Torch/Hugging Face caches on `C:`.
 
 ```powershell
-lr python scripts/build_proposal_review_pack.py --item data/real_fan_benchmark/images/candidates/example.jpg data/real_fan_benchmark/drafts/example_proposals.csv --out-dir data/review/example_proposal_review_v1
+rl python scripts/build_proposal_review_pack.py --item data/real_fan_benchmark/images/candidates/example.jpg data/real_fan_benchmark/drafts/example_proposals.csv --out-dir data/review/example_proposal_review_v1
 ```
 
 The generated `review.csv` has blank `review_include`, `review_class`, and `review_notes` columns for human curation. Only reviewed rows should become training or calibration crops, and benchmark images still must not be trained on.
@@ -68,8 +68,8 @@ The generated `review.csv` has blank `review_include`, `review_class`, and `revi
 For faster curation, serve the repo and open the static review UI:
 
 ```powershell
-lr python scripts/build_benchmark_review_index.py
-lr python -m http.server 8787
+rl python scripts/build_benchmark_review_index.py
+rl python -m http.server 8787
 ```
 
 Open `http://localhost:8787/data/real_fan_benchmark/review_index.html` for benchmark candidate links, then use `http://localhost:8787/demo/labeler/` to edit visible-region draft boxes.
@@ -79,7 +79,7 @@ Open `http://localhost:8787/demo/review/`, load a review CSV such as `/data/revi
 After review, convert selected rows from non-benchmark capture packs into an ImageFolder classifier dataset:
 
 ```powershell
-lr python scripts/build_fragment_classifier_from_review_pack.py --manifest data/review/example_proposal_review_v1/review.csv --out data/fragment_classifier_real_partial_reviewed_v1 --clean
+rl python scripts/build_fragment_classifier_from_review_pack.py --manifest data/review/example_proposal_review_v1/review.csv --out data/fragment_classifier_real_partial_reviewed_v1 --clean
 ```
 
 Use `--include-unreviewed` only for diagnostics or smoke tests, never for final training data.

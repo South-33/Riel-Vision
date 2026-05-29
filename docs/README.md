@@ -23,7 +23,7 @@ Use this file as the first stop when the repo feels noisy. The project has many 
 - `docs/fragment-classifier-plan.md`: detector-plus-fragment-classifier architecture and historical classifier results.
 - `docs/cashsnap-partial-banknote-synthetic-roadmap.md`: renderer-agnostic roadmap and promotion gates.
 - `docs/3d-scene-composition-pipeline.md`: draft WebGL/Three.js renderer plan.
-- `docs/model-first-plan.md` and `docs/model-baseline.md`: older baseline context; useful for history, not the next command source.
+- `docs/archive/`: older baseline/model-first/compositor plans; useful for history, not the next command source.
 
 ## Data And Source References
 

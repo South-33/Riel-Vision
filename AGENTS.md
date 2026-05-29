@@ -9,7 +9,7 @@ This is the project's AGENTS.md
 - Use `ideas.md` as the short living board for high-value CashSnap experiment ideas and results; keep it curated, not append-only.
 - Background removal can be automated for free using `scripts/process_picwish_batches.py` with the `picwish` PyPI library; keep concurrency under 15 (using `asyncio.Semaphore(10)`) with short sleeps to avoid Cloudflare rate blocks.
 - All-KHR PicWish v1 queue/output is `data/picwish_upload_batches_cashsnap_khr_v1/` -> `data/asset_candidates/cashsnap_khr_picwish_output_v1/`; use `cashsnap_khr_picwish_strict_low_skin_bank_v1` only as a conservative candidate bank, not verified final assets.
-- Synthetic data is the main CashSnap path when assets are clean: follow `docs/synthetic-compositor-plan.md` for verified real-camera cutouts, z-order compositing, and visible-pixel label regeneration.
+- Synthetic data is still useful when assets are clean, but the active path is `docs/synthetic-harness-runbook.md` plus `docs/synthetic-strategy-evaluation.md`; the original compositor plan is archived for history.
 - Current best cutout set came from scoring PicWish/BEN2 outputs, but `rare_pristine_asset_bank_v1` is contaminated by legacy/reference assets; audit with `scripts/audit_asset_bank_scope.py` before using it for current-KHR probes.
 - First rare-cutout synthetic stage should be clean curriculum (`data/synthetic/khr_rare_pristine_clean_v1/`): 1-3 notes, no synthetic fingers, no strip/fan chaos; only scale up to harder fan/overlap after this probe is evaluated.
 - Avoid `--fraction` for mixed CashSnap smoke probes: Ultralytics takes an ordered slice, which can select only empty/background `cashsnap_v1` labels; use synthetic-only YAML or `--max-train-batches` instead.

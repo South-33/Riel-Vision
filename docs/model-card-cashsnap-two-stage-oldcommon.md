@@ -64,7 +64,7 @@ Raw detector-only thresholding is not enough. In the same refresh, the detector 
 Track new captures in `manifests/real_partial_capture_inventory.csv` and run:
 
 ```powershell
-lr python scripts/check_capture_requirements.py
+rl python scripts/check_capture_requirements.py
 ```
 
 The highest-value missing data is rights-clear phone photos with human-identifiable partial KHR slices, especially hand fan plus thin/edge `KHR_5000` and `KHR_20000` front/back views that target the current old/common confusion pairs. Synthetic microthin `KHR_5000,KHR_20000` smoke data can be generated with `--thin-strip-min-frac 0.04 --thin-strip-max-frac 0.12`, but it is still artificial and should not replace reviewed real captures.
