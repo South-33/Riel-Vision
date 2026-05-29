@@ -12,6 +12,7 @@ DEFAULT_MANIFESTS = [
     ROOT / "data" / "review" / "roboflow_cuurecy_detection_is_oldcommon_highconf_failure_review_v1" / "manifest.csv",
     ROOT / "data" / "review" / "roboflow_cuurecy_detection_is_khr_5k_10k_partial_review_v1" / "manifest.csv",
     ROOT / "data" / "review" / "roboflow_cuurecy_detection_is_khr_20k_50k_partial_review_v1" / "manifest.csv",
+    ROOT / "data" / "review" / "cashsnap_p1_oldcommon_partial_focus_review_v1" / "manifest.csv",
     ROOT / "data" / "review" / "cashsnap_old_common_khr_crop_review_v1" / "manifest.csv",
 ]
 SELECTED_VALUES = {"1", "true", "yes", "y", "include", "included", "selected"}

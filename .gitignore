@@ -60,3 +60,9 @@ Thumbs.db
 # LongRun CLI files
 .agent/
 LONGRUN.md
+
+# Local datasets and untracked files
+data/deprecated/
+data/numista_raw/
+debug.log
+presentation.html

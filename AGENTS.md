@@ -41,3 +41,5 @@ This is the project's AGENTS.md
 - Before training from `roboflow_cuurecy_detection_is`, read `docs/roboflow-cuurecy-detection-audit.md`; it records the headroom-run audits, review-pack paths, split caveats, and public-release currency reproduction warning.
 - 2026-05-27 public-data sweep found the Roboflow `cuurecy-detection-is` segmentation lead plus adjacent banknote datasets; still prioritize rights-clear Cambodian phone captures for validation and final calibration.
 - Khmer OCR cue probe (`scripts/probe_khmer_ocr_cues.py` + `mer`) produced noisy text and wrong/partial denomination digits on shop-overlap crops; treat OCR as optional auxiliary evidence, not the main CashSnap path.
+- Current synthetic-data strategy is `docs/cashsnap-partial-banknote-synthetic-roadmap.md`: build a renderer-agnostic evidence harness, start 2.5D, and promote WebGL/3D only after real-benchmark gates.
+- Scan-based cutouts can be rebuilt with `scripts/build_numista_cutout_bank.py` to `data/asset_candidates/numista_current_cutout_bank_v1/`; prefer this over specimen-marked NBC assets for clean texture probes.

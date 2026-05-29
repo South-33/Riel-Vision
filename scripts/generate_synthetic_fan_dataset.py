@@ -8,6 +8,7 @@ visible region of each note after occlusion.
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import random
 import re
@@ -61,6 +62,33 @@ class NoteRef:
     class_name: str
 
 
+@dataclass(frozen=True)
+class PlacedNote:
+    class_name: str
+    instance_id: int
+    source_path: str
+    placed_pixels: int
+    layout_mode: str
+
+
+def metadata_path(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.resolve().as_posix()
+
+
+def evidence_tier(
+    visible_area_frac: float,
+    visibility_ratio: float,
+    unknown_visible_area_frac: float,
+    unknown_visible_ratio: float,
+) -> str:
+    if visible_area_frac < unknown_visible_area_frac or visibility_ratio < unknown_visible_ratio:
+        return "banknote_unknown"
+    return "identifiable"
+
+
 def parse_note_class(path: Path) -> str | None:
     for part in path.parts:
         if part in CLASS_TO_ID:
@@ -106,9 +134,6 @@ def looks_like_whole_note(path: Path) -> bool:
 def specimen_score(path: Path) -> float:
     if "specimen" in path.name.lower():
         return 1.0
-    lower_parts = {part.lower() for part in path.parts}
-    if "khr_nbc_current_cutout_bank_v1" in lower_parts:
-        return 0.0
     try:
         image = Image.open(path).convert("RGB").resize((160, 80))
     except OSError:
@@ -262,18 +287,32 @@ def make_background(size: int, rng: random.Random) -> Image.Image:
     return Image.fromarray(arr, "RGB").filter(ImageFilter.GaussianBlur(0.4))
 
 
-def add_hand_occluders(canvas: Image.Image, id_mask: np.ndarray, rng: random.Random, probability: float) -> None:
+def add_hand_occluders(
+    canvas: Image.Image,
+    id_mask: np.ndarray,
+    rng: random.Random,
+    probability: float,
+    grip_center: tuple[int, int] | None = None,
+) -> None:
     if probability <= 0 or rng.random() > probability:
         return
     occ = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     occ_mask = Image.new("L", canvas.size, 0)
     count = rng.randint(1, 4)
     for _ in range(count):
-        x = rng.randint(int(canvas.width * 0.15), int(canvas.width * 0.85))
-        y = rng.randint(int(canvas.height * 0.35), int(canvas.height * 0.92))
+        if grip_center is None:
+            x = rng.randint(int(canvas.width * 0.15), int(canvas.width * 0.85))
+            y = rng.randint(int(canvas.height * 0.35), int(canvas.height * 0.92))
+            angle = rng.uniform(-25, 25)
+        else:
+            grip_x, grip_y = grip_center
+            x = int(rng.gauss(grip_x, canvas.width * 0.06))
+            y = int(rng.gauss(grip_y - canvas.height * 0.05, canvas.height * 0.045))
+            x = max(int(canvas.width * 0.08), min(int(canvas.width * 0.92), x))
+            y = max(int(canvas.height * 0.48), min(int(canvas.height * 0.98), y))
+            angle = rng.uniform(-18, 18)
         w = rng.randint(28, 58)
         h = rng.randint(105, 190)
-        angle = rng.uniform(-25, 25)
         finger = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         color = (
             rng.randint(145, 215),
@@ -298,6 +337,27 @@ def add_hand_occluders(canvas: Image.Image, id_mask: np.ndarray, rng: random.Ran
     id_mask[occ_arr] = 0
 
 
+def add_note_shadow(
+    canvas: Image.Image,
+    note: Image.Image,
+    x: int,
+    y: int,
+    rng: random.Random,
+    probability: float,
+) -> None:
+    if probability <= 0 or rng.random() > probability:
+        return
+    offset_x = rng.choice([-1, 1]) * rng.randint(3, 16)
+    offset_y = rng.randint(5, 22)
+    blur_radius = rng.uniform(2.2, 7.5)
+    opacity = rng.uniform(0.10, 0.28)
+    shadow_alpha = note.getchannel("A").filter(ImageFilter.GaussianBlur(blur_radius))
+    shadow_alpha = shadow_alpha.point(lambda value: int(value * opacity))
+    shadow = Image.new("RGBA", note.size, (0, 0, 0, 0))
+    shadow.putalpha(shadow_alpha)
+    canvas.alpha_composite(shadow, (x + offset_x, y + offset_y))
+
+
 def paste_note(
     canvas: Image.Image,
     id_mask: np.ndarray,
@@ -305,14 +365,14 @@ def paste_note(
     instance_id: int,
     x: int,
     y: int,
-) -> None:
+) -> int:
     alpha = np.asarray(note.getchannel("A")) > 16
     x1 = max(0, x)
     y1 = max(0, y)
     x2 = min(canvas.width, x + note.width)
     y2 = min(canvas.height, y + note.height)
     if x1 >= x2 or y1 >= y2:
-        return
+        return 0
     sx1 = x1 - x
     sy1 = y1 - y
     sx2 = sx1 + (x2 - x1)
@@ -320,6 +380,7 @@ def paste_note(
     canvas.alpha_composite(note, (x, y))
     visible = alpha[sy1:sy2, sx1:sx2]
     id_mask[y1:y2, x1:x2][visible] = instance_id
+    return int(visible.sum())
 
 
 def visible_box(id_mask: np.ndarray, instance_id: int) -> tuple[int, int, int, int] | None:
@@ -363,16 +424,20 @@ def make_scene(
     max_notes: int = 12,
     layout_modes: list[str] | None = None,
     hand_probability: float = 0.25,
+    note_shadow_probability: float = 0.0,
     label_format: str = "detect",
     save_visible_masks: bool = False,
     strip_min_frac: float = 0.16,
     strip_max_frac: float = 0.38,
     thin_strip_min_frac: float = 0.07,
     thin_strip_max_frac: float = 0.20,
-) -> tuple[Image.Image, list[str], list[tuple[str, np.ndarray]]]:
+    unknown_visible_area_frac: float = 0.012,
+    unknown_visible_ratio: float = 0.18,
+    drop_unknown_denom_labels: bool = False,
+) -> tuple[Image.Image, list[str], list[tuple[str, np.ndarray]], list[dict[str, object]]]:
     canvas = make_background(image_size, rng).convert("RGBA")
     id_mask = np.zeros((image_size, image_size), dtype=np.uint16)
-    labels: list[tuple[str, int]] = []
+    placed_notes: list[PlacedNote] = []
     note_count = rng.randint(min_notes, max_notes)
     available_modes = layout_modes or [
         "radial_slice",
@@ -526,28 +591,88 @@ def make_scene(
             x = int(center_x + math.sin(theta) * spread + rng.randint(-90, 90) - note.width / 2)
             y = int(image_size * rng.uniform(0.25, 0.75) - math.cos(theta) * spread * 0.20 + rng.randint(-90, 90) - note.height / 2)
 
-        instance_id = len(labels) + 1
-        paste_note(canvas, id_mask, note, instance_id, x, y)
-        labels.append((ref.class_name, instance_id))
+        instance_id = len(placed_notes) + 1
+        add_note_shadow(canvas, note, x, y, rng, note_shadow_probability)
+        placed_pixels = paste_note(canvas, id_mask, note, instance_id, x, y)
+        placed_notes.append(
+            PlacedNote(
+                class_name=ref.class_name,
+                instance_id=instance_id,
+                source_path=metadata_path(ref.path),
+                placed_pixels=placed_pixels,
+                layout_mode=layout_mode,
+            )
+        )
 
-    add_hand_occluders(canvas, id_mask, rng, hand_probability)
+    fan_layouts = {"radial_slice", "strip_fan", "thin_radial_slice", "tight_fan", "fan"}
+    grip_center = (center_x, pivot_y) if layout_mode in fan_layouts else None
+    add_hand_occluders(canvas, id_mask, rng, hand_probability, grip_center=grip_center)
 
     label_lines: list[str] = []
     visible_masks: list[tuple[str, np.ndarray]] = []
-    for class_name, instance_id in labels:
-        box = visible_box(id_mask, instance_id)
+    records: list[dict[str, object]] = []
+    for placed in placed_notes:
+        box = visible_box(id_mask, placed.instance_id)
+        base_record: dict[str, object] = {
+            "class_name": placed.class_name,
+            "instance_id": placed.instance_id,
+            "source_path": placed.source_path,
+            "layout_mode": placed.layout_mode,
+            "placed_pixels": placed.placed_pixels,
+            "exported_label": False,
+        }
         if not box:
+            records.append(
+                {
+                    **base_record,
+                    "visible_pixels": 0,
+                    "visibility_ratio": 0.0,
+                    "visible_area_frac": 0.0,
+                    "evidence_tier": "ignore",
+                    "drop_reason": "no_visible_pixels",
+                }
+            )
             continue
         x1, y1, x2, y2 = box
         w = x2 - x1
         h = y2 - y1
         area = w * h
+        mask = visible_mask(id_mask, placed.instance_id)
+        visible_pixels = int(mask.sum())
+        visible_area_frac = visible_pixels / (image_size * image_size)
+        visibility_ratio = visible_pixels / max(1, placed.placed_pixels)
+        tier = evidence_tier(
+            visible_area_frac,
+            visibility_ratio,
+            unknown_visible_area_frac,
+            unknown_visible_ratio,
+        )
+        record = {
+            **base_record,
+            "bbox_xyxy": [x1, y1, x2, y2],
+            "bbox_width": w,
+            "bbox_height": h,
+            "bbox_area_frac": area / (image_size * image_size),
+            "visible_pixels": visible_pixels,
+            "visible_area_frac": visible_area_frac,
+            "visibility_ratio": visibility_ratio,
+            "evidence_tier": tier,
+        }
         if area < image_size * image_size * 0.004 or w < 18 or h < 18:
+            record["evidence_tier"] = "ignore"
+            record["drop_reason"] = "too_small"
+            records.append(record)
             continue
-        mask = visible_mask(id_mask, instance_id)
+        if drop_unknown_denom_labels and tier == "banknote_unknown":
+            record["drop_reason"] = "banknote_unknown"
+            records.append(record)
+            continue
         if label_format == "obb":
-            line = visible_obb_line(mask, class_name, image_size)
+            line = visible_obb_line(mask, placed.class_name, image_size)
             if line is None:
+                record["evidence_tier"] = "ignore"
+                record["drop_reason"] = "obb_failed"
+                records.append(record)
                 continue
             label_lines.append(line)
         else:
@@ -555,9 +680,11 @@ def make_scene(
             cy = (y1 + y2) / 2 / image_size
             bw = w / image_size
             bh = h / image_size
-            label_lines.append(f"{CLASS_TO_ID[class_name]} {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}")
+            label_lines.append(f"{CLASS_TO_ID[placed.class_name]} {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}")
+        record["exported_label"] = True
         if save_visible_masks:
-            visible_masks.append((class_name, mask.copy()))
+            visible_masks.append((placed.class_name, mask.copy()))
+        records.append(record)
 
     rgb = canvas.convert("RGB")
     if rng.random() < 0.45:
@@ -566,7 +693,7 @@ def make_scene(
         rgb = Image.fromarray(np.clip(arr + grain, 0, 255).astype(np.uint8), "RGB")
     if rng.random() < 0.25:
         rgb = ImageOps.autocontrast(rgb, cutoff=rng.uniform(0, 1.5))
-    return rgb, label_lines, visible_masks
+    return rgb, label_lines, visible_masks, records
 
 
 def write_yaml(out: Path) -> None:
@@ -597,6 +724,24 @@ def main() -> None:
         help="Write axis-aligned YOLO detect labels or YOLO OBB corner labels.",
     )
     parser.add_argument("--save-visible-masks", action="store_true", help="Save per-visible-instance binary masks.")
+    parser.add_argument("--no-metadata", action="store_true", help="Do not write per-image instance metadata JSONL files.")
+    parser.add_argument(
+        "--unknown-visible-area-frac",
+        type=float,
+        default=0.012,
+        help="Visible image-area fraction below which metadata marks an instance as banknote_unknown.",
+    )
+    parser.add_argument(
+        "--unknown-visible-ratio",
+        type=float,
+        default=0.18,
+        help="Visible/placed pixel ratio below which metadata marks an instance as banknote_unknown.",
+    )
+    parser.add_argument(
+        "--drop-unknown-denom-labels",
+        action="store_true",
+        help="Skip denomination labels for instances marked banknote_unknown while keeping metadata.",
+    )
     parser.add_argument("--min-notes", type=int, default=4, help="Minimum notes per synthetic scene.")
     parser.add_argument("--max-notes", type=int, default=12, help="Maximum notes per synthetic scene.")
     parser.add_argument(
@@ -609,6 +754,7 @@ def main() -> None:
     parser.add_argument("--strip-max-frac", type=float, default=0.38, help="Maximum source-note width kept for strip_fan crops.")
     parser.add_argument("--thin-strip-min-frac", type=float, default=0.07, help="Minimum source-note width kept for thin_radial_slice crops.")
     parser.add_argument("--thin-strip-max-frac", type=float, default=0.20, help="Maximum source-note width kept for thin_radial_slice crops.")
+    parser.add_argument("--note-shadow-prob", type=float, default=0.0, help="Probability that each upper note casts a soft contact shadow.")
     args = parser.parse_args()
 
     rng = random.Random(args.seed)
@@ -638,6 +784,12 @@ def main() -> None:
         raise SystemExit("--strip-min-frac must be > 0 and <= --strip-max-frac <= 1")
     if not (0 < args.thin_strip_min_frac <= args.thin_strip_max_frac <= 1):
         raise SystemExit("--thin-strip-min-frac must be > 0 and <= --thin-strip-max-frac <= 1")
+    if args.unknown_visible_area_frac < 0:
+        raise SystemExit("--unknown-visible-area-frac must be >= 0")
+    if not (0 <= args.unknown_visible_ratio <= 1):
+        raise SystemExit("--unknown-visible-ratio must be between 0 and 1")
+    if not (0 <= args.note_shadow_prob <= 1):
+        raise SystemExit("--note-shadow-prob must be between 0 and 1")
     refs = load_refs(args.source, allowed_classes)
     if not args.allow_specimen:
         before = len(refs)
@@ -654,6 +806,14 @@ def main() -> None:
     for split in ["train", "val", "test"]:
         (args.out / "images" / split).mkdir(parents=True, exist_ok=True)
         (args.out / "labels" / split).mkdir(parents=True, exist_ok=True)
+    metadata_handles = {}
+    if not args.no_metadata:
+        metadata_dir = args.out / "metadata"
+        metadata_dir.mkdir(parents=True, exist_ok=True)
+        metadata_handles = {
+            split: (metadata_dir / f"{split}.jsonl").open("w", encoding="utf-8")
+            for split in ["train", "val", "test"]
+        }
 
     counts = {"train": 0, "val": 0, "test": 0}
     boxes = {"train": 0, "val": 0, "test": 0}
@@ -662,7 +822,7 @@ def main() -> None:
     attempts = 0
     while i < args.count:
         attempts += 1
-        image, labels, visible_masks = make_scene(
+        image, labels, visible_masks, records = make_scene(
             refs,
             args.image_size,
             rng,
@@ -671,12 +831,16 @@ def main() -> None:
             max_notes=args.max_notes,
             layout_modes=layout_modes,
             hand_probability=args.hand_prob,
+            note_shadow_probability=args.note_shadow_prob,
             label_format=args.label_format,
             save_visible_masks=args.save_visible_masks,
             strip_min_frac=args.strip_min_frac,
             strip_max_frac=args.strip_max_frac,
             thin_strip_min_frac=args.thin_strip_min_frac,
             thin_strip_max_frac=args.thin_strip_max_frac,
+            unknown_visible_area_frac=args.unknown_visible_area_frac,
+            unknown_visible_ratio=args.unknown_visible_ratio,
+            drop_unknown_denom_labels=args.drop_unknown_denom_labels,
         )
         if not labels:
             if attempts > args.count * 5:
@@ -690,8 +854,25 @@ def main() -> None:
         else:
             split = "train"
         stem = f"khr_fan_{i:06d}"
-        image.save(args.out / "images" / split / f"{stem}.jpg", quality=88)
-        (args.out / "labels" / split / f"{stem}.txt").write_text("\n".join(labels) + "\n", encoding="utf-8")
+        image_path = args.out / "images" / split / f"{stem}.jpg"
+        label_path = args.out / "labels" / split / f"{stem}.txt"
+        image.save(image_path, quality=88)
+        label_path.write_text("\n".join(labels) + "\n", encoding="utf-8")
+        if metadata_handles:
+            metadata_handles[split].write(
+                json.dumps(
+                    {
+                        "image": image_path.relative_to(args.out).as_posix(),
+                        "label": label_path.relative_to(args.out).as_posix(),
+                        "split": split,
+                        "image_size": args.image_size,
+                        "label_format": args.label_format,
+                        "instances": records,
+                    },
+                    sort_keys=True,
+                )
+                + "\n"
+            )
         if args.save_visible_masks:
             mask_dir = args.out / "masks" / split
             mask_dir.mkdir(parents=True, exist_ok=True)
@@ -705,6 +886,8 @@ def main() -> None:
             print(f"generated {i}/{args.count} images", flush=True)
 
     write_yaml(args.out)
+    for handle in metadata_handles.values():
+        handle.close()
     print(f"source refs: {len(refs)}")
     for split in ["train", "val", "test"]:
         print(f"{split}: {counts[split]} images, {boxes[split]} boxes")
