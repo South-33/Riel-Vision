@@ -14,6 +14,8 @@ Start with a 2.5D CPU/OpenCV-style renderer because it is easier to debug, deter
 
 The desired product is not "a 3D renderer." The desired product is a data engine that creates images, visible-pixel labels, partial-crop verifier data, QA reports, and real-benchmark gains.
 
+The current sequence is base-model strength first, partial/fan specialization second. Use 2.5D to improve clean and near-clean recognition, weak KHR class coverage, and phone-domain robustness before scaling dense overlaps and hand-held fans.
+
 ## What To Believe From The Research
 
 Use these points as strong guidance:
@@ -145,6 +147,14 @@ OCR and template matching should remain auxiliary cues. Use them only for crops 
 ## Training Curriculum
 
 Keep clean-note skill alive while adding hard geometry.
+
+For the immediate base-strength phase, use a gentler curriculum:
+
+- 60% clean or near-clean notes with realistic phone degradation.
+- 25% light table spreads and simple two-note overlaps.
+- 15% mild off-frame/partial notes, with hard fans and heavy fingers kept mostly out.
+
+Bias this phase toward weak classes and sides, especially `KHR_20000`, `KHR_50000`, and old/common circulated KHR only when the experiment explicitly includes that scope.
 
 Recommended batch mix for the main robust checkpoint:
 

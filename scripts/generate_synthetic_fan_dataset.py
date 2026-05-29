@@ -8,6 +8,7 @@ visible region of each note after occlusion.
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import math
 import random
@@ -461,6 +462,78 @@ def add_note_shadow(
     canvas.alpha_composite(shadow, (x + offset_x, y + offset_y))
 
 
+def add_glare(rgb: Image.Image, rng: random.Random) -> Image.Image:
+    overlay = Image.new("RGBA", rgb.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    width, height = rgb.size
+    if rng.random() < 0.55:
+        y = rng.randint(int(height * 0.05), int(height * 0.78))
+        band_h = rng.randint(max(8, height // 32), max(18, height // 9))
+        skew = rng.randint(-width // 5, width // 5)
+        alpha = rng.randint(18, 58)
+        polygon = [
+            (-width // 8, y),
+            (width + width // 8, y + skew),
+            (width + width // 8, y + skew + band_h),
+            (-width // 8, y + band_h),
+        ]
+        draw.polygon(polygon, fill=(255, 255, 245, alpha))
+    else:
+        cx = rng.randint(0, width)
+        cy = rng.randint(0, height)
+        rx = rng.randint(max(18, width // 12), max(24, width // 3))
+        ry = rng.randint(max(12, height // 18), max(18, height // 4))
+        alpha = rng.randint(16, 52)
+        draw.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), fill=(255, 255, 245, alpha))
+    return Image.alpha_composite(rgb.convert("RGBA"), overlay).convert("RGB")
+
+
+def jpeg_roundtrip(rgb: Image.Image, rng: random.Random, min_quality: int, max_quality: int) -> Image.Image:
+    quality = rng.randint(min_quality, max_quality)
+    buffer = io.BytesIO()
+    rgb.save(buffer, format="JPEG", quality=quality)
+    buffer.seek(0)
+    return Image.open(buffer).convert("RGB")
+
+
+def apply_phone_postprocess(
+    rgb: Image.Image,
+    rng: random.Random,
+    probability: float,
+    jpeg_quality_min: int,
+    jpeg_quality_max: int,
+) -> Image.Image:
+    if probability <= 0 or rng.random() > probability:
+        return rgb
+    output = rgb
+    if rng.random() < 0.75:
+        arr = np.asarray(output).astype(np.float32)
+        channel_gain = np.array(
+            [
+                rng.uniform(0.92, 1.10),
+                rng.uniform(0.94, 1.06),
+                rng.uniform(0.88, 1.08),
+            ],
+            dtype=np.float32,
+        )
+        arr = np.clip(arr * channel_gain, 0, 255)
+        output = Image.fromarray(arr.astype(np.uint8), "RGB")
+    if rng.random() < 0.65:
+        arr = np.asarray(output).astype(np.int16)
+        noise_sigma = rng.uniform(5, 18)
+        grain = np.random.default_rng(rng.randint(0, 2**32 - 1)).normal(0, noise_sigma, arr.shape)
+        output = Image.fromarray(np.clip(arr + grain, 0, 255).astype(np.uint8), "RGB")
+    if rng.random() < 0.45:
+        output = add_glare(output, rng)
+    if rng.random() < 0.35:
+        output = output.filter(ImageFilter.GaussianBlur(radius=rng.uniform(0.35, 1.25)))
+    if rng.random() < 0.45:
+        output = ImageEnhance.Sharpness(output).enhance(rng.uniform(0.75, 1.55))
+    if rng.random() < 0.70:
+        output = jpeg_roundtrip(output, rng, jpeg_quality_min, jpeg_quality_max)
+    return output
+
+
 def paste_note(
     canvas: Image.Image,
     id_mask: np.ndarray,
@@ -540,12 +613,16 @@ def make_scene(
     balance_classes: bool = False,
     backgrounds: list[BackgroundRef] | None = None,
     perspective_probability: float = 0.35,
+    scene_aug_probability: float = 0.0,
+    jpeg_quality_min: int = 62,
+    jpeg_quality_max: int = 92,
 ) -> tuple[Image.Image, list[str], list[tuple[str, np.ndarray]], list[dict[str, object]], dict[str, object]]:
     background, background_path = make_background(image_size, rng, backgrounds)
     canvas = background.convert("RGBA")
     scene_info: dict[str, object] = {
         "background": background_path,
         "perspective_probability": perspective_probability,
+        "scene_aug_probability": scene_aug_probability,
     }
     id_mask = np.zeros((image_size, image_size), dtype=np.uint16)
     placed_notes: list[PlacedNote] = []
@@ -813,6 +890,7 @@ def make_scene(
         rgb = Image.fromarray(np.clip(arr + grain, 0, 255).astype(np.uint8), "RGB")
     if rng.random() < 0.25:
         rgb = ImageOps.autocontrast(rgb, cutoff=rng.uniform(0, 1.5))
+    rgb = apply_phone_postprocess(rgb, rng, scene_aug_probability, jpeg_quality_min, jpeg_quality_max)
     return rgb, label_lines, visible_masks, records, scene_info
 
 
@@ -898,6 +976,9 @@ def main() -> None:
     parser.add_argument("--note-shadow-prob", type=float, default=0.0, help="Probability that each upper note casts a soft contact shadow.")
     parser.add_argument("--balance-classes", action="store_true", help="Sample a class uniformly first, then sample a reference asset from that class.")
     parser.add_argument("--perspective-prob", type=float, default=0.35, help="Probability of applying a mild local perspective warp to each note.")
+    parser.add_argument("--scene-aug-prob", type=float, default=0.0, help="Probability of phone-style scene postprocessing: color cast, noise, glare, blur, sharpening, and JPEG.")
+    parser.add_argument("--jpeg-quality-min", type=int, default=62, help="Minimum JPEG quality for --scene-aug-prob postprocessing.")
+    parser.add_argument("--jpeg-quality-max", type=int, default=92, help="Maximum JPEG quality for --scene-aug-prob postprocessing.")
     args = parser.parse_args()
 
     rng = random.Random(args.seed)
@@ -937,6 +1018,10 @@ def main() -> None:
         raise SystemExit("--crop-pad-frac must be >= 0")
     if not (0 <= args.perspective_prob <= 1):
         raise SystemExit("--perspective-prob must be between 0 and 1")
+    if not (0 <= args.scene_aug_prob <= 1):
+        raise SystemExit("--scene-aug-prob must be between 0 and 1")
+    if not (1 <= args.jpeg_quality_min <= args.jpeg_quality_max <= 100):
+        raise SystemExit("--jpeg-quality-min/--jpeg-quality-max must satisfy 1 <= min <= max <= 100")
     refs = load_refs(args.source, allowed_classes)
     backgrounds = load_background_refs(args.background_dir) if args.background_dir else []
     if args.background_dir:
@@ -996,6 +1081,9 @@ def main() -> None:
             balance_classes=args.balance_classes,
             backgrounds=backgrounds,
             perspective_probability=args.perspective_prob,
+            scene_aug_probability=args.scene_aug_prob,
+            jpeg_quality_min=args.jpeg_quality_min,
+            jpeg_quality_max=args.jpeg_quality_max,
         )
         if not labels:
             if attempts > args.count * 5:

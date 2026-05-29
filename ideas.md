@@ -2,8 +2,17 @@
 
 Living doc for high-value ideas, experiments, and results. Keep this short: only add ideas worth revisiting.
 
+## Active Dashboard
+
+- Current phase: strengthen the base detector first, then scale into hard partial/fan scenes. Use `docs/cashsnap-active-plan.md` as the repo compass.
+- Main synthetic path: 2.5D clean/near-clean scenes with phone-style domain knobs, QA'd backgrounds, and explicit balancing for weak KHR classes (`KHR_20000`, `KHR_50000`) before broader overlap/fan curricula.
+- Parked path: WebGL/3D remains a design reference, not the next build, until a small Windows-stable ID-pass proof beats a matched 2.5D dataset on reviewed real labels.
+- Next data quality gate: mined background banks need contact-sheet QA. A geometry-only strict bank still leaked currency fragments; detector-rejected patches looked cleaner but should stay smoke-only until a complete manifest/contact sheet passes review.
+- Keep `ideas.md` curated. Move old detailed results into docs when they become historical context instead of active guidance.
+
 ## Strong Ideas To Try
 
+- Generate a modest base-model 2.5D dataset with `--scene-aug-prob`, real/QA'd backgrounds, balanced weak classes, and clean/near-clean layouts before returning to hard fan geometry.
 - Collect the minimum real partial-note phone pack from `manifests/real_partial_capture_requirements.csv`, run `scripts/run_capture_review_pipeline.py`, review crops in `demo/review/`, then retrain/calibrate only from accepted rows. This is now higher leverage than more synthetic scaling or broad public-dataset search.
 - Audit the downloaded Roboflow `cuurecy-detection-is` segmentation export: it has KHR/USD front/back masks and promising real phone partial/overlap examples. Exact duplicate/split-leakage and label-geometry audits passed; license/reproduction constraints, near-duplicates, note versions, and tiny-mask visual QA still need review before training.
 - Use the current 2.5D synthetic harness in `docs/synthetic-harness-runbook.md`; the original mask compositor plan is archived under `docs/archive/synthetic-compositor-plan.md`.
@@ -80,6 +89,7 @@ Living doc for high-value ideas, experiments, and results. Keep this short: only
 - For the next real data pass, run `rl python scripts/check_capture_requirements.py`; it now prints priority-ranked `data/inbox/real_partial_photos/` gaps, especially hand fan and thin-slice `KHR_5000`/`KHR_20000`.
 - Follow-up web/Hugging Face/Roboflow searches after the audit did not find a better KHR partial/fan dataset; a resumed targeted search again only surfaced Cambodia Currency Project plus adjacent non-KHR BankNote-Net/Indian-Thai/YOLOv11 mixed-currency work, so stop broad hunting for now and spend effort on curation or rights-clear phone captures.
 - Scan 2.5D Numista geometry probes are useful as region-coverage experiments but not as final data: broad scan 2.5D got 6/6 any-class only at permissive 640px settings and old/common focus lost coverage while adding `KHR_500`/`KHR_1000` false positives.
+- 2.5D base-phone smoke (`data/synthetic/cashsnap_scan_2p5d_base_phone_smoke_v1/`) proves the base-first recipe runs with 1-3 clean/near-clean notes, detector-rejected backgrounds, and `--scene-aug-prob`; use it as a smoke artifact only, not a training set.
 - The current 2D-vs-3D decision is in `docs/synthetic-strategy-evaluation.md`: continue the 2.5D evidence harness plus real reviewed fragments, and promote WebGL/3D only after a small Windows-stable ID-pass proof beats matched 2.5D data on real labels.
 - Rebuilt P1 old/common partial-focus review queue now has 103 existing crops with zero missing paths after recovering stale high-confidence failure rows from `source_crop`; it covers `KHR_5000`/`KHR_10000`/`KHR_20000` front/back curation targets.
 - Current old/common classifier fails that P1 focus queue badly (val 0.088, test 0.067), with thin `KHR_5000`/`KHR_20000` collapsing into `KHR_10000`; this is the clearest signal to collect/review real thin/edge 5k/20k crops before model tricks.

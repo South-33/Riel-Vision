@@ -4,14 +4,16 @@ Use this file as the first stop when the repo feels noisy. The project has many 
 
 ## Current Active Path
 
-1. Review real partial KHR fragments, especially thin/edge `KHR_5000` and `KHR_20000` front/back crops.
-2. Train small fragment-classifier probes only from reviewed rows, mixed carefully with the existing old/common real-box base.
-3. Verify in the browser stack and on real fan/overlap draft labels before changing default model config.
-4. Use 2.5D synthetic data as a controlled geometry supplement; promote WebGL/3D only after a matched benchmark gate.
+1. Read `docs/cashsnap-active-plan.md` for the current north star and phase order.
+2. Strengthen the base detector first with clean/near-clean 2.5D data, phone-style domain knobs, and extra support for weak KHR classes like `KHR_20000` and `KHR_50000`.
+3. Keep current KHR, rare KHR, old/common circulated KHR, and USD scopes explicit when mixing data.
+4. After the base model is stable, scale into simple overlaps, thin slices, hand-held fans, and finger occlusion.
+5. Keep 3D/WebGL parked behind the proof gate in `docs/synthetic-strategy-evaluation.md`.
 
 ## Start Here
 
 - `docs/model-card-cashsnap-two-stage-oldcommon.md`: current deployable diagnostic stack, known limits, and browser smoke evidence.
+- `docs/cashsnap-active-plan.md`: current phase order, parked ideas, and immediate milestones.
 - `docs/p1-fragment-curation-runbook.md`: next concrete data loop for the old/common `KHR_5000`/`KHR_20000` collapse.
 - `docs/synthetic-strategy-evaluation.md`: current 2D/2.5D vs 3D decision memo.
 - `docs/synthetic-harness-runbook.md`: scan-bank audit, 2.5D generation, QA, and detector-probe commands.
