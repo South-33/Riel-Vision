@@ -43,6 +43,8 @@ The 2026-05-30 `scripts/run_browser_smoke_cases.py` suite also passed the USD_1 
 
 Temporary browser override `--detector-override 0.20` keeps the shop-overlap count and 4/6 same-class score but changes the value error from `+6000` KHR to `-4000` KHR by turning the weak false `KHR_20000` into `KHR_10000`; the same override still passes the USD_1 and detector-only KHR guard cases. Do not change the default config from one image; use the smoke-runner override flags for calibration sweeps once more labeled real cases exist.
 
+`scripts/inspect_two_stage_matches.py` now makes row-level fusion failures easier to inspect. On the PyTorch-side `det0.17/nms0.85/detconf` fused shop-overlap CSV, the remaining same-class miss is a high-confidence fragment error: visible `KHR_5000` is predicted as `KHR_10000` with fragment confidence `0.9826`, while the detector label is also wrong (`KHR_20000`). This is not a simple low-confidence rejection problem; it needs reviewed real `KHR_5000`/`KHR_20000` partial crops or a stronger local verifier.
+
 Browser smoke debug currently reports detector output dims `[1,300,6]`, `13` browser proposals, and `6` final detections. Ultralytics ONNX Runtime on the same detector artifact reaches `6/6` detector same-class recall at `416/conf=0.05`, so remaining browser work should focus on classifier/crop parity and data quality rather than blaming the ONNX file itself.
 
 `scripts/debug_onnx_detector_preprocess.py` isolates the sensitivity: on the shop-overlap image, the detector ONNX produces `13` proposals with `cv2` resize and `8` proposals with PIL-style resize at the same `416/conf=0.05`, including a PIL-side `USD_100` proposal. Treat browser canvas preprocessing as a first-class deployment variable for thin/partial slices.
