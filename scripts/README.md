@@ -33,6 +33,7 @@ This directory is intentionally script-heavy because CashSnap is still in data a
 - `classify_yolo_proposals.py`, `fuse_two_stage_csv.py`, `sweep_two_stage_fusion.py`, `evaluate_two_stage_csv.py`: detector/classifier fusion diagnostics.
 - `inspect_two_stage_matches.py`: row-level detector/classifier confidence inspection against draft labels.
 - `build_currency_gate_dataset.py`: KHR/USD/background gate experiments; historical gate did not transfer to hard shop-overlap.
+- `probe_template_feature_verifier.py`: diagnostic-only SIFT/ORB/AKAZE template matcher for partial crops; current P1 results are poor, so do not treat it as a production verifier path.
 
 ## Synthetic And Assets
 
