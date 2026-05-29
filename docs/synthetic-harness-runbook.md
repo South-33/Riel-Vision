@@ -64,6 +64,8 @@ rl python scripts/generate_synthetic_fan_dataset.py `
   --hand-prob 0.0 `
   --balance-classes `
   --perspective-prob 0.55 `
+  --camera-geom-prob 0.45 `
+  --lens-distort-prob 0.35 `
   --scene-aug-prob 0.85 `
   --jpeg-quality-min 50 `
   --jpeg-quality-max 90 `
@@ -101,6 +103,8 @@ rl python scripts/generate_synthetic_fan_dataset.py `
   --hand-prob 0.0 `
   --balance-classes `
   --perspective-prob 0.55 `
+  --camera-geom-prob 0.45 `
+  --lens-distort-prob 0.30 `
   --scene-aug-prob 0.75 `
   --jpeg-quality-min 55 `
   --jpeg-quality-max 92 `

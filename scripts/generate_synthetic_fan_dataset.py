@@ -462,6 +462,111 @@ def add_note_shadow(
     canvas.alpha_composite(shadow, (x + offset_x, y + offset_y))
 
 
+def corner_fill_rgba(image: Image.Image) -> tuple[int, int, int, int]:
+    arr = np.asarray(image.convert("RGBA"))
+    samples = np.concatenate(
+        [
+            arr[:16, :16].reshape(-1, 4),
+            arr[:16, -16:].reshape(-1, 4),
+            arr[-16:, :16].reshape(-1, 4),
+            arr[-16:, -16:].reshape(-1, 4),
+        ],
+        axis=0,
+    )
+    fill = np.median(samples, axis=0).astype(np.uint8)
+    return tuple(int(v) for v in fill)
+
+
+def warp_scene_affine(
+    canvas: Image.Image,
+    id_mask: np.ndarray,
+    rng: random.Random,
+) -> tuple[Image.Image, np.ndarray]:
+    if cv2 is None:
+        return canvas, id_mask
+    width, height = canvas.size
+    scale_x = rng.uniform(0.90, 1.12)
+    scale_y = rng.uniform(0.90, 1.12)
+    shear = rng.uniform(-0.045, 0.045)
+    tx = rng.uniform(-0.045, 0.045) * width
+    ty = rng.uniform(-0.045, 0.045) * height
+    matrix = np.array(
+        [
+            [scale_x, shear, (1 - scale_x) * width * 0.5 + tx],
+            [rng.uniform(-0.025, 0.025), scale_y, (1 - scale_y) * height * 0.5 + ty],
+        ],
+        dtype=np.float32,
+    )
+    image_arr = np.asarray(canvas.convert("RGBA"))
+    fill = corner_fill_rgba(canvas)
+    warped_image = cv2.warpAffine(
+        image_arr,
+        matrix,
+        (width, height),
+        flags=cv2.INTER_CUBIC,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=fill,
+    )
+    warped_mask = cv2.warpAffine(
+        id_mask,
+        matrix,
+        (width, height),
+        flags=cv2.INTER_NEAREST,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=0,
+    )
+    return Image.fromarray(warped_image, "RGBA"), warped_mask.astype(id_mask.dtype, copy=False)
+
+
+def distort_scene_lens(
+    canvas: Image.Image,
+    id_mask: np.ndarray,
+    rng: random.Random,
+) -> tuple[Image.Image, np.ndarray]:
+    if cv2 is None:
+        return canvas, id_mask
+    width, height = canvas.size
+    yy, xx = np.indices((height, width), dtype=np.float32)
+    cx = (width - 1) * 0.5
+    cy = (height - 1) * 0.5
+    radius = max(width, height) * 0.5
+    x = (xx - cx) / radius
+    y = (yy - cy) / radius
+    r2 = x * x + y * y
+    k1 = rng.uniform(-0.055, 0.055)
+    k2 = rng.uniform(-0.018, 0.018)
+    scale = 1.0 + k1 * r2 + k2 * r2 * r2
+    map_x = np.clip(cx + x * scale * radius, 0, width - 1).astype(np.float32)
+    map_y = np.clip(cy + y * scale * radius, 0, height - 1).astype(np.float32)
+    image_arr = np.asarray(canvas.convert("RGBA"))
+    warped_image = cv2.remap(image_arr, map_x, map_y, interpolation=cv2.INTER_CUBIC)
+    warped_mask = cv2.remap(id_mask, map_x, map_y, interpolation=cv2.INTER_NEAREST)
+    return Image.fromarray(warped_image, "RGBA"), warped_mask.astype(id_mask.dtype, copy=False)
+
+
+def apply_scene_camera_geometry(
+    canvas: Image.Image,
+    id_mask: np.ndarray,
+    rng: random.Random,
+    camera_geom_probability: float,
+    lens_distort_probability: float,
+) -> tuple[Image.Image, np.ndarray, dict[str, object]]:
+    info: dict[str, object] = {
+        "camera_geom_applied": False,
+        "lens_distort_applied": False,
+        "camera_geometry_backend": "cv2" if cv2 is not None else "unavailable",
+    }
+    if cv2 is None:
+        return canvas, id_mask, info
+    if camera_geom_probability > 0 and rng.random() < camera_geom_probability:
+        canvas, id_mask = warp_scene_affine(canvas, id_mask, rng)
+        info["camera_geom_applied"] = True
+    if lens_distort_probability > 0 and rng.random() < lens_distort_probability:
+        canvas, id_mask = distort_scene_lens(canvas, id_mask, rng)
+        info["lens_distort_applied"] = True
+    return canvas, id_mask, info
+
+
 def add_glare(rgb: Image.Image, rng: random.Random) -> Image.Image:
     overlay = Image.new("RGBA", rgb.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
@@ -613,6 +718,8 @@ def make_scene(
     balance_classes: bool = False,
     backgrounds: list[BackgroundRef] | None = None,
     perspective_probability: float = 0.35,
+    camera_geom_probability: float = 0.0,
+    lens_distort_probability: float = 0.0,
     scene_aug_probability: float = 0.0,
     jpeg_quality_min: int = 62,
     jpeg_quality_max: int = 92,
@@ -622,6 +729,8 @@ def make_scene(
     scene_info: dict[str, object] = {
         "background": background_path,
         "perspective_probability": perspective_probability,
+        "camera_geom_probability": camera_geom_probability,
+        "lens_distort_probability": lens_distort_probability,
         "scene_aug_probability": scene_aug_probability,
     }
     id_mask = np.zeros((image_size, image_size), dtype=np.uint16)
@@ -804,6 +913,14 @@ def make_scene(
     fan_layouts = {"radial_slice", "strip_fan", "thin_radial_slice", "tight_fan", "fan"}
     grip_center = (center_x, pivot_y) if layout_mode in fan_layouts else None
     add_hand_occluders(canvas, id_mask, rng, hand_probability, grip_center=grip_center)
+    canvas, id_mask, camera_info = apply_scene_camera_geometry(
+        canvas,
+        id_mask,
+        rng,
+        camera_geom_probability,
+        lens_distort_probability,
+    )
+    scene_info.update(camera_info)
 
     label_lines: list[str] = []
     visible_masks: list[tuple[str, np.ndarray]] = []
@@ -837,7 +954,7 @@ def make_scene(
         mask = visible_mask(id_mask, placed.instance_id)
         visible_pixels = int(mask.sum())
         visible_area_frac = visible_pixels / (image_size * image_size)
-        visibility_ratio = visible_pixels / max(1, placed.placed_pixels)
+        visibility_ratio = min(1.0, visible_pixels / max(1, placed.placed_pixels))
         tier = evidence_tier(
             visible_area_frac,
             visibility_ratio,
@@ -976,6 +1093,8 @@ def main() -> None:
     parser.add_argument("--note-shadow-prob", type=float, default=0.0, help="Probability that each upper note casts a soft contact shadow.")
     parser.add_argument("--balance-classes", action="store_true", help="Sample a class uniformly first, then sample a reference asset from that class.")
     parser.add_argument("--perspective-prob", type=float, default=0.35, help="Probability of applying a mild local perspective warp to each note.")
+    parser.add_argument("--camera-geom-prob", type=float, default=0.0, help="Probability of applying mild whole-scene affine camera framing to the RGB image and ID mask before labels are exported.")
+    parser.add_argument("--lens-distort-prob", type=float, default=0.0, help="Probability of applying mild whole-scene radial lens distortion to the RGB image and ID mask before labels are exported.")
     parser.add_argument("--scene-aug-prob", type=float, default=0.0, help="Probability of phone-style scene postprocessing: color cast, noise, glare, blur, sharpening, and JPEG.")
     parser.add_argument("--jpeg-quality-min", type=int, default=62, help="Minimum JPEG quality for --scene-aug-prob postprocessing.")
     parser.add_argument("--jpeg-quality-max", type=int, default=92, help="Maximum JPEG quality for --scene-aug-prob postprocessing.")
@@ -1018,6 +1137,10 @@ def main() -> None:
         raise SystemExit("--crop-pad-frac must be >= 0")
     if not (0 <= args.perspective_prob <= 1):
         raise SystemExit("--perspective-prob must be between 0 and 1")
+    if not (0 <= args.camera_geom_prob <= 1):
+        raise SystemExit("--camera-geom-prob must be between 0 and 1")
+    if not (0 <= args.lens_distort_prob <= 1):
+        raise SystemExit("--lens-distort-prob must be between 0 and 1")
     if not (0 <= args.scene_aug_prob <= 1):
         raise SystemExit("--scene-aug-prob must be between 0 and 1")
     if not (1 <= args.jpeg_quality_min <= args.jpeg_quality_max <= 100):
@@ -1081,6 +1204,8 @@ def main() -> None:
             balance_classes=args.balance_classes,
             backgrounds=backgrounds,
             perspective_probability=args.perspective_prob,
+            camera_geom_probability=args.camera_geom_prob,
+            lens_distort_probability=args.lens_distort_prob,
             scene_aug_probability=args.scene_aug_prob,
             jpeg_quality_min=args.jpeg_quality_min,
             jpeg_quality_max=args.jpeg_quality_max,
