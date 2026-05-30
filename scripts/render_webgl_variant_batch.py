@@ -8,6 +8,7 @@ import json
 import shutil
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 import cv2
@@ -144,7 +145,7 @@ def obb_audit_for_mask(mask: np.ndarray) -> dict[str, float | int | str]:
     }
 
 
-def write_obb_label(id_path: Path, boxes_path: Path, out_path: Path, metadata_path: Path) -> None:
+def build_obb_label(id_path: Path, boxes_path: Path) -> tuple[list[str], list[dict[str, object]]]:
     id_image = np.array(Image.open(id_path).convert("RGB"))
     height, width = id_image.shape[:2]
     boxes_doc = json.loads(boxes_path.read_text(encoding="utf-8"))
@@ -178,8 +179,25 @@ def write_obb_label(id_path: Path, boxes_path: Path, out_path: Path, metadata_pa
             + " ".join(f"{max(0.0, min(1.0, value)):.6f}" for value in normalized)
         )
 
-    out_path.write_text("\n".join(rows) + ("\n" if rows else ""), encoding="utf-8")
-    metadata_path.write_text(json.dumps(metadata_rows, indent=2) + "\n", encoding="utf-8")
+    return rows, metadata_rows
+
+
+def write_lines(path: Path, rows: list[str]) -> None:
+    path.write_text("\n".join(rows) + ("\n" if rows else ""), encoding="utf-8")
+
+
+def write_json(path: Path, payload: object) -> None:
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def prepare_empty_dir(directory: Path, out_root: Path) -> None:
+    resolved_directory = directory.resolve()
+    resolved_root = out_root.resolve()
+    if resolved_directory != resolved_root and resolved_root not in resolved_directory.parents:
+        raise RuntimeError(f"refusing to clear directory outside output root: {directory}")
+    if directory.exists():
+        shutil.rmtree(directory)
+    directory.mkdir(parents=True, exist_ok=True)
 
 
 def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path) -> tuple[Path, Path]:
@@ -190,10 +208,24 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path) -> 
     obb_images_dir = out_root / "obb" / "images" / "train"
     obb_labels_dir = out_root / "obb" / "labels" / "train"
     obb_metadata_dir = out_root / "obb" / "metadata" / "train"
-    for directory in (images_dir, labels_dir, ids_dir, metadata_dir, obb_images_dir, obb_labels_dir, obb_metadata_dir):
-        directory.mkdir(parents=True, exist_ok=True)
+    obb_rejected_labels_dir = out_root / "obb" / "rejected_labels" / "train"
+    obb_rejected_metadata_dir = out_root / "obb" / "rejected_metadata" / "train"
+    for directory in (
+        images_dir,
+        labels_dir,
+        ids_dir,
+        metadata_dir,
+        obb_images_dir,
+        obb_labels_dir,
+        obb_metadata_dir,
+        obb_rejected_labels_dir,
+        obb_rejected_metadata_dir,
+    ):
+        prepare_empty_dir(directory, out_root)
 
     manifest = []
+    obb_image_status_counts: Counter[str] = Counter()
+    obb_instance_status_counts: Counter[str] = Counter()
     for variant, out_dir in variant_dirs:
         stem = f"variant_{variant:04d}"
         image_path = images_dir / f"{stem}.png"
@@ -205,29 +237,67 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path) -> 
         obb_image_path = obb_images_dir / f"{stem}.png"
         obb_label_path = obb_labels_dir / f"{stem}.txt"
         obb_metadata_path = obb_metadata_dir / f"{stem}.json"
+        obb_rejected_label_path = obb_rejected_labels_dir / f"{stem}.txt"
+        obb_rejected_metadata_path = obb_rejected_metadata_dir / f"{stem}.json"
         shutil.copyfile(out_dir / "visual.png", image_path)
-        shutil.copyfile(out_dir / "visual.png", obb_image_path)
         shutil.copyfile(out_dir / "labels_visible.txt", label_path)
         shutil.copyfile(out_dir / "id.png", id_path)
         shutil.copyfile(out_dir / "visible_boxes.json", boxes_path)
         shutil.copyfile(out_dir / "layer_audit.json", audit_path)
         shutil.copyfile(out_dir / "metadata.json", source_metadata_path)
-        write_obb_label(id_path, boxes_path, obb_label_path, obb_metadata_path)
-        manifest.append(
-            {
-                "variant": variant,
-                "image": str(image_path.relative_to(out_root)),
-                "label": str(label_path.relative_to(out_root)),
-                "obb_image": str(obb_image_path.relative_to(out_root)),
-                "obb_label": str(obb_label_path.relative_to(out_root)),
-                "obb_metadata": str(obb_metadata_path.relative_to(out_root)),
-                "id": str(id_path.relative_to(out_root)),
-                "visible_boxes": str(boxes_path.relative_to(out_root)),
-                "layer_audit": str(audit_path.relative_to(out_root)),
-            }
-        )
+        obb_rows, obb_metadata = build_obb_label(id_path, boxes_path)
+        obb_reject_reasons = sorted({str(row["status"]) for row in obb_metadata if row["status"] != "exported"})
+        obb_instance_status_counts.update(str(row["status"]) for row in obb_metadata)
+        manifest_row = {
+            "variant": variant,
+            "image": str(image_path.relative_to(out_root)),
+            "label": str(label_path.relative_to(out_root)),
+            "id": str(id_path.relative_to(out_root)),
+            "visible_boxes": str(boxes_path.relative_to(out_root)),
+            "layer_audit": str(audit_path.relative_to(out_root)),
+            "obb_status": "accepted" if not obb_reject_reasons else "rejected",
+            "obb_reject_reasons": obb_reject_reasons,
+        }
+        if obb_reject_reasons:
+            obb_image_status_counts["rejected"] += 1
+            write_lines(obb_rejected_label_path, obb_rows)
+            write_json(obb_rejected_metadata_path, obb_metadata)
+            manifest_row.update(
+                {
+                    "obb_diagnostic_label": str(obb_rejected_label_path.relative_to(out_root)),
+                    "obb_diagnostic_metadata": str(obb_rejected_metadata_path.relative_to(out_root)),
+                }
+            )
+        else:
+            obb_image_status_counts["accepted"] += 1
+            shutil.copyfile(out_dir / "visual.png", obb_image_path)
+            write_lines(obb_label_path, obb_rows)
+            write_json(obb_metadata_path, obb_metadata)
+            manifest_row.update(
+                {
+                    "obb_image": str(obb_image_path.relative_to(out_root)),
+                    "obb_label": str(obb_label_path.relative_to(out_root)),
+                    "obb_metadata": str(obb_metadata_path.relative_to(out_root)),
+                }
+            )
+        manifest.append(manifest_row)
 
-    (out_root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    write_json(out_root / "manifest.json", manifest)
+    write_json(
+        out_root / "obb" / "summary.json",
+        {
+            "trainable_obb_images": obb_image_status_counts["accepted"],
+            "rejected_obb_images": obb_image_status_counts["rejected"],
+            "compact_instance_obbs": obb_instance_status_counts["exported"],
+            "instance_status_counts": dict(sorted(obb_instance_status_counts.items())),
+            "policy": {
+                "trainable_obb_dataset": "all visible instances in an image must have exported OBB labels",
+                "rejected_labels": "diagnostic only; do not train from rejected_labels because skipped visible bills would become background",
+                "min_largest_component_frac": OBB_MIN_LARGEST_COMPONENT_FRAC,
+                "min_rect_fill_frac": OBB_MIN_RECT_FILL_FRAC,
+            },
+        },
+    )
     data_yaml = out_root / "data.yaml"
     data_yaml.write_text(
         "\n".join(
