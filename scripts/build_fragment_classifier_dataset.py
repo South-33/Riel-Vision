@@ -23,6 +23,7 @@ CLASS_NAMES = [
     "KHR_50000",
 ]
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
+CLASS_NAMES_BY_LENGTH = sorted(CLASS_NAMES, key=len, reverse=True)
 
 
 @dataclass(frozen=True)
@@ -65,6 +66,10 @@ def resolve(path_text: str) -> Path:
     return path if path.is_absolute() else ROOT / path
 
 
+def split_list(value: str) -> set[str]:
+    return {item.strip() for item in re.split(r"[,\s]+", value) if item.strip()}
+
+
 def collect_assets(sources: list[str], classes: set[str], include_name_regex: str) -> list[Asset]:
     pattern = re.compile(include_name_regex, flags=re.IGNORECASE) if include_name_regex else None
     assets: list[Asset] = []
@@ -78,7 +83,9 @@ def collect_assets(sources: list[str], classes: set[str], include_name_regex: st
             normalized = str(path.relative_to(ROOT)).replace("\\", "/")
             if pattern is not None and not pattern.search(normalized):
                 continue
-            class_name = next((name for name in CLASS_NAMES if name in path.parts or name in path.name), None)
+            class_name = next((name for name in CLASS_NAMES if name in path.parts), None)
+            if class_name is None:
+                class_name = next((name for name in CLASS_NAMES_BY_LENGTH if name in path.name), None)
             if class_name is None or (classes and class_name not in classes):
                 continue
             assets.append(Asset(path=path, class_name=class_name))
@@ -275,7 +282,7 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     existing_rows = [] if args.clean else read_csv(out_dir / "manifest.csv")
 
-    selected_classes = {item.strip() for item in args.classes.split(",") if item.strip()}
+    selected_classes = split_list(args.classes)
     assets = collect_assets(args.source, selected_classes, args.include_name_regex)
     by_class = {class_name: [asset for asset in assets if asset.class_name == class_name] for class_name in CLASS_NAMES}
     rows: list[dict[str, str]] = []

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import re
 import shutil
 from pathlib import Path
 
@@ -32,6 +33,10 @@ def parse_args() -> argparse.Namespace:
 def resolve(path_text: str) -> Path:
     path = Path(path_text)
     return path if path.is_absolute() else ROOT / path
+
+
+def split_list(value: str) -> list[str]:
+    return [item.strip() for item in re.split(r"[,\s]+", value) if item.strip()]
 
 
 def safe_clean(path: Path) -> None:
@@ -98,7 +103,7 @@ def main() -> None:
     args = parse_args()
     base = resolve(args.base)
     extras = [resolve(path) for path in args.train_extra]
-    extra_splits = [value.strip() for value in args.train_extra_splits.split(",") if value.strip()]
+    extra_splits = split_list(args.train_extra_splits)
     if not extra_splits:
         raise SystemExit("--train-extra-splits must include at least one split")
     out_dir = resolve(args.out)
