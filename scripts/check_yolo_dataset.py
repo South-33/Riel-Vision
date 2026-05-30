@@ -58,6 +58,8 @@ def count_images(images: list[Path], class_count: int) -> tuple[int, int, Counte
             problems.append(f"Missing label: {label}")
             continue
         for line_no, line in enumerate(label.read_text(encoding="utf-8").splitlines(), start=1):
+            if not line.strip():
+                continue
             parts = line.split()
             if len(parts) != 5:
                 problems.append(f"{label}:{line_no} expected 5 YOLO fields, found {len(parts)}")

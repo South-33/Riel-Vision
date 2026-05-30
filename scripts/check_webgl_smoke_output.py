@@ -34,6 +34,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Allow clean/separated scenes that intentionally have no note-on-note overlap.",
     )
+    parser.add_argument(
+        "--allow-no-boxes",
+        action="store_true",
+        help="Allow hard-negative scenes with no visible banknote boxes.",
+    )
     return parser.parse_args()
 
 
@@ -87,12 +92,13 @@ def main() -> int:
     labels = read_labels(out_dir / "labels_visible.txt")
 
     visual_colors = visual.getcolors(maxcolors=10_000_000)
-    if visual_colors is None or len(visual_colors) < args.min_visual_colors:
+    min_visual_colors = min(args.min_visual_colors, 50) if args.allow_no_boxes else args.min_visual_colors
+    if visual_colors is None or len(visual_colors) < min_visual_colors:
         count = 0 if visual_colors is None else len(visual_colors)
         raise SystemExit(f"visual render looks blank or posterized: {count} colors")
 
     boxes = boxes_doc.get("boxes", [])
-    if not boxes:
+    if not boxes and not args.allow_no_boxes:
         raise SystemExit("visible_boxes.json has no boxes")
     if len(labels) != len(boxes):
         raise SystemExit(f"label count mismatch: {len(labels)} labels for {len(boxes)} boxes")

@@ -70,11 +70,11 @@
     {
       "id": "webgl_hard_negative_replay_v1",
       "target_condition_ids": ["hard_negatives_and_non_banknote_paper"],
-      "artifact_status": "planned",
-      "scene_modes": ["future_negative"],
+      "artifact_status": "smoke_ready",
+      "scene_modes": ["negative"],
       "intended_use": "Bound false positives on receipts, wallets, cards, hands, and clean backgrounds.",
       "promotion_gate": "browser guard false positives remain bounded after synthetic mix",
-      "current_blocker": "Need reviewed-clean non-banknote background/prop library."
+      "current_blocker": "Negative mode can emit empty banknote scenes; still needs reviewed-clean non-banknote background/prop library."
     },
     {
       "id": "webgl_calibration_mix_v1",

@@ -84,8 +84,8 @@ if (!Number.isInteger(MIN_VISIBLE_PIXELS) || MIN_VISIBLE_PIXELS < 1) {
   throw new Error("--min-visible-pixels must be a positive integer");
 }
 
-if (!["auto", "clean", "stack", "fan", "qa3"].includes(SCENE_MODE)) {
-  throw new Error("--scene-mode must be one of: auto, clean, stack, fan, qa3");
+if (!["auto", "clean", "negative", "stack", "fan", "qa3"].includes(SCENE_MODE)) {
+  throw new Error("--scene-mode must be one of: auto, clean, negative, stack, fan, qa3");
 }
 
 const effectiveSceneMode = SCENE_MODE === "auto" ? (VARIANT >= 100 ? "fan" : "stack") : SCENE_MODE;
@@ -132,7 +132,7 @@ function listImageFiles(directory) {
 }
 
 function sceneConfig(variant, mode, backgroundPath) {
-  const modeOffset = mode === "fan" ? 1009 : mode === "clean" ? 2003 : mode === "qa3" ? 3001 : 0;
+  const modeOffset = mode === "fan" ? 1009 : mode === "clean" ? 2003 : mode === "qa3" ? 3001 : mode === "negative" ? 4001 : 0;
   const rng = mulberry32(26058003 + variant * 191 + modeOffset);
   const surfaces = [
     { name: "warm_wood", base: "#9b784a", light: "#fff2d6", dark: "#231810", scene: "#9b927d", repeat: [2.5, 2.0] },
@@ -255,6 +255,7 @@ const baseOccluders = [
 ];
 
 function variantAssets(variant) {
+  if (effectiveSceneMode === "negative") return [];
   if (effectiveSceneMode === "qa3") return qa3Assets(variant);
   if (effectiveSceneMode === "fan") return fanAssets(variant);
   if (effectiveSceneMode === "clean") return cleanAssets(variant);
@@ -302,6 +303,7 @@ function variantAssets(variant) {
 }
 
 function variantOccluders(variant) {
+  if (effectiveSceneMode === "negative") return [];
   if (effectiveSceneMode === "qa3") return [];
   if (effectiveSceneMode === "clean") return [];
   if (effectiveSceneMode === "fan") return fanOccluders(variant);
@@ -984,9 +986,12 @@ async function main() {
     }
     fs.writeFileSync(path.join(OUT_DIR, "visible_boxes.json"), JSON.stringify({ boxes }, null, 2));
     fs.writeFileSync(path.join(OUT_DIR, "layer_audit.json"), JSON.stringify(layerAudit, null, 2));
+    const labelText = boxes
+      .map((box) => `${box.classIndex} ${box.yolo.map((value) => Number(value).toFixed(6)).join(" ")}`)
+      .join("\n");
     fs.writeFileSync(
       path.join(OUT_DIR, "labels_visible.txt"),
-      `${boxes.map((box) => `${box.classIndex} ${box.yolo.map((value) => Number(value).toFixed(6)).join(" ")}`).join("\n")}\n`
+      labelText ? `${labelText}\n` : ""
     );
     fs.writeFileSync(
       path.join(OUT_DIR, "metadata.json"),

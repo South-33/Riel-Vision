@@ -51,6 +51,7 @@ Definition of done for the synthetic pipeline:
 - [x] Batch QA writes visual+ID mask overlays under `qa/previews/` and validates their existence.
 - [x] Batch QA writes `qa/quarantine.json` for trainable-view exclusions and ignored below-threshold fragment components.
 - [x] Batch QA writes `qa/contact_index.json` mapping contact-sheet cells back to variants.
+- [x] Hard-negative scene mode emits valid zero-box/zero-fragment packages with empty YOLO labels and full smoke QA.
 - [ ] Full visual QA suite includes visual regression snapshots and bad-scene quarantine promotion rules.
 - [x] Named synthetic recipe slots exist for clean/base, overlap, fan, hand occlusion, thin-edge partials, back-side confusion, rare-class support, hard negatives, and calibration mixes in `configs/synthetic_recipes/cashsnap_webgl_recipe_catalog_v1.json`.
 - [x] Batch outputs include `recipe.json` with recipe name, smoke/diagnostic/trainable-candidate status, variant seed range, intended use, checks, outputs, and trainability policy.
@@ -60,7 +61,7 @@ Definition of done for the synthetic pipeline:
 - [ ] Operations are one-command reproducible: render, QA/package, train under headroom, evaluate clean/real/browser guards, and clean scratch outputs.
 - [ ] Promotion rules require real-scoreboard improvement, clean-validation guardrails, browser/deploy guardrails, and enough metadata to diagnose regressions.
 
-Current completion status: renderer and label contract are proven at P0, target/recipe coverage is now explicit, and WebGL packages carry QA, recipe, and ignored-fragment metadata. The production training-data factory is still not complete. The next bottleneck is promoting smoke-ready recipes through real-gated P1 training experiments, then adding the missing renderer modes for clean separated notes, thin edges, hard negatives, and broader hand occlusion.
+Current completion status: renderer and label contract are proven at P0, target/recipe coverage is now explicit, and WebGL packages carry QA, recipe, ignored-fragment metadata, clean-scene smoke, and hard-negative zero-box smoke. The production training-data factory is still not complete. The next bottleneck is promoting smoke-ready recipes through real-gated P1 training experiments, then adding the missing renderer modes for thin edges and broader hand occlusion.
 
 ## Work Loop
 
@@ -165,6 +166,7 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-05-30 21:00 | renderer | keep | WebGL batch packaging writes visual+ID mask overlay previews, hashes them in `qa/summary.json`, and validates them in label-view QA. |
 | 2026-05-30 21:03 | renderer | keep | WebGL batch packaging writes `qa/contact_index.json` so contact-sheet visual and ID cells map back to variants; label-view QA validates the index. |
 | 2026-05-30 21:06 | renderer | keep | `check_webgl_label_views.py` recomputes `qa/summary.json` file hashes for visual, ID, labels, and previews; clean and stack smoke packages pass after repackaging. |
+| 2026-05-30 21:17 | renderer | keep | WebGL `negative` scene mode passed a 2-image hard-negative smoke with 0 boxes/fragments; renderer emits zero-byte `labels_visible.txt`, dataset checks accept blank YOLO labels, and full label-view QA passes. |
 
 ## Current Active Assets
 

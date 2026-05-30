@@ -43,7 +43,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-root", type=Path, default=Path("data/synthetic/cashsnap_webgl_variant_batch_smoke"))
     parser.add_argument("--start-variant", type=int, default=0)
     parser.add_argument("--count", type=int, default=4)
-    parser.add_argument("--scene-mode", choices=["auto", "clean", "stack", "fan", "qa3"], default="auto")
+    parser.add_argument("--scene-mode", choices=["auto", "clean", "negative", "stack", "fan", "qa3"], default="auto")
     parser.add_argument("--background-dir", type=Path, help="Optional reviewed-clean background image directory.")
     parser.add_argument("--recipe-name", default="", help="Human-readable recipe name to write into recipe.json.")
     parser.add_argument(
@@ -102,12 +102,19 @@ def render_variant(variant: int, out_dir: Path, scene_mode: str, background_dir:
     run(cmd)
 
 
-def check_variant(out_dir: Path, allow_no_occluder: bool = False, allow_no_overlap: bool = False) -> None:
+def check_variant(
+    out_dir: Path,
+    allow_no_occluder: bool = False,
+    allow_no_overlap: bool = False,
+    allow_no_boxes: bool = False,
+) -> None:
     cmd = [sys.executable, "scripts/check_webgl_smoke_output.py", "--out-dir", str(out_dir)]
     if allow_no_occluder:
         cmd.append("--allow-no-occluder")
     if allow_no_overlap:
         cmd.append("--allow-no-overlap")
+    if allow_no_boxes:
+        cmd.append("--allow-no-boxes")
     run(cmd)
 
 
@@ -809,8 +816,9 @@ def main() -> int:
             render_variant(variant, out_dir, args.scene_mode, args.background_dir, args)
         check_variant(
             out_dir,
-            allow_no_occluder=args.scene_mode in {"clean", "qa3"},
-            allow_no_overlap=args.scene_mode == "clean",
+            allow_no_occluder=args.scene_mode in {"clean", "negative", "qa3"},
+            allow_no_overlap=args.scene_mode in {"clean", "negative"},
+            allow_no_boxes=args.scene_mode == "negative",
         )
         variant_dirs.append((variant, out_dir))
 
