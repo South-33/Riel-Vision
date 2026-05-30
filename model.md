@@ -51,6 +51,12 @@ Validate active 3D configs:
 rl python scripts\validate_3d_pipeline_config.py configs\3d_pipeline\proof_p0_renderer_smoke.json configs\3d_pipeline\proof_p1_transfer.json
 ```
 
+Render P0 proof scenes:
+
+```powershell
+rl python scripts\render_3d_pipeline_probe.py --config configs\3d_pipeline\proof_p0_renderer_smoke.json --clean
+```
+
 Protect the real benchmark boundary:
 
 ```powershell
@@ -157,6 +163,14 @@ Scope:
 - basic bends/curls
 - visual pass and ID pass
 - detect labels, OBB labels, masks, overlays
+
+Current scaffold:
+
+- `scripts/render_3d_pipeline_probe.py` consumes the P0/P1 JSON config style.
+- It renders perspective-warped Numista notes with simple contact shadows, visual images, flat ID masks, visible-only YOLO detect labels, OBB metadata, scene metadata, `data.yaml`, contact sheets, and mask overlays.
+- P0 smoke output path: `data/synthetic/cashsnap_3d_p0_renderer_smoke/`.
+- Last P0 smoke: 20 scenes; `check_yolo_dataset.py --data data\synthetic\cashsnap_3d_p0_renderer_smoke\data.yaml` passed with 16 train images / 48 boxes and 4 val images / 9 boxes.
+- This scaffold is not the final 3D renderer. It proves the label/QA contract before WebGL/PBR/material realism.
 
 Success:
 

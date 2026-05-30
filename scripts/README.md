@@ -39,6 +39,7 @@ This directory is intentionally script-heavy because CashSnap has a lot of histo
 ## Synthetic And Assets
 
 - `validate_3d_pipeline_config.py`: strict renderer-agnostic validator for the active 3D proof configs.
+- `render_3d_pipeline_probe.py`: P0 renderer scaffold that emits visual renders, ID masks, labels, metadata, and QA sheets from the active 3D configs.
 - `curate_reference_images.py`: bucket KHR reference assets by circulation priority.
 - `build_current_khr_cutout_bank.py`, `build_numista_cutout_bank.py`: reproducible scan/reference cutout banks.
 - `audit_cutout_bank.py`, `render_cutout_contact_sheet.py`, `score_transparent_cutouts.py`, `select_best_cutouts.py`: cutout QA.
