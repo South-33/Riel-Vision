@@ -84,8 +84,8 @@ if (!Number.isInteger(MIN_VISIBLE_PIXELS) || MIN_VISIBLE_PIXELS < 1) {
   throw new Error("--min-visible-pixels must be a positive integer");
 }
 
-if (!["auto", "clean", "negative", "stack", "fan", "qa3"].includes(SCENE_MODE)) {
-  throw new Error("--scene-mode must be one of: auto, clean, negative, stack, fan, qa3");
+if (!["auto", "clean", "negative", "stack", "fan", "thin_edge", "qa3"].includes(SCENE_MODE)) {
+  throw new Error("--scene-mode must be one of: auto, clean, negative, stack, fan, thin_edge, qa3");
 }
 
 const effectiveSceneMode = SCENE_MODE === "auto" ? (VARIANT >= 100 ? "fan" : "stack") : SCENE_MODE;
@@ -132,7 +132,7 @@ function listImageFiles(directory) {
 }
 
 function sceneConfig(variant, mode, backgroundPath) {
-  const modeOffset = mode === "fan" ? 1009 : mode === "clean" ? 2003 : mode === "qa3" ? 3001 : mode === "negative" ? 4001 : 0;
+  const modeOffset = mode === "fan" ? 1009 : mode === "clean" ? 2003 : mode === "qa3" ? 3001 : mode === "negative" ? 4001 : mode === "thin_edge" ? 5003 : 0;
   const rng = mulberry32(26058003 + variant * 191 + modeOffset);
   const surfaces = [
     { name: "warm_wood", base: "#9b784a", light: "#fff2d6", dark: "#231810", scene: "#9b927d", repeat: [2.5, 2.0] },
@@ -258,6 +258,7 @@ function variantAssets(variant) {
   if (effectiveSceneMode === "negative") return [];
   if (effectiveSceneMode === "qa3") return qa3Assets(variant);
   if (effectiveSceneMode === "fan") return fanAssets(variant);
+  if (effectiveSceneMode === "thin_edge") return thinEdgeAssets(variant);
   if (effectiveSceneMode === "clean") return cleanAssets(variant);
   if (variant === 0) return baseAssets;
   const rng = mulberry32(26053003 + variant * 101);
@@ -307,6 +308,7 @@ function variantOccluders(variant) {
   if (effectiveSceneMode === "qa3") return [];
   if (effectiveSceneMode === "clean") return [];
   if (effectiveSceneMode === "fan") return fanOccluders(variant);
+  if (effectiveSceneMode === "thin_edge") return thinEdgeOccluders(variant);
   if (variant === 0) return baseOccluders;
   const rng = mulberry32(26054003 + variant * 131);
   return baseOccluders.map((occluder) => ({
@@ -397,6 +399,102 @@ function qa3Assets(variant) {
       roughness: 0.80,
       ripple: 0.0,
       ...placements[index],
+    };
+  });
+}
+
+function thinEdgeLayout(variant) {
+  const rng = mulberry32(26058003 + variant * 197);
+  const classes = ["KHR_5000", "KHR_20000", "KHR_10000", "KHR_500"];
+  const placements = [
+    {
+      position: [-0.32, -0.22, 0.03],
+      rotation: [0.04, -0.04, -0.18],
+      coverOffset: [0.14, 0.00],
+      coverSize: [1.18, 0.62],
+    },
+    {
+      position: [0.30, -0.13, 0.06],
+      rotation: [0.02, 0.05, 0.30],
+      coverOffset: [-0.15, 0.00],
+      coverSize: [1.18, 0.62],
+    },
+    {
+      position: [-0.08, 0.24, 0.09],
+      rotation: [0.02, -0.03, 1.42],
+      coverOffset: [0.00, -0.12],
+      coverSize: [1.18, 0.58],
+    },
+    {
+      position: [0.42, 0.23, 0.12],
+      rotation: [0.03, 0.02, -0.66],
+      coverOffset: [0.08, 0.10],
+      coverSize: [1.04, 0.54],
+    },
+  ];
+  return placements.map((placement, index) => {
+    const className = classes[(variant + index) % classes.length];
+    const classIndex = CLASS_NAMES.indexOf(className);
+    const jitter = rotate2(
+      [randomBetween(rng, -0.025, 0.025), randomBetween(rng, -0.025, 0.025)],
+      placement.rotation[2],
+    );
+    return {
+      classIndex,
+      className,
+      position: [
+        placement.position[0] + jitter[0],
+        placement.position[1] + jitter[1],
+        placement.position[2],
+      ],
+      rotation: [
+        placement.rotation[0] + randomBetween(rng, -0.025, 0.025),
+        placement.rotation[1] + randomBetween(rng, -0.025, 0.025),
+        placement.rotation[2] + randomBetween(rng, -0.07, 0.07),
+      ],
+      coverOffset: [
+        placement.coverOffset[0] + randomBetween(rng, -0.020, 0.020),
+        placement.coverOffset[1] + randomBetween(rng, -0.020, 0.020),
+      ],
+      coverSize: placement.coverSize,
+      layer: index,
+    };
+  });
+}
+
+function thinEdgeAssets(variant) {
+  return thinEdgeLayout(variant).map((item, index) => {
+    const base = baseAssets[index % baseAssets.length];
+    return {
+      ...base,
+      classIndex: item.classIndex,
+      className: item.className,
+      idColor: INSTANCE_ID_COLORS[index],
+      path: assetPathPools[item.className][(variant + index) % assetPathPools[item.className].length],
+      physicalWidthMm: PHYSICAL_WIDTH_MM[item.className],
+      position: item.position,
+      rotation: item.rotation,
+      curl: 0.040,
+      ripple: 0.0,
+      roughness: 0.82,
+      layer: item.layer,
+      thinEdge: true,
+    };
+  });
+}
+
+function thinEdgeOccluders(variant) {
+  const colors = [0xe4dfd3, 0xcfc7b8, 0xf2eee4, 0xd8d0c2];
+  return thinEdgeLayout(variant).map((item, index) => {
+    const [dx, dy] = rotate2(item.coverOffset, item.rotation[2]);
+    return {
+      kind: "cover_card",
+      layer: 30 + index,
+      color: colors[index % colors.length],
+      position: [item.position[0] + dx, item.position[1] + dy, item.position[2] + 0.055],
+      rotation: [item.rotation[0], item.rotation[1], item.rotation[2]],
+      width: item.coverSize[0],
+      height: item.coverSize[1],
     };
   });
 }
@@ -664,6 +762,15 @@ function makeFingerGeometry(radius, length) {
   return geometry;
 }
 
+function makeOccluderGeometry(occluder) {
+  if (occluder.kind === "cover_card") {
+    const geometry = new THREE.PlaneGeometry(occluder.width, occluder.height, 1, 1);
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+  return makeFingerGeometry(occluder.radius, occluder.length);
+}
+
 async function addNotes() {
   for (const asset of [...assets].sort((a, b) => a.layer - b.layer)) {
     const texture = await loader.loadAsync(asset.textureUrl);
@@ -718,11 +825,12 @@ async function addNotes() {
 
 function addOccluders() {
   for (const occluder of occluders) {
-    const geometry = makeFingerGeometry(occluder.radius, occluder.length);
+    const geometry = makeOccluderGeometry(occluder);
     const material = new THREE.MeshStandardMaterial({
       color: occluder.color,
       roughness: 0.88,
       metalness: 0.0,
+      side: THREE.DoubleSide,
       depthTest: false,
       depthWrite: false
     });
