@@ -124,7 +124,7 @@ async function addNotes() {
     mesh.renderOrder = 10 + asset.layer;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    mesh.userData = { material, idColor: asset.idColor };
+    mesh.userData = { material, idColor: asset.idColor, asset };
     meshes.push(mesh);
     scene.add(mesh);
   }
@@ -157,15 +157,24 @@ window.renderPass = (mode) => {
   renderer.render(scene, camera);
 };
 
-window.extractIdBoxes = () => {
-  window.renderPass("id");
+function captureCanvasPixels() {
   const canvas = renderer.domElement;
   const scratch = document.createElement("canvas");
   scratch.width = canvas.width;
   scratch.height = canvas.height;
   const context = scratch.getContext("2d", { willReadFrequently: true });
   context.drawImage(canvas, 0, 0);
-  const { data, width, height } = context.getImageData(0, 0, scratch.width, scratch.height);
+  return context.getImageData(0, 0, scratch.width, scratch.height);
+}
+
+function pixelKey(data, offset) {
+  return data[offset] + "," + data[offset + 1] + "," + data[offset + 2];
+}
+
+window.extractIdBoxes = () => {
+  for (const mesh of meshes) mesh.visible = true;
+  window.renderPass("id");
+  const { data, width, height } = captureCanvasPixels();
   const boxes = new Map();
 
   for (let y = 0; y < height; y += 1) {
@@ -199,6 +208,59 @@ window.extractIdBoxes = () => {
       (box.maxY - box.minY + 1) / height,
     ],
   })).sort((a, b) => a.classIndex - b.classIndex);
+};
+
+window.auditLayerOrder = () => {
+  for (const mesh of meshes) mesh.visible = true;
+  window.renderPass("id");
+  const finalPass = captureCanvasPixels();
+  const finalData = finalPass.data;
+  const width = finalPass.width;
+  const height = finalPass.height;
+
+  const isolated = meshes.map((targetMesh) => {
+    for (const mesh of meshes) mesh.visible = mesh === targetMesh;
+    window.renderPass("id");
+    return {
+      className: targetMesh.userData.asset.className,
+      layer: targetMesh.userData.asset.layer,
+      colorKey: targetMesh.userData.idColor.join(","),
+      data: new Uint8ClampedArray(captureCanvasPixels().data),
+    };
+  });
+
+  for (const mesh of meshes) mesh.visible = true;
+  window.renderPass("id");
+
+  let visiblePixels = 0;
+  let overlapPixels = 0;
+  let violations = 0;
+  const examples = [];
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const offset = (y * width + x) * 4;
+      let coverage = 0;
+      let expected = null;
+      for (const item of isolated) {
+        if (pixelKey(item.data, offset) === "0,0,0") continue;
+        coverage += 1;
+        if (expected === null || item.layer > expected.layer) expected = item;
+      }
+      if (coverage === 0) continue;
+      visiblePixels += 1;
+      if (coverage > 1) overlapPixels += 1;
+      const actualKey = pixelKey(finalData, offset);
+      if (actualKey !== expected.colorKey) {
+        violations += 1;
+        if (examples.length < 10) {
+          examples.push({ x, y, expected: expected.className, expectedColor: expected.colorKey, actualColor: actualKey, coverage });
+        }
+      }
+    }
+  }
+
+  return { width, height, visiblePixels, overlapPixels, violations, examples };
 };
 
 window.renderPass("visual");
@@ -239,7 +301,12 @@ async function main() {
     await page.evaluate(() => window.renderPass("id"));
     await page.screenshot({ path: path.join(OUT_DIR, "id.png") });
     const boxes = await page.evaluate(() => window.extractIdBoxes());
+    const layerAudit = await page.evaluate(() => window.auditLayerOrder());
+    if (layerAudit.violations !== 0) {
+      throw new Error(`Layer-order audit failed with ${layerAudit.violations} violating pixels`);
+    }
     fs.writeFileSync(path.join(OUT_DIR, "visible_boxes.json"), JSON.stringify({ boxes }, null, 2));
+    fs.writeFileSync(path.join(OUT_DIR, "layer_audit.json"), JSON.stringify(layerAudit, null, 2));
     fs.writeFileSync(
       path.join(OUT_DIR, "labels_visible.txt"),
       `${boxes.map((box) => `${box.classIndex} ${box.yolo.map((value) => Number(value).toFixed(6)).join(" ")}`).join("\n")}\n`
