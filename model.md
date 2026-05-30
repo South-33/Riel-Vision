@@ -179,6 +179,7 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-05-30 21:21 | renderer | keep | WebGL `thin_edge` scene mode passed a 3-image smoke with 10 detect boxes, 11 fragments, 4 ignored below-threshold components, 1/3 trainable OBB images, and zero layer-order violations; treat as smoke only until ambiguity policy and real transfer gates exist. |
 | 2026-05-30 21:26 | renderer | keep | WebGL `hand_occlusion` scene mode passed a 3-image smoke with 13 detect boxes, 32 fragments, 10 split parents, 6 ignored tiny components, 0/3 trainable OBB images, and zero layer-order violations; use for fragment diagnostics, not OBB training. |
 | 2026-05-30 21:31 | harness | keep | Added `check_webgl_smoke_gate.py` and wired `run_webgl_recipe.py` to gate smoke artifacts; negative, thin-edge, hand-occlusion, and clean smoke packages pass, while older fan artifacts need repackaging because they lack `recipe.json`. |
+| 2026-05-30 21:36 | harness | keep | Repackaged older fan and stack smoke through `run_webgl_recipe.py --skip-render`; packager now backfills missing `sceneMode` from the requested scene mode, and both `webgl_fan_fullschema_v1` plus `webgl_overlap_stack_v1` pass smoke gates. |
 
 ## Current Active Assets
 
@@ -361,6 +362,7 @@ Current proof:
 - WebGL batch packaging writes `qa/contact_index.json` to map contact-sheet visual/ID cells back to variants, and `check_webgl_label_views.py` validates the index.
 - Fragment packaging now writes `fragments/ignored_metadata/` for connected components below `FRAGMENT_MIN_PIXELS`; `fragments/summary.json`, `qa/summary.json`, and `check_webgl_label_views.py` validate ignored counts so tiny evidence is not silently forced into denomination labels.
 - `check_webgl_smoke_gate.py` applies mode-specific smoke gates after label-view validation. New smoke artifacts must include `recipe.json`; older fan/stack artifacts without it need repackaging before they can be treated as gateable evidence.
+- `render_webgl_variant_batch.py --skip-render --scene-mode MODE` backfills missing `sceneMode` in copied source metadata, so older rendered variants can be repackaged into current gateable smoke artifacts without relaunching Edge.
 - WebGL batch outputs now include `recipe.json` with recipe name, artifact status (`smoke`, `diagnostic`, or `trainable-candidate`), variant seed range, checks, output paths, and trainability policy. Smoke verification used `--recipe-name webgl_stack_smoke_v0_3 --artifact-status smoke --intended-use "renderer and label-view smoke proof"` with `--skip-render`.
 - WebGL `clean` scene mode now supports separated/single-note smoke data. `webgl_clean_smoke_v0_2` passed with 3 images, 6 detect boxes, 6 fragments, and 3/3 trainable OBB images after running the packager with `--min-free-ram-gb 2`; the hard RAM cap stayed at 90%.
 - WebGL asset pools now use the full 13-class CashSnap schema from `data/cashsnap_v1/data.yaml` and load available scan PNGs from `data/asset_candidates/numista_current_cutout_bank_v1/`. Tiny visible slivers below `--min-visible-pixels` (default 500 at 1440p) stay in the ID image but are not exported as class labels.

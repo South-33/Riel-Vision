@@ -392,7 +392,7 @@ def prepare_empty_dir(directory: Path, out_root: Path) -> None:
     directory.mkdir(parents=True, exist_ok=True)
 
 
-def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path) -> tuple[Path, Path, Path]:
+def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path, fallback_scene_mode: str) -> tuple[Path, Path, Path]:
     images_dir = out_root / "images" / "train"
     labels_dir = out_root / "labels" / "train"
     ids_dir = out_root / "ids" / "train"
@@ -475,7 +475,12 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path) -> 
         visible_boxes = boxes_doc.get("boxes", [])
         layer_audit = json.loads(audit_path.read_text(encoding="utf-8"))
         source_metadata = json.loads(source_metadata_path.read_text(encoding="utf-8"))
-        scene_mode_counts[str(source_metadata.get("sceneMode", "unknown"))] += 1
+        source_scene_mode = str(source_metadata.get("sceneMode") or "")
+        if not source_scene_mode or source_scene_mode == "unknown":
+            source_scene_mode = fallback_scene_mode if fallback_scene_mode != "auto" else "unknown"
+            source_metadata["sceneMode"] = source_scene_mode
+            write_json(source_metadata_path, source_metadata)
+        scene_mode_counts[source_scene_mode] += 1
         scene_config = source_metadata.get("sceneConfig", {})
         if isinstance(scene_config, dict):
             surface = scene_config.get("surface", {})
@@ -575,7 +580,7 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path) -> 
             {
                 "variant": variant,
                 "image": str(image_path.relative_to(out_root)),
-                "scene_mode": str(source_metadata.get("sceneMode", "unknown")),
+                "scene_mode": source_scene_mode,
                 "visible_instances": len(visible_boxes),
                 "visible_pixels": int(sum(visible_pixels)),
                 "fragments": len(fragment_rows),
@@ -824,7 +829,7 @@ def main() -> int:
 
     contact_sheet = out_root / "contact_sheet.png"
     contact_index = write_contact_sheet(variant_dirs, contact_sheet)
-    data_yaml, data_obb_yaml, data_fragments_yaml = write_yolo_dataset(variant_dirs, out_root)
+    data_yaml, data_obb_yaml, data_fragments_yaml = write_yolo_dataset(variant_dirs, out_root, args.scene_mode)
     write_json(
         out_root / "qa" / "contact_index.json",
         {
