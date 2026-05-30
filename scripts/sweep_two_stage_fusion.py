@@ -10,7 +10,12 @@ from PIL import Image
 
 from evaluate_real_draft_labels import greedy_match, read_yolo_detect_labels
 from evaluate_two_stage_csv import CLASS_TO_ID
-from fuse_two_stage_csv import nms
+from fuse_two_stage_csv import (
+    infer_supported_classes,
+    nms,
+    parse_classes,
+    prefer_supported_duplicate_classes,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +35,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-class-column", default="fragment_class")
     parser.add_argument("--out-score-column", default="fragment_conf")
     parser.add_argument("--match-iou", type=float, default=0.50)
+    parser.add_argument("--prefer-supported-detector-duplicates", action="store_true")
+    parser.add_argument("--duplicate-iou", type=float, default=0.95)
+    parser.add_argument("--supported-detector-classes", default="")
     return parser.parse_args()
 
 
@@ -98,6 +106,17 @@ def evaluate(
 def main() -> None:
     args = parse_args()
     rows = list(csv.DictReader(resolve(args.csv).open("r", newline="", encoding="utf-8")))
+    duplicate_relabels = 0
+    if args.prefer_supported_detector_duplicates:
+        rows = [dict(row) for row in rows]
+        supported_classes = parse_classes(args.supported_detector_classes) or infer_supported_classes(rows)
+        duplicate_relabels = prefer_supported_duplicate_classes(
+            rows,
+            args.det_class_column,
+            args.det_score_column,
+            supported_classes,
+            args.duplicate_iou,
+        )
     with Image.open(resolve(args.image)) as image:
         gt_boxes, gt_classes = read_yolo_detect_labels(resolve(args.labels), image.size)
     results: list[dict[str, str]] = []
@@ -120,7 +139,10 @@ def main() -> None:
             writer = csv.DictWriter(handle, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(results)
-        print(f"wrote {len(results)} sweep rows to {out_path.relative_to(ROOT)}")
+        print(
+            f"wrote {len(results)} sweep rows to {out_path.relative_to(ROOT)}; "
+            f"duplicate_relabels={duplicate_relabels}"
+        )
     writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
     writer.writeheader()
     writer.writerows(results)
