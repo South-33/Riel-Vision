@@ -169,6 +169,30 @@ def draw_label_previews(
     fragment.save(fragment_out, quality=92)
 
 
+def write_id_overlay(visual_path: Path, id_path: Path, out_path: Path) -> None:
+    visual = Image.open(visual_path).convert("RGB")
+    id_image = Image.open(id_path).convert("RGB")
+    overlay = Image.new("RGB", visual.size, (0, 0, 0))
+    visual_pixels = visual.load()
+    id_pixels = id_image.load()
+    overlay_pixels = overlay.load()
+    for y in range(visual.height):
+        for x in range(visual.width):
+            mask_color = id_pixels[x, y]
+            if mask_color == (0, 0, 0):
+                overlay_pixels[x, y] = visual_pixels[x, y]
+            else:
+                vr, vg, vb = visual_pixels[x, y]
+                mr, mg, mb = mask_color
+                overlay_pixels[x, y] = (
+                    int(vr * 0.58 + mr * 0.42),
+                    int(vg * 0.58 + mg * 0.42),
+                    int(vb * 0.58 + mb * 0.42),
+                )
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    overlay.save(out_path, quality=92)
+
+
 def obb_audit_for_mask(mask: np.ndarray) -> dict[str, float | int | str]:
     component_count, _component_ids, stats, _centroids = cv2.connectedComponentsWithStats(
         mask.astype(np.uint8),
@@ -423,6 +447,7 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path) -> 
         fragment_ignored_metadata_path = fragment_ignored_metadata_dir / f"{stem}.json"
         detect_preview_path = preview_dir / f"{stem}_detect.jpg"
         fragment_preview_path = preview_dir / f"{stem}_fragments.jpg"
+        id_overlay_path = preview_dir / f"{stem}_id_overlay.jpg"
         shutil.copyfile(out_dir / "visual.png", image_path)
         shutil.copyfile(out_dir / "labels_visible.txt", label_path)
         shutil.copyfile(out_dir / "id.png", id_path)
@@ -447,6 +472,7 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path) -> 
         write_json(fragment_metadata_path, fragment_metadata)
         write_json(fragment_ignored_metadata_path, ignored_fragment_metadata)
         draw_label_previews(image_path, visible_boxes, fragment_metadata, detect_preview_path, fragment_preview_path)
+        write_id_overlay(image_path, id_path, id_overlay_path)
         fragment_counts["images"] += 1
         fragment_counts["fragments"] += len(fragment_rows)
         ignored_fragment_counts["ignored_fragments"] += len(ignored_fragment_metadata)
@@ -481,6 +507,7 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path) -> 
             "fragment_ignored_metadata": str(fragment_ignored_metadata_path.relative_to(out_root)),
             "detect_preview": str(detect_preview_path.relative_to(out_root)),
             "fragment_preview": str(fragment_preview_path.relative_to(out_root)),
+            "id_overlay": str(id_overlay_path.relative_to(out_root)),
             "obb_status": "accepted" if not obb_reject_reasons else "rejected",
             "obb_reject_reasons": obb_reject_reasons,
             }
@@ -552,10 +579,12 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path) -> 
                     "fragment_label": sha256_file(fragment_label_path),
                     "detect_preview": sha256_file(detect_preview_path),
                     "fragment_preview": sha256_file(fragment_preview_path),
+                    "id_overlay": sha256_file(id_overlay_path),
                 },
                 "previews": {
                     "detect": str(detect_preview_path.relative_to(out_root)),
                     "fragments": str(fragment_preview_path.relative_to(out_root)),
+                    "id_overlay": str(id_overlay_path.relative_to(out_root)),
                 },
             }
         )
