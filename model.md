@@ -277,6 +277,7 @@ Decision from this pass: do not chase full PBR or a full hand mesh yet. Build a 
 - The renderer needs explicit phone-camera profiles, not generic perspective defaults. Seed profiles from common phone FOV/focal-length specs, but prefer EXIF from CashSnap capture images and calibration shots when available.
 - Use an OpenCV-style pinhole camera plus radial/tangential distortion model for postprocess: camera matrix plus distortion coefficients `k1`, `k2`, `p1`, `p2`, `k3`. Source: [OpenCV camera calibration](https://docs.opencv.org/master/dc/dbb/tutorial_py_calibration.html).
 - Postprocess should be profile-driven: radial distortion, perspective/crop/resize, motion or focus blur, sensor noise/grain, JPEG/WebP compression, white balance, exposure/flash glare, and mild sharpening. Do not randomize these blindly; sample ranges from real captures once enough EXIF/images exist.
+- Current public real benchmark candidates are weak camera-profile sources: two have no EXIF and `real_overlap_0002_commons_museum.jpg` only reports Canon EOS 600D make/model. Future phone capture/review pipelines should preserve EXIF so renderer camera profiles come from CashSnap target devices.
 
 ## Known Results
 
