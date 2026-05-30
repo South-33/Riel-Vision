@@ -40,7 +40,8 @@ This directory is intentionally script-heavy because CashSnap has a lot of histo
 - `validate_3d_pipeline_config.py`: strict renderer-agnostic validator for the active 3D proof configs.
 - `render_3d_pipeline_probe.py`: P0 renderer scaffold that emits visual renders, ID masks, labels, metadata, and QA sheets from the active 3D configs.
 - `render_webgl_variant_batch.py`, `check_webgl_smoke_output.py`, `check_webgl_label_views.py`: WebGL batch render/package/QA path for detect, OBB, fragment, recipe, and QA-summary outputs.
-- `run_webgl_recipe.py`: one-command wrapper that resolves a recipe id from the WebGL recipe catalog and runs the batch packager with recipe metadata.
+- `run_webgl_recipe.py`: one-command wrapper that resolves a recipe id from the WebGL recipe catalog, runs the batch packager with recipe metadata, and applies smoke gates for smoke-ready recipes.
+- `check_webgl_smoke_gate.py`: mode-specific smoke promotion/quarantine gate for packaged WebGL artifacts with `recipe.json`.
 - `check_synthetic_recipe_catalog.py`: validates the synthetic target matrix and recipe catalog coverage.
 - `curate_reference_images.py`: bucket KHR reference assets by circulation priority.
 - `build_current_khr_cutout_bank.py`, `build_numista_cutout_bank.py`: reproducible scan/reference cutout banks.

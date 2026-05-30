@@ -39,6 +39,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-render", action="store_true")
     parser.add_argument("--skip-yolo-check", action="store_true")
     parser.add_argument("--skip-label-view-check", action="store_true")
+    parser.add_argument("--skip-smoke-gate", action="store_true")
     return parser.parse_args()
 
 
@@ -117,6 +118,19 @@ def main() -> int:
 
     print(" ".join(cmd), flush=True)
     subprocess.run(cmd, cwd=ROOT, check=True)
+    if artifact_status == "smoke" and not args.skip_smoke_gate:
+        gate_cmd = [
+            sys.executable,
+            "scripts/check_webgl_smoke_gate.py",
+            "--root",
+            str(out_root),
+            "--require-recipe",
+            args.recipe_id,
+        ]
+        if scene_mode != "auto":
+            gate_cmd.extend(["--require-scene-mode", scene_mode])
+        print(" ".join(gate_cmd), flush=True)
+        subprocess.run(gate_cmd, cwd=ROOT, check=True)
     return 0
 
 

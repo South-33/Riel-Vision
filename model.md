@@ -51,6 +51,7 @@ Definition of done for the synthetic pipeline:
 - [x] Batch QA writes visual+ID mask overlays under `qa/previews/` and validates their existence.
 - [x] Batch QA writes `qa/quarantine.json` for trainable-view exclusions and ignored below-threshold fragment components.
 - [x] Batch QA writes `qa/contact_index.json` mapping contact-sheet cells back to variants.
+- [x] Smoke artifacts have mode-specific promotion/quarantine gates that run from the recipe wrapper.
 - [x] Hard-negative scene mode emits valid zero-box/zero-fragment packages with empty YOLO labels and full smoke QA.
 - [x] Thin-edge scene mode emits visible sliver packages with card/paper occluders and records unsafe OBB/fragment exclusions.
 - [x] Broader hand-occlusion scene mode emits multi-finger split-fragment packages and quarantines unsafe OBB views.
@@ -63,7 +64,7 @@ Definition of done for the synthetic pipeline:
 - [ ] Operations are one-command reproducible: render, QA/package, train under headroom, evaluate clean/real/browser guards, and clean scratch outputs.
 - [ ] Promotion rules require real-scoreboard improvement, clean-validation guardrails, browser/deploy guardrails, and enough metadata to diagnose regressions.
 
-Current completion status: renderer and label contract are proven at P0, target/recipe coverage is now explicit, and WebGL packages carry QA, recipe, ignored-fragment metadata, clean-scene smoke, hard-negative zero-box smoke, thin-edge sliver smoke, and hand-occlusion fragment smoke. The production training-data factory is still not complete. The next bottleneck is promoting smoke-ready recipes through real-gated P1 training experiments, then improving ambiguity/ignore policy and visual QA promotion rules.
+Current completion status: renderer and label contract are proven at P0, target/recipe coverage is now explicit, and WebGL packages carry QA, recipe, ignored-fragment metadata, smoke gates, clean-scene smoke, hard-negative zero-box smoke, thin-edge sliver smoke, and hand-occlusion fragment smoke. The production training-data factory is still not complete. The next bottleneck is promoting smoke-ready recipes through real-gated P1 training experiments, then improving ambiguity/ignore policy and visual QA promotion rules.
 
 ## Work Loop
 
@@ -130,6 +131,12 @@ Check WebGL smoke output:
 rl python scripts\check_webgl_smoke_output.py --out-dir data\synthetic\cashsnap_webgl_smoke
 ```
 
+Gate a packaged WebGL smoke artifact:
+
+```powershell
+rl python scripts\check_webgl_smoke_gate.py --root data\synthetic\cashsnap_webgl_clean_batch_smoke --require-recipe webgl_clean_base_v1 --require-scene-mode clean
+```
+
 Protect the real benchmark boundary:
 
 ```powershell
@@ -171,6 +178,7 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-05-30 21:17 | renderer | keep | WebGL `negative` scene mode passed a 2-image hard-negative smoke with 0 boxes/fragments; renderer emits zero-byte `labels_visible.txt`, dataset checks accept blank YOLO labels, and full label-view QA passes. |
 | 2026-05-30 21:21 | renderer | keep | WebGL `thin_edge` scene mode passed a 3-image smoke with 10 detect boxes, 11 fragments, 4 ignored below-threshold components, 1/3 trainable OBB images, and zero layer-order violations; treat as smoke only until ambiguity policy and real transfer gates exist. |
 | 2026-05-30 21:26 | renderer | keep | WebGL `hand_occlusion` scene mode passed a 3-image smoke with 13 detect boxes, 32 fragments, 10 split parents, 6 ignored tiny components, 0/3 trainable OBB images, and zero layer-order violations; use for fragment diagnostics, not OBB training. |
+| 2026-05-30 21:31 | harness | keep | Added `check_webgl_smoke_gate.py` and wired `run_webgl_recipe.py` to gate smoke artifacts; negative, thin-edge, hand-occlusion, and clean smoke packages pass, while older fan artifacts need repackaging because they lack `recipe.json`. |
 
 ## Current Active Assets
 
@@ -352,6 +360,7 @@ Current proof:
 - WebGL batch packaging writes `qa/quarantine.json` with explicit policies for trainable OBB exclusions and ignored below-threshold fragments. Stack smoke currently records 3 OBB exclusions and 2 ignored tiny fragment components.
 - WebGL batch packaging writes `qa/contact_index.json` to map contact-sheet visual/ID cells back to variants, and `check_webgl_label_views.py` validates the index.
 - Fragment packaging now writes `fragments/ignored_metadata/` for connected components below `FRAGMENT_MIN_PIXELS`; `fragments/summary.json`, `qa/summary.json`, and `check_webgl_label_views.py` validate ignored counts so tiny evidence is not silently forced into denomination labels.
+- `check_webgl_smoke_gate.py` applies mode-specific smoke gates after label-view validation. New smoke artifacts must include `recipe.json`; older fan/stack artifacts without it need repackaging before they can be treated as gateable evidence.
 - WebGL batch outputs now include `recipe.json` with recipe name, artifact status (`smoke`, `diagnostic`, or `trainable-candidate`), variant seed range, checks, output paths, and trainability policy. Smoke verification used `--recipe-name webgl_stack_smoke_v0_3 --artifact-status smoke --intended-use "renderer and label-view smoke proof"` with `--skip-render`.
 - WebGL `clean` scene mode now supports separated/single-note smoke data. `webgl_clean_smoke_v0_2` passed with 3 images, 6 detect boxes, 6 fragments, and 3/3 trainable OBB images after running the packager with `--min-free-ram-gb 2`; the hard RAM cap stayed at 90%.
 - WebGL asset pools now use the full 13-class CashSnap schema from `data/cashsnap_v1/data.yaml` and load available scan PNGs from `data/asset_candidates/numista_current_cutout_bank_v1/`. Tiny visible slivers below `--min-visible-pixels` (default 500 at 1440p) stay in the ID image but are not exported as class labels.
