@@ -31,11 +31,11 @@ Current diagnostic fusion, refreshed on 2026-05-30:
 
 ## Current Evidence
 
-On draft labels for `real_overlap_0003_commons_shop_5k_10k_20k`, the focused old/common KHR classifier plus detector-threshold fusion reaches:
+On scoreable draft labels for `real_overlap_0003_commons_shop_5k_10k_20k`, filtered through `manifests/real_fan_benchmark_label_quality.csv`, the focused old/common KHR classifier plus detector-threshold fusion reaches:
 
 - `6/6` any-class visible-region matches
 - `5/6` same-class matches
-- `6` predictions for `6` draft visible notes
+- `6` predictions for `6` scoreable visible notes
 
 The deployable browser path should be checked with `scripts/smoke_browser_demo_cdp.cjs`, because Edge ONNX Runtime Web/canvas preprocessing is the deployment truth and can differ from PyTorch-generated proposal CSVs around borderline detector scores. Current Edge smoke-suite refresh on the same shop-overlap image predicts `6` bills with `KHR 76,000`, `USD 0`, and classes `KHR_1000:1;KHR_10000:1;KHR_20000:3;KHR_5000:1`. Run the smoke with `--labels data/real_fan_benchmark/drafts/real_overlap_0003_commons_shop_5k_10k_20k.txt`; its JSON reports `6/6` any-class matches, `4/6` same-class matches, a `+6000` KHR value error, and matched-pair confusions `KHR_10000->KHR_1000` plus `KHR_5000->KHR_20000`, plus per-source recall showing final/detector labels at `4/6` and fragment-only labels at `3/6`.
 
@@ -51,13 +51,13 @@ Browser smoke debug currently reports detector output dims `[1,300,6]`, `13` bro
 
 `scripts/debug_onnx_detector_preprocess.py` isolates the sensitivity: on the shop-overlap image, the detector ONNX produces `13` proposals with `cv2` resize and `8` proposals with PIL-style resize at the same `416/conf=0.05`, including a PIL-side `USD_100` proposal. Treat browser canvas preprocessing as a first-class deployment variable for thin/partial slices.
 
-Broad 14-class fragment classifiers and a 3-class KHR/USD/background gate did not transfer to this real shop-overlap probe; both remained too confused for browser/mobile deployment.
+Broad 14-class fragment classifiers, a 3-class KHR/USD/background gate, reviewed micro-P1 refreshes, broad unreviewed Roboflow partial mixing, and targeted clean Numista `KHR_5000` face/number crops did not transfer to this real shop-overlap probe. Keep them as evidence, not defaults.
 
 Raw detector-only thresholding is not enough. In the same refresh, the detector can reach full same-class recall only at `416/conf=0.03` with `23` predictions for `6` notes, while `416/conf=0.05` gives `5/6` same-class and `14` predictions. Existing Khmer OCR (`mer`) also failed as a shortcut on the same crops, returning scattered text and wrong/partial denomination digits, so OCR remains optional auxiliary evidence rather than the core path.
 
 ## Known Limits
 
-- Tuned against one draft-labeled real image, so treat metrics as calibration evidence, not a benchmark result.
+- Tuned against one scoreable draft-labeled real image, so treat metrics as calibration evidence, not a benchmark result.
 - Does not cover all KHR denominations, rare current notes, USD fragment re-reading, or reliable old/new issue disambiguation.
 - Real fan, hand occlusion, off-frame, worn-note, and mixed KHR/USD performance is not solved.
 - Production claims require a rights-clear reviewed phone-photo benchmark and non-benchmark reviewed training crops.
@@ -71,4 +71,4 @@ Track new captures in `manifests/real_partial_capture_inventory.csv` and run:
 rl python scripts/check_capture_requirements.py
 ```
 
-The highest-value missing data is rights-clear phone photos with human-identifiable partial KHR slices, especially hand fan plus thin/edge `KHR_5000` and `KHR_20000` front/back views that target the current old/common confusion pairs. Synthetic microthin `KHR_5000,KHR_20000` smoke data can be generated with `--thin-strip-min-frac 0.04 --thin-strip-max-frac 0.12`, but it is still artificial and should not replace reviewed real captures.
+The highest-value missing data is rights-clear phone photos with human-identifiable partial KHR slices, especially `KHR_5000` portrait-plus-5000 overlap views and thin/edge `KHR_20000` front/back views that target the current old/common confusion pairs. Synthetic smoke data is still useful for controlled tests, but clean scan crops and broad partial mixes have not replaced reviewed real captures.
