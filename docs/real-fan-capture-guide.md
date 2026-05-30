@@ -12,6 +12,7 @@ Capture each scene with normal phone distance and lighting:
 - 3 hand-occlusion photos: fingers partly cover notes but do not hide all denomination evidence.
 - 3 partial off-frame photos: notes clipped by the image border.
 - 3 thin/edge partial `KHR_5000` slices and 3 thin/edge partial `KHR_20000` slices, with a front/back mix if possible. These directly target the current old/common classifier's high-confidence partial-slice confusions.
+- 5 `KHR_5000` overlap/partial photos where the visible region includes the portrait plus `5000` numerals. This directly targets the current shop-overlap row-6 miss, whose embedding neighbors are all `KHR_10000`.
 - Optional mixed scenes: KHR plus USD only after the KHR-only set is captured.
 
 For visual examples of the target thin/edge failure shape, regenerate `data/review/cashsnap_p1_oldcommon_partial_focus_review_v1/contact_sheet.jpg` with `scripts/build_partial_focus_review_queue.py --clean`. Use it as capture inspiration only; collect rights-clear photos rather than copying those public-data crops into the benchmark.
@@ -30,12 +31,13 @@ rl python scripts/init_capture_inbox.py --write-guides
 rl python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos --scene-type hand_fan --denominations "KHR_5000;KHR_10000" --dry-run
 rl python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos --scene-type hand_fan --denominations "KHR_5000;KHR_10000"
 rl python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos/thin_slice_khr_5000 --scene-type thin_slice_khr_5000 --dry-run
+rl python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos/khr_5000_face_number_overlap --scene-type khr_5000_face_number_overlap --denominations "KHR_5000" --dry-run
 rl python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos/thin_slice_khr_20000 --scene-type thin_slice_khr_20000 --dry-run
 rl python scripts/register_capture_photos.py --images-dir data/inbox/real_partial_photos --recursive --scene-type-from-parent --dry-run
 rl python scripts/check_capture_requirements.py
 ```
 
-Registration validates scene types against `manifests/real_partial_capture_requirements.csv`; pass `--allow-unknown-scene-type` only for unusual captures. When registering recursively from the inbox root, `thin_slice_khr_5000` and `thin_slice_khr_20000` folders automatically fill `denominations` if no shared `--denominations` value is supplied.
+Registration validates scene types against `manifests/real_partial_capture_requirements.csv`; pass `--allow-unknown-scene-type` only for unusual captures. When registering recursively from the inbox root, `thin_slice_khr_5000`, `khr_5000_face_number_overlap`, and `thin_slice_khr_20000` folders automatically fill `denominations` if no shared `--denominations` value is supplied.
 
 ## Label Rules
 

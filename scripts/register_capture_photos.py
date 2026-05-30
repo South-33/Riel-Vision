@@ -115,6 +115,8 @@ def denominations_for(args: argparse.Namespace, scene_type: str) -> str:
     lower = scene_type.lower()
     if lower.startswith("thin_slice_khr_"):
         return f"KHR_{lower.rsplit('_', 1)[-1]}"
+    if "khr_5000" in lower:
+        return "KHR_5000"
     return ""
 
 

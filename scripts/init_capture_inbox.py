@@ -62,6 +62,8 @@ def denomination_hint(scene_type: str) -> str:
     lower = scene_type.lower()
     if lower.startswith("thin_slice_khr_"):
         return f" --denominations \"KHR_{lower.rsplit('_', 1)[-1]}\""
+    if "khr_5000" in lower:
+        return " --denominations \"KHR_5000\""
     if lower == "single_khr":
         return " --denominations \"KHR_...\""
     if lower == "mixed_usd_khr":
