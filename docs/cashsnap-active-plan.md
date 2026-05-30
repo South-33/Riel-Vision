@@ -8,11 +8,13 @@ Build a small phone/browser-deployable CashSnap model that counts mixed USD and 
 
 ## Current Decision
 
-The active path is a data/evaluation reset around trusted current-scope evidence, then partial/fan specialization.
+The active path is now a 3D synthetic-pipeline reset before the next training push.
+
+The strategic goal is to build a scalable 3D data factory that can generate trusted, phone-like, perfectly labeled banknote scenes from Numista scans. Do not start another model-training run until the renderer proof can produce plausible visual images, exact visible masks, scoreable labels, and QA artifacts.
 
 Use Numista `in_circulation` raw folders as the clean KHR metadata backbone for issue/year/side scans. Non-Numista public data, including Roboflow and Wikimedia/Commons photos, is domain stress or review material until note design and circulation scope are checked. Do not let old, collector, or out-of-scope note designs silently define success.
 
-Use the 2.5D synthetic harness to strengthen base recognition only when the recipe is tied to that trusted scan atlas and clean validation does not regress. The next synthetic work should stay clean/near-clean and use realistic camera/domain knobs:
+Use 2.5D only as a comparison baseline or fallback. The 3D proof should explicitly test whether physically configurable scenes give CashSnap a real scaling unit. The synthetic work should use realistic camera/domain knobs:
 
 - lens/aspect/crop variation
 - color temperature and tint
@@ -21,7 +23,7 @@ Use the 2.5D synthetic harness to strengthen base recognition only when the reci
 - class balancing for weak KHR classes, especially `KHR_20000` and `KHR_50000`
 - clean separation between Numista/NBC current KHR, current rare KHR, old/common circulated KHR, and USD
 
-The first Numista 2.5D calibration probes improved real-overlap region coverage but still overcounted and confused old/common KHR backs. Later reviewed-P1, broad Roboflow-partial, and targeted Numista `KHR_5000` face/number probes all preserved some crop metrics but did not beat the real shop-overlap diagnostic. Do not keep chasing tiny one-image gains with more generic partial mixing.
+The first Numista 2.5D calibration probes improved real-overlap region coverage but still overcounted and confused old/common KHR backs. Later reviewed-P1, broad Roboflow-partial, and targeted Numista `KHR_5000` face/number probes all preserved some crop metrics but did not beat the real shop-overlap diagnostic. Do not keep chasing tiny one-image gains with more generic partial mixing; invest in the renderer proof.
 
 The immediate bottleneck is high-quality, rights-clear, scoreable real evidence:
 
@@ -58,17 +60,17 @@ OCR is optional auxiliary evidence only. Current Khmer OCR cues are too noisy to
 
 ## Immediate Milestones
 
-### M1: Trusted Asset Atlas
+### M1: 3D Pipeline Spec And Asset Atlas
 
-Rebuild or audit scan/cutout assets from Numista `in_circulation` first, then NBC/current references if needed. Keep issue year, side, and circulation bucket explicit. The base model needs enough clean visual evidence for weak classes before hard occlusion is useful.
+Keep `docs/3d-scene-composition-pipeline.md` current as the active renderer spec. Rebuild or audit scan/cutout assets from Numista `in_circulation` first, then NBC/current references if needed. Keep issue year, side, and circulation bucket explicit.
 
-### M2: 2.5D Base Domain Data
+### M2: Renderer Smoke
 
-Generate a modest clean/near-clean 2.5D dataset with phone-style scene augmentation and QA'd backgrounds. This is for base recognition strength, not fan counting yet.
+Generate a tiny 3D smoke dataset with visual pass, ID pass, visible labels, masks, metadata, and contact sheets. No training yet.
 
-### M3: Base Detector Probe
+### M3: 3D Vs 2.5D Transfer Proof
 
-Train from fresh YOLO26n-family weights under the headroom harness. Evaluate clean validation, weak KHR classes, and deployable ONNX/browser smoke before any hard-case fine-tune.
+Generate a 100-300 scene proof dataset and a matched 2.5D dataset. Only then train a short fresh-base probe under the headroom harness and compare scoreable real labels, clean validation, and browser/export smoke.
 
 ### M4: Scoreable Real Fragment Loop
 

@@ -7,7 +7,7 @@ This is the project's AGENTS.md
 - YOLO runs must be written under the repo's ignored `runs/` directory on D; avoid `C:\Users\Venom\runs` because the user profile drive is space-constrained.
 - Real fan-photo stress image still is not solved; combined e2/e4 checkpoints beat dense synthetic v3 at `416/conf=0.25`, while e4 is the better rare-slice stress candidate.
 - Use `ideas.md` as the short living board for high-value CashSnap experiment ideas and results; keep it curated, not append-only.
-- Current repo compass is `docs/cashsnap-active-plan.md`: strengthen the base detector with clean/near-clean 2.5D and weak KHR class support first, then scale overlap/fan/hand curricula; keep 3D parked behind proof gates.
+- Current repo compass is `docs/cashsnap-active-plan.md`: 3D synthetic-pipeline reset before the next training push; make `docs/3d-scene-composition-pipeline.md` the active renderer spec and use 2.5D as the matched baseline/fallback.
 - Background removal can be automated for free using `scripts/process_picwish_batches.py` with the `picwish` PyPI library; keep concurrency under 15 (using `asyncio.Semaphore(10)`) with short sleeps to avoid Cloudflare rate blocks.
 - All-KHR PicWish v1 queue/output is `data/picwish_upload_batches_cashsnap_khr_v1/` -> `data/asset_candidates/cashsnap_khr_picwish_output_v1/`; use `cashsnap_khr_picwish_strict_low_skin_bank_v1` only as a conservative candidate bank, not verified final assets.
 - Synthetic data is still useful when assets are clean, but the active path is `docs/synthetic-harness-runbook.md` plus `docs/synthetic-strategy-evaluation.md`; the original compositor plan is archived for history.
