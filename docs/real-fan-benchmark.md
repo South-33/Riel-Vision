@@ -23,6 +23,7 @@ Capture requirements for new rights-clear phone photos live in `docs/real-fan-ca
 - Source image: https://upload.wikimedia.org/wikipedia/commons/5/50/Campuchia_-_Ti%E1%BB%81n_Gi%E1%BA%A5y_5000%2C_10_000%2C_20_000_rial.png
 - Status: candidate, unlabeled.
 - Rights caveat: the Wikimedia page marks the file public domain by self-release, but also shows the same 2026 deletion request family related to Cambodian banknote copyright. Use locally until rights are rechecked.
+- Label-quality caveat: draft boxes are human-legible visible regions, but several issue years/designs are older shop notes; use it as a hard local diagnostic, not as the final current-circulation scoreboard until design scope is reviewed.
 
 ## Labeling Rule
 

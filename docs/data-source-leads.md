@@ -9,13 +9,14 @@ Purpose: keep dataset research actionable. Do not download large datasets just b
 - Path: `data/numista_raw/`
 - Use: clean scan texture atlas for synthetic generation.
 - Builder: `scripts/build_numista_cutout_bank.py`
+- Current trust level: best local KHR metadata source for issue year, side, and circulation folder status. Prefer Numista `in_circulation` assets when the task needs canonical clean scans.
 - Caveat: scans are clean/reference-like, so they need phone-style degradation, hand/fan geometry, shadows, and real benchmark validation before training claims.
 
 ### Roboflow `cuurecy-detection-is`
 
 - Repo memory: `data/raw_datasets/roboflow_cuurecy_detection_is/`
 - Use: real phone partial/overlap examples and KHR/USD masks.
-- Caveat: read `docs/roboflow-cuurecy-detection-audit.md` first; split/lookalike caveats mean it is not a clean validation oracle without curation.
+- Caveat: read `docs/roboflow-cuurecy-detection-audit.md` first; split/lookalike caveats mean it is not a clean validation oracle without curation, and it is not issue-year/circulation authoritative.
 
 ### Hugging Face `ebowwa/usd-side-coco-annotations`
 

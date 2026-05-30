@@ -57,4 +57,4 @@ Treat public release separately from internal training:
 
 Use this source for curated internal review and possible fragment-classifier data, especially backs/partials of `KHR_5000`, `KHR_10000`, `KHR_20000`, and `KHR_50000`.
 
-Do not use the dataset's original splits as proof of generalization. Use rights-clear phone photos and reviewed local validation for final model claims.
+Do not use the dataset's original splits as proof of generalization. Also do not treat its denomination labels as proof that a note design is in the current product scope; verify issue era/circulation against Numista `in_circulation` folders or the circulation-scope docs before promoting examples into trusted training. Use rights-clear phone photos and reviewed local validation for final model claims.
