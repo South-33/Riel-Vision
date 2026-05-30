@@ -257,6 +257,18 @@ Current proof:
 - Texture loading should stay file-backed (`file://`) instead of base64-inlining full scan PNGs into the HTML. Base64 inlining caused headroom pauses; file-backed textures completed the smoke quickly under the same wrapper caps.
 - Even after trimming shadow-map size, the local laptop can still pause WebGL smoke runs when baseline RAM is high. Batch rendering should reuse one browser/page and design texture downscaling/cache behavior before scaling scene counts.
 
+## Research Checkpoint
+
+2026-05-30 bounded synthesis-data review:
+
+- Synthetic data is useful because it can provide pixel-perfect labels, but domain gap remains the core risk; mixing synthetic with real data is repeatedly favored over treating synthetic as a full replacement. Source: [Eversberg and Lambrecht 2021](https://www.mdpi.com/1424-8220/21/23/7901).
+- There is no universal winner between photorealistic rendering and domain randomization. Domain knowledge about the target scene and object-specific realism can matter more than global prettiness. Source: [Eversberg and Lambrecht 2021](https://www.mdpi.com/1424-8220/21/23/7901).
+- Domain randomization studies point to object/texture diversity, camera positioning, and occlusion as meaningful parameters; random noise alone is lower leverage. Source: [Domain randomization review, PMC](https://pmc.ncbi.nlm.nih.gov/articles/PMC8570318/).
+- Hand-occlusion literature treats occlusion-aware augmentation as a valid first step, and papers cite black solid shapes or object segments pasted over people as established augmentation. This supports primitive finger occluders before a full hand mesh. Source: [HandOccNet CVPR 2022](https://openaccess.thecvf.com/content/CVPR2022/papers/Park_HandOccNet_Occlusion-Robust_3D_Hand_Mesh_Estimation_Network_CVPR_2022_paper.pdf).
+- Recent synthetic-generation surveys frame 3D generators around either photorealistic rendering or domain randomization, but both still need target-domain validation. Source: [Artificial Intelligence Review 2025 synthetic generation survey](https://link.springer.com/article/10.1007/s10462-025-11431-3).
+
+Decision from this pass: do not chase full PBR or a full hand mesh yet. Build a small WebGL batch proof with controlled banknote layer geometry, real-ish table/background variation, primitive fingers, exact visible masks, and measured comparison against the Python/2.5D baselines plus real partial/fan gates.
+
 ## Known Results
 
 - Clean isolated-note detection is strong, but dense overlap/fan counting is not solved.
