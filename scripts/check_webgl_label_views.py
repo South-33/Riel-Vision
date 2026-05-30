@@ -136,6 +136,12 @@ def main() -> int:
     if fragment_summary.get("ignored_fragments") != ignored_fragment_count:
         raise SystemExit("fragment summary ignored count mismatch")
     qa_summary = read_json(dataset_root / "qa" / "summary.json")
+    quarantine = read_json(dataset_root / "qa" / "quarantine.json")
+    if not isinstance(quarantine.get("rows"), list):
+        raise SystemExit("quarantine rows must be a list")
+    quarantine_counts = Counter(str(row.get("action", "")) for row in quarantine["rows"])
+    if quarantine.get("counts") != dict(sorted(quarantine_counts.items())):
+        raise SystemExit("quarantine count mismatch")
     if qa_summary.get("images") != len(manifest):
         raise SystemExit("qa summary image count mismatch")
     if qa_summary.get("visible_instances", {}).get("total") != visible_instance_count:

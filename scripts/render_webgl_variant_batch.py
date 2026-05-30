@@ -403,6 +403,7 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path) -> 
     fragments_per_parent_values: list[float] = []
     obb_reject_reason_counts: Counter[str] = Counter()
     image_summary_rows: list[dict[str, object]] = []
+    quarantine_rows: list[dict[str, object]] = []
     for variant, out_dir in variant_dirs:
         stem = f"variant_{variant:04d}"
         image_path = images_dir / f"{stem}.png"
@@ -487,6 +488,15 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path) -> 
             obb_image_status_counts["rejected"] += 1
             write_lines(obb_rejected_label_path, obb_rows)
             write_json(obb_rejected_metadata_path, obb_metadata)
+            quarantine_rows.append(
+                {
+                    "variant": variant,
+                    "image": str(image_path.relative_to(out_root)),
+                    "view": "obb",
+                    "action": "excluded_from_trainable_obb",
+                    "reasons": obb_reject_reasons,
+                }
+            )
             manifest_row.update(
                 {
                     "obb_diagnostic_label": str(obb_rejected_label_path.relative_to(out_root)),
@@ -506,6 +516,17 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path) -> 
                 }
             )
         manifest.append(manifest_row)
+        if ignored_fragment_metadata:
+            quarantine_rows.append(
+                {
+                    "variant": variant,
+                    "image": str(image_path.relative_to(out_root)),
+                    "view": "fragment",
+                    "action": "ignored_below_threshold_components",
+                    "reasons": sorted({str(row["ignore_reason"]) for row in ignored_fragment_metadata}),
+                    "ignored_fragments": len(ignored_fragment_metadata),
+                }
+            )
         image_summary_rows.append(
             {
                 "variant": variant,
@@ -540,6 +561,17 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path) -> 
         )
 
     write_json(out_root / "manifest.json", manifest)
+    write_json(
+        qa_dir / "quarantine.json",
+        {
+            "rows": quarantine_rows,
+            "counts": dict(sorted(Counter(str(row["action"]) for row in quarantine_rows).items())),
+            "policy": {
+                "excluded_from_trainable_obb": "image remains valid for detect/fragment views, but is excluded from the trainable OBB split",
+                "ignored_below_threshold_components": "tiny connected components are recorded for review and not forced into fragment training labels",
+            },
+        },
+    )
     write_json(
         out_root / "obb" / "summary.json",
         {
@@ -710,6 +742,7 @@ def write_recipe_metadata(
             "qa_summary": rel(out_root / "qa" / "summary.json"),
                 "contact_sheet": rel(contact_sheet),
                 "preview_dir": rel(out_root / "qa" / "previews"),
+                "quarantine": rel(out_root / "qa" / "quarantine.json"),
             },
         "policy": {
             "smoke": "pipeline functionality proof; do not train final claims from this artifact",
