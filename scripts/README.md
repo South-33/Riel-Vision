@@ -30,7 +30,7 @@ This directory is intentionally script-heavy because CashSnap is still in data a
 - `build_yolo_crop_review_pack.py`: auditable review packs from YOLO detection or segmentation labels.
 - `train_fragment_classifier.py`: MobileNetV3-small fragment classifier training and ONNX export.
 - `evaluate_fragment_classifier.py`: ImageFolder evaluation and per-crop prediction CSVs.
-- `classify_yolo_proposals.py`, `fuse_two_stage_csv.py`, `sweep_two_stage_fusion.py`, `evaluate_two_stage_csv.py`: detector/classifier fusion diagnostics.
+- `classify_yolo_proposals.py`, `fuse_two_stage_csv.py`, `sweep_two_stage_fusion.py`, `evaluate_two_stage_csv.py`: detector/classifier fusion diagnostics; keep `fuse_two_stage_csv.py --prefer-supported-detector-duplicates` diagnostic-only until guard cases pass.
 - `inspect_two_stage_matches.py`: row-level detector/classifier confidence inspection against draft labels.
 - `build_currency_gate_dataset.py`: KHR/USD/background gate experiments; historical gate did not transfer to hard shop-overlap.
 - `probe_template_feature_verifier.py`: diagnostic-only SIFT/ORB/AKAZE template matcher for partial crops; current P1 results are poor, so do not treat it as a production verifier path.
