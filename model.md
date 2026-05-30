@@ -138,6 +138,12 @@ Build the gated smoke-suite YOLO mix:
 rl python scripts\build_webgl_mix_yaml.py --out configs\cashsnap_webgl_smoke_suite_mix.yaml
 ```
 
+Check WebGL P1 transfer readiness:
+
+```powershell
+rl python scripts\check_webgl_p1_readiness.py
+```
+
 Check WebGL smoke output:
 
 ```powershell
@@ -199,6 +205,7 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-05-30 21:51 | evaluation | note | P1 real/deploy guardrails are structurally present but not full scoreboards: `check_real_fan_benchmark.py` passes with 3 candidate sources, 0 promoted labeled images, and 1 draft-labeled 6-box overlap image; browser smoke manifest validates 5 cases. |
 | 2026-05-30 21:52 | evaluation | note | `filter_yolo_labels_by_quality.py` keeps 6/6 labels for the draft shop-overlap diagnostic at `data/audit/real_overlap_0003_commons_shop_5k_10k_20k.scoreable.txt`; this is local diagnostic material, not promoted benchmark truth. |
 | 2026-05-30 21:54 | evaluation | note | Current alpha `yolo26n_cashsnap_current_thin_legacy_clean_v1_e20_i416_b8` on the scoreable shop-overlap draft tops out at 3/6 same-class and 5/6 any-class (`416/conf=0.03` or `640/conf=0.03`); use this as a local diagnostic hurdle, not a final benchmark. |
+| 2026-05-30 21:58 | evaluation | note | Added `check_webgl_p1_readiness.py`; smoke mix, real-benchmark structure, and browser manifest pass, but full P1 transfer is blocked by 0 promoted real benchmark labels (6 draft scoreable boxes remain diagnostic-only). |
 
 ## Current Active Assets
 
