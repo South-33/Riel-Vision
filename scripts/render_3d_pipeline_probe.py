@@ -13,6 +13,7 @@ import json
 import math
 import random
 import shutil
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -258,7 +259,7 @@ def render_scene(
     scene_index: int,
     split: str,
     rng: random.Random,
-) -> tuple[Image.Image, Image.Image, list[dict[str, Any]], list[str]]:
+) -> tuple[Image.Image, Image.Image, list[dict[str, Any]], list[str], list[str]]:
     layout = choose_weighted(config["layouts"], rng)
     camera = choose_weighted(config["camera_profiles"], rng)
     material = choose_weighted(config["material_presets"], rng)
@@ -296,6 +297,7 @@ def render_scene(
     id_image = Image.fromarray(id_arr, "RGB")
     instances: list[dict[str, Any]] = []
     label_lines: list[str] = []
+    obb_label_lines: list[str] = []
     min_pixels = int(config["label_policy"]["min_visible_pixels"])
     min_ratio = float(config["label_policy"]["min_visibility_ratio_for_denoms"])
     for instance_id, plan in enumerate(plans):
@@ -320,6 +322,11 @@ def render_scene(
                 bw = (x2 - x1) / width
                 bh = (y2 - y1) / height
                 label_lines.append(f"{CLASS_TO_ID[plan.asset.class_name]} {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}")
+                norm_points = []
+                for point_x, point_y in obb:
+                    norm_points.extend([point_x / width, point_y / height])
+                obb_values = " ".join(f"{value:.6f}" for value in norm_points)
+                obb_label_lines.append(f"{CLASS_TO_ID[plan.asset.class_name]} {obb_values}")
         instances.append(
             {
                 "instance_id": instance_id,
@@ -343,7 +350,7 @@ def render_scene(
                 "obb": obb,
             }
         )
-    return visual, id_image, instances, label_lines
+    return visual, id_image, instances, label_lines, obb_label_lines
 
 
 def make_contact_sheet(image_paths: list[Path], out_path: Path, title: str) -> None:
@@ -408,27 +415,48 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     for subdir in ["images/train", "images/val", "labels/train", "labels/val", "masks/train", "masks/val", "metadata", "qa"]:
         (out_dir / subdir).mkdir(parents=True, exist_ok=True)
+    for subdir in ["labels_obb/train", "labels_obb/val"]:
+        (out_dir / subdir).mkdir(parents=True, exist_ok=True)
 
     rng = random.Random(int(config["seed"]))
     assets = load_assets(config)
     image_paths: list[Path] = []
     overlay_paths: list[Path] = []
+    split_counts: Counter[str] = Counter()
+    class_counts: Counter[str] = Counter()
+    exported_class_counts: Counter[str] = Counter()
+    layout_counts: Counter[str] = Counter()
+    visibility_ratios: list[float] = []
+    exported_labels = 0
+    total_instances = 0
     metadata_path = out_dir / "metadata" / "scenes.jsonl"
     with metadata_path.open("w", encoding="utf-8") as metadata_handle:
         for scene_index in range(int(config["scene_count"])):
             split = "val" if scene_index % 5 == 0 else "train"
-            visual, id_image, instances, label_lines = render_scene(config, assets, scene_index, split, rng)
+            visual, id_image, instances, label_lines, obb_label_lines = render_scene(config, assets, scene_index, split, rng)
             stem = f"{config['name']}_{scene_index:05d}"
             image_path = out_dir / "images" / split / f"{stem}.jpg"
             id_path = out_dir / "masks" / split / f"{stem}_id.png"
             label_path = out_dir / "labels" / split / f"{stem}.txt"
+            obb_label_path = out_dir / "labels_obb" / split / f"{stem}.txt"
             visual.save(image_path, quality=rng.randint(*config.get("postprocess", {}).get("jpeg_quality", [82, 92])))
             id_image.save(id_path)
             label_path.write_text("\n".join(label_lines) + ("\n" if label_lines else ""), encoding="utf-8")
+            obb_label_path.write_text("\n".join(obb_label_lines) + ("\n" if obb_label_lines else ""), encoding="utf-8")
             overlay_path = out_dir / "qa" / f"{stem}_overlay.jpg"
             overlay_id(image_path, id_path, overlay_path)
             image_paths.append(image_path)
             overlay_paths.append(overlay_path)
+            split_counts[split] += 1
+            for instance in instances:
+                total_instances += 1
+                class_name = str(instance["class_name"])
+                class_counts[class_name] += 1
+                layout_counts[str(instance["layout_mode"])] += 1
+                visibility_ratios.append(float(instance["visibility_ratio"]))
+                if instance["exported_label"]:
+                    exported_labels += 1
+                    exported_class_counts[class_name] += 1
             metadata_handle.write(
                 json.dumps(
                     {
@@ -437,6 +465,7 @@ def main() -> None:
                         "image": str(image_path.relative_to(ROOT)),
                         "id_mask": str(id_path.relative_to(ROOT)),
                         "label": str(label_path.relative_to(ROOT)),
+                        "obb_label": str(obb_label_path.relative_to(ROOT)),
                         "instances": instances,
                     },
                     sort_keys=True,
@@ -445,6 +474,23 @@ def main() -> None:
             )
 
     write_data_yaml(out_dir)
+    sorted_visibility = sorted(visibility_ratios)
+    stats = {
+        "config": str(config_path.relative_to(ROOT)),
+        "scene_count": int(config["scene_count"]),
+        "splits": dict(sorted(split_counts.items())),
+        "instances": total_instances,
+        "exported_labels": exported_labels,
+        "classes_all": dict(sorted(class_counts.items())),
+        "classes_exported": dict(sorted(exported_class_counts.items())),
+        "layouts": dict(sorted(layout_counts.items())),
+        "visibility_ratio": {
+            "min": sorted_visibility[0] if sorted_visibility else None,
+            "p50": sorted_visibility[len(sorted_visibility) // 2] if sorted_visibility else None,
+            "max": sorted_visibility[-1] if sorted_visibility else None,
+        },
+    }
+    (out_dir / "qa" / "label_stats.json").write_text(json.dumps(stats, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     make_contact_sheet(image_paths, out_dir / "qa" / "contact_sheet.jpg", config["name"])
     make_contact_sheet(overlay_paths, out_dir / "qa" / "mask_overlay_contact.jpg", f"{config['name']} masks")
     print(f"rendered {config['scene_count']} scenes to {out_dir}")
