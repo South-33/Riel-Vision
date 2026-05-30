@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import cv2
+import numpy as np
 from PIL import Image, ImageDraw
 
 
@@ -29,6 +31,8 @@ CLASS_NAMES = [
     "KHR_20000",
     "KHR_50000",
 ]
+OBB_MIN_LARGEST_COMPONENT_FRAC = 0.85
+OBB_MIN_RECT_FILL_FRAC = 0.35
 
 
 def parse_args() -> argparse.Namespace:
@@ -103,12 +107,90 @@ def write_contact_sheet(variant_dirs: list[tuple[int, Path]], out_path: Path) ->
     sheet.save(out_path)
 
 
-def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path) -> Path:
+def obb_audit_for_mask(mask: np.ndarray) -> dict[str, float | int | str]:
+    component_count, _component_ids, stats, _centroids = cv2.connectedComponentsWithStats(
+        mask.astype(np.uint8),
+        connectivity=8,
+    )
+    component_areas = stats[1:, cv2.CC_STAT_AREA] if component_count > 1 else np.array([], dtype=np.int32)
+    total_pixels = int(mask.sum())
+    largest_component_pixels = int(component_areas.max()) if len(component_areas) else 0
+    largest_component_frac = largest_component_pixels / total_pixels if total_pixels else 0.0
+
+    ys, xs = np.where(mask)
+    points = np.column_stack([xs, ys]).astype(np.float32)
+    rect = cv2.minAreaRect(points)
+    rect_width, rect_height = rect[1]
+    rect_area = float(max(rect_width * rect_height, 1.0))
+    rect_fill_frac = float(total_pixels / rect_area)
+
+    status = "exported"
+    if len(xs) < 4:
+        status = "too_few_pixels"
+    elif component_count > 2 and largest_component_frac < OBB_MIN_LARGEST_COMPONENT_FRAC:
+        status = "fragmented_visible_mask"
+    elif rect_fill_frac < OBB_MIN_RECT_FILL_FRAC:
+        status = "loose_min_area_rect"
+
+    return {
+        "status": status,
+        "visible_pixels": total_pixels,
+        "component_count": int(max(0, component_count - 1)),
+        "largest_component_pixels": largest_component_pixels,
+        "largest_component_frac": round(float(largest_component_frac), 4),
+        "rect_fill_frac": round(float(rect_fill_frac), 4),
+        "rect_width_px": round(float(rect_width), 2),
+        "rect_height_px": round(float(rect_height), 2),
+    }
+
+
+def write_obb_label(id_path: Path, boxes_path: Path, out_path: Path, metadata_path: Path) -> None:
+    id_image = np.array(Image.open(id_path).convert("RGB"))
+    height, width = id_image.shape[:2]
+    boxes_doc = json.loads(boxes_path.read_text(encoding="utf-8"))
+    rows: list[str] = []
+    metadata_rows: list[dict[str, object]] = []
+
+    for box in boxes_doc.get("boxes", []):
+        color = np.array(box["color"], dtype=np.uint8)
+        mask = np.all(id_image == color, axis=2)
+        ys, xs = np.where(mask)
+        if len(xs) == 0:
+            continue
+        audit = obb_audit_for_mask(mask)
+        metadata_row: dict[str, object] = {
+            "classIndex": int(box["classIndex"]),
+            "className": box.get("className"),
+            "color": box["color"],
+            **audit,
+        }
+        metadata_rows.append(metadata_row)
+        if audit["status"] != "exported":
+            continue
+        points = np.column_stack([xs, ys]).astype(np.float32)
+        rect = cv2.minAreaRect(points)
+        corners = cv2.boxPoints(rect)
+        normalized = []
+        for x, y in corners:
+            normalized.extend([x / width, y / height])
+        rows.append(
+            f"{int(box['classIndex'])} "
+            + " ".join(f"{max(0.0, min(1.0, value)):.6f}" for value in normalized)
+        )
+
+    out_path.write_text("\n".join(rows) + ("\n" if rows else ""), encoding="utf-8")
+    metadata_path.write_text(json.dumps(metadata_rows, indent=2) + "\n", encoding="utf-8")
+
+
+def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path) -> tuple[Path, Path]:
     images_dir = out_root / "images" / "train"
     labels_dir = out_root / "labels" / "train"
     ids_dir = out_root / "ids" / "train"
     metadata_dir = out_root / "metadata"
-    for directory in (images_dir, labels_dir, ids_dir, metadata_dir):
+    obb_images_dir = out_root / "obb" / "images" / "train"
+    obb_labels_dir = out_root / "obb" / "labels" / "train"
+    obb_metadata_dir = out_root / "obb" / "metadata" / "train"
+    for directory in (images_dir, labels_dir, ids_dir, metadata_dir, obb_images_dir, obb_labels_dir, obb_metadata_dir):
         directory.mkdir(parents=True, exist_ok=True)
 
     manifest = []
@@ -120,17 +202,25 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path) -> 
         boxes_path = metadata_dir / f"{stem}_visible_boxes.json"
         audit_path = metadata_dir / f"{stem}_layer_audit.json"
         source_metadata_path = metadata_dir / f"{stem}_metadata.json"
+        obb_image_path = obb_images_dir / f"{stem}.png"
+        obb_label_path = obb_labels_dir / f"{stem}.txt"
+        obb_metadata_path = obb_metadata_dir / f"{stem}.json"
         shutil.copyfile(out_dir / "visual.png", image_path)
+        shutil.copyfile(out_dir / "visual.png", obb_image_path)
         shutil.copyfile(out_dir / "labels_visible.txt", label_path)
         shutil.copyfile(out_dir / "id.png", id_path)
         shutil.copyfile(out_dir / "visible_boxes.json", boxes_path)
         shutil.copyfile(out_dir / "layer_audit.json", audit_path)
         shutil.copyfile(out_dir / "metadata.json", source_metadata_path)
+        write_obb_label(id_path, boxes_path, obb_label_path, obb_metadata_path)
         manifest.append(
             {
                 "variant": variant,
                 "image": str(image_path.relative_to(out_root)),
                 "label": str(label_path.relative_to(out_root)),
+                "obb_image": str(obb_image_path.relative_to(out_root)),
+                "obb_label": str(obb_label_path.relative_to(out_root)),
+                "obb_metadata": str(obb_metadata_path.relative_to(out_root)),
                 "id": str(id_path.relative_to(out_root)),
                 "visible_boxes": str(boxes_path.relative_to(out_root)),
                 "layer_audit": str(audit_path.relative_to(out_root)),
@@ -152,7 +242,21 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path) -> 
         ),
         encoding="utf-8",
     )
-    return data_yaml
+    data_obb_yaml = out_root / "data_obb.yaml"
+    data_obb_yaml.write_text(
+        "\n".join(
+            [
+                f"path: {(out_root / 'obb').as_posix()}",
+                "train: images/train",
+                "val: images/train",
+                "names:",
+                *[f"  {index}: {name}" for index, name in enumerate(CLASS_NAMES)],
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return data_yaml, data_obb_yaml
 
 
 def main() -> int:
@@ -173,11 +277,12 @@ def main() -> int:
 
     contact_sheet = out_root / "contact_sheet.png"
     write_contact_sheet(variant_dirs, contact_sheet)
-    data_yaml = write_yolo_dataset(variant_dirs, out_root)
+    data_yaml, data_obb_yaml = write_yolo_dataset(variant_dirs, out_root)
     if not args.skip_yolo_check:
         run([sys.executable, "scripts/check_yolo_dataset.py", "--data", str(data_yaml)])
     print(f"wrote {contact_sheet.relative_to(ROOT)}")
     print(f"wrote {data_yaml.relative_to(ROOT)}")
+    print(f"wrote {data_obb_yaml.relative_to(ROOT)}")
     return 0
 
 

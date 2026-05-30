@@ -40,10 +40,11 @@ COLORS = [
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Render a YOLO detect label file over an image for review.")
+    parser = argparse.ArgumentParser(description="Render a YOLO detect or OBB label file over an image for review.")
     parser.add_argument("--image", type=Path, required=True, help="Image to annotate.")
-    parser.add_argument("--labels", type=Path, required=True, help="YOLO detect .txt label file.")
+    parser.add_argument("--labels", type=Path, required=True, help="YOLO detect or OBB .txt label file.")
     parser.add_argument("--out", type=Path, required=True, help="Output preview image path.")
+    parser.add_argument("--format", choices=["auto", "detect", "obb"], default="auto", help="Label format.")
     parser.add_argument("--max-side", type=int, default=2000, help="Resize preview so the longest side is at most this.")
     return parser.parse_args()
 
@@ -61,24 +62,40 @@ def load_font(size: int) -> ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def read_labels(path: Path) -> list[tuple[int, float, float, float, float]]:
-    rows: list[tuple[int, float, float, float, float]] = []
+def read_labels(path: Path, label_format: str) -> list[tuple[int, list[float]]]:
+    rows: list[tuple[int, list[float]]] = []
     for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
         parts = line.split()
-        if len(parts) != 5:
-            raise ValueError(f"{path}: line {line_number} has {len(parts)} fields; expected 5")
+        expected_lengths = {"detect": {5}, "obb": {9}, "auto": {5, 9}}[label_format]
+        if len(parts) not in expected_lengths:
+            expected = " or ".join(str(value) for value in sorted(expected_lengths))
+            raise ValueError(f"{path}: line {line_number} has {len(parts)} fields; expected {expected}")
         class_id = int(parts[0])
-        cx, cy, width, height = [float(value) for value in parts[1:]]
-        rows.append((class_id, cx, cy, width, height))
+        rows.append((class_id, [float(value) for value in parts[1:]]))
     return rows
 
 
 def draw_label(draw: ImageDraw.ImageDraw, xy: tuple[float, float, float, float], text: str, color: tuple[int, int, int], font: ImageFont.ImageFont) -> None:
     x1, y1, x2, y2 = xy
     draw.rectangle(xy, outline=color, width=4)
+    left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
+    text_width = right - left
+    text_height = bottom - top
+    pad = 5
+    label_y1 = max(0, y1 - text_height - pad * 2)
+    label_y2 = label_y1 + text_height + pad * 2
+    label_x2 = min(draw.im.size[0], x1 + text_width + pad * 2)
+    draw.rectangle((x1, label_y1, label_x2, label_y2), fill=color)
+    draw.text((x1 + pad, label_y1 + pad), text, fill=(0, 0, 0), font=font)
+
+
+def draw_polygon_label(draw: ImageDraw.ImageDraw, points: list[tuple[float, float]], text: str, color: tuple[int, int, int], font: ImageFont.ImageFont) -> None:
+    draw.line(points + [points[0]], fill=color, width=4)
+    x1 = min(x for x, _y in points)
+    y1 = min(y for _x, y in points)
     left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
     text_width = right - left
     text_height = bottom - top
@@ -106,14 +123,19 @@ def main() -> None:
     width, height = preview.size
     draw = ImageDraw.Draw(preview)
     font = load_font(max(18, round(max(width, height) * 0.018)))
-    for class_id, cx, cy, box_width, box_height in read_labels(label_path):
+    for class_id, values in read_labels(label_path, args.format):
         color = COLORS[class_id % len(COLORS)]
-        x1 = (cx - box_width / 2) * width
-        y1 = (cy - box_height / 2) * height
-        x2 = (cx + box_width / 2) * width
-        y2 = (cy + box_height / 2) * height
         name = DEFAULT_NAMES.get(class_id, f"class_{class_id}")
-        draw_label(draw, (x1, y1, x2, y2), name, color, font)
+        if len(values) == 4:
+            cx, cy, box_width, box_height = values
+            x1 = (cx - box_width / 2) * width
+            y1 = (cy - box_height / 2) * height
+            x2 = (cx + box_width / 2) * width
+            y2 = (cy + box_height / 2) * height
+            draw_label(draw, (x1, y1, x2, y2), name, color, font)
+        else:
+            points = [(values[index] * width, values[index + 1] * height) for index in range(0, 8, 2)]
+            draw_polygon_label(draw, points, name, color, font)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     preview.save(out_path, quality=92)
