@@ -36,11 +36,6 @@ const assets = [
   },
 ];
 
-function imageDataUrl(filePath) {
-  const bytes = fs.readFileSync(filePath);
-  return `data:image/png;base64,${bytes.toString("base64")}`;
-}
-
 function html(textureAssets) {
   return `<!doctype html>
 <html>
@@ -105,7 +100,7 @@ function bendGeometry(geometry, curl, ripple) {
 
 async function addNotes() {
   for (const asset of [...assets].sort((a, b) => a.layer - b.layer)) {
-    const texture = await loader.loadAsync(asset.dataUrl);
+    const texture = await loader.loadAsync(asset.textureUrl);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = 4;
     const geometry = new THREE.PlaneGeometry(1.28, 0.56, 36, 16);
@@ -275,7 +270,7 @@ async function main() {
     throw new Error(`Microsoft Edge executable not found at ${EDGE}`);
   }
   fs.mkdirSync(OUT_DIR, { recursive: true });
-  const textureAssets = assets.map((asset) => ({ ...asset, dataUrl: imageDataUrl(asset.path) }));
+  const textureAssets = assets.map((asset) => ({ ...asset, textureUrl: pathToFileURL(asset.path).href }));
   const browser = await puppeteer.launch({
     executablePath: EDGE,
     headless: "new",
@@ -317,7 +312,7 @@ async function main() {
         renderer: "three-webgl-edge",
         visibilityModel: "explicit-layer-order",
         noteDepthPolicy: "banknote planes use renderOrder with depthTest/depthWrite disabled to avoid impossible surface interpenetration in visible masks",
-        assets: textureAssets.map(({ dataUrl, ...rest }) => rest),
+        assets: textureAssets,
       }, null, 2)
     );
     console.log(`wrote ${OUT_DIR}`);

@@ -252,7 +252,7 @@ Current proof:
 - Last smoke rendered `visual.png`, `id.png`, `visible_boxes.json`, `labels_visible.txt`, `layer_audit.json`, `metadata.json`, and the temporary `smoke.html`.
 - ID pass is exact after disabling WebGL antialiasing: black background plus one RGB ID color per visible note, no blended edge colors.
 - Note visibility uses explicit layer order (`renderOrder` with depth test/write disabled for banknote planes) so tilted sheets do not phase through each other and poison visible masks. The current smoke audited 87,438 overlapping pixels with zero layer-order violations. This is an intentional topological stacking shortcut until a real contact/physics solver exists.
-- The first headroom-wrapped run paused on RAM/CPU pressure and then completed after the file-backed page fix. This stack is viable on the local Windows laptop, but keep the proof small until batching/texture memory is designed.
+- Texture loading should stay file-backed (`file://`) instead of base64-inlining full scan PNGs into the HTML. Base64 inlining caused headroom pauses; file-backed textures completed the smoke quickly under the same wrapper caps.
 
 ## Known Results
 
