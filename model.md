@@ -148,6 +148,7 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-05-30 20:28 | data | keep | Added WebGL recipe catalog with 9 named recipe slots mapped to real target conditions, promotion gates, and blockers. |
 | 2026-05-30 20:29 | harness | keep | Added `check_synthetic_recipe_catalog.py` to validate target/recipe JSON coverage and required-condition mapping. |
 | 2026-05-30 20:31 | renderer | keep | Fragment packaging records below-threshold components as ignored metadata and validates ignored counts in label-view QA. |
+| 2026-05-30 20:45 | renderer | keep | WebGL `clean` scene mode passed a 3-image smoke (`webgl_clean_smoke_v0_2`) with 6 detect boxes, 6 fragments, and 3/3 trainable OBB images; packager headroom thresholds are now configurable and recorded in `recipe.json`. |
 
 ## Current Active Assets
 
@@ -325,6 +326,7 @@ Current proof:
 - The WebGL batch packager now writes `qa/summary.json` with class counts, visible-pixel stats, fragment-per-parent stats, OBB rejection reasons, layer-audit totals, and SHA-256 hashes for reproducibility checks. `check_webgl_label_views.py` validates this summary against the manifest so the QA artifact cannot silently drift.
 - Fragment packaging now writes `fragments/ignored_metadata/` for connected components below `FRAGMENT_MIN_PIXELS`; `fragments/summary.json`, `qa/summary.json`, and `check_webgl_label_views.py` validate ignored counts so tiny evidence is not silently forced into denomination labels.
 - WebGL batch outputs now include `recipe.json` with recipe name, artifact status (`smoke`, `diagnostic`, or `trainable-candidate`), variant seed range, checks, output paths, and trainability policy. Smoke verification used `--recipe-name webgl_stack_smoke_v0_3 --artifact-status smoke --intended-use "renderer and label-view smoke proof"` with `--skip-render`.
+- WebGL `clean` scene mode now supports separated/single-note smoke data. `webgl_clean_smoke_v0_2` passed with 3 images, 6 detect boxes, 6 fragments, and 3/3 trainable OBB images after running the packager with `--min-free-ram-gb 2`; the hard RAM cap stayed at 90%.
 - WebGL asset pools now use the full 13-class CashSnap schema from `data/cashsnap_v1/data.yaml` and load available scan PNGs from `data/asset_candidates/numista_current_cutout_bank_v1/`. Tiny visible slivers below `--min-visible-pixels` (default 500 at 1440p) stay in the ID image but are not exported as class labels.
 - Current Numista cutout audit summary: 76 assets, all 13 classes have front/back coverage, all source rows are `in_circulation`, and 3 assets remain `large_red_mark_suspect` visual-review candidates. Summary path: `data/asset_candidates/numista_current_cutout_bank_v1/audit/summary.json`.
 - Variant class selection uses a deterministic co-prime stride instead of consecutive class IDs, so mixed-currency scenes look less like ordered dataset rows while staying reproducible.

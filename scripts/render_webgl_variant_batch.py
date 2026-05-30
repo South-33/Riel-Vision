@@ -54,6 +54,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--intended-use", default="", help="Short intended-use note to write into recipe.json.")
     parser.add_argument("--notes", default="", help="Optional short recipe notes to write into recipe.json.")
+    parser.add_argument("--headroom-max-percent", default="90", help="CPU/GPU percent cap passed to run_with_headroom.py.")
+    parser.add_argument("--headroom-resume-percent", default="82", help="Resume threshold passed to run_with_headroom.py.")
+    parser.add_argument("--headroom-max-ram-percent", default="90", help="RAM percent cap passed to run_with_headroom.py.")
+    parser.add_argument("--headroom-max-gpu-mem-percent", default="90", help="GPU memory percent cap passed to run_with_headroom.py.")
+    parser.add_argument("--min-free-ram-gb", default="3", help="Free-RAM preflight floor passed to run_with_headroom.py.")
+    parser.add_argument("--preflight-timeout", default="120", help="Initial headroom wait timeout in seconds.")
     parser.add_argument("--skip-render", action="store_true", help="Only recheck/contact-sheet existing outputs.")
     parser.add_argument("--skip-yolo-check", action="store_true", help="Do not run check_yolo_dataset.py on the packaged dataset.")
     parser.add_argument("--skip-label-view-check", action="store_true", help="Do not run check_webgl_label_views.py on packaged label views.")
@@ -65,22 +71,22 @@ def run(cmd: list[str]) -> None:
     subprocess.run(cmd, cwd=ROOT, check=True)
 
 
-def render_variant(variant: int, out_dir: Path, scene_mode: str, background_dir: Path | None) -> None:
+def render_variant(variant: int, out_dir: Path, scene_mode: str, background_dir: Path | None, args: argparse.Namespace) -> None:
     cmd = [
         sys.executable,
         "scripts/run_with_headroom.py",
         "--max-percent",
-        "90",
+        args.headroom_max_percent,
         "--resume-percent",
-        "82",
+        args.headroom_resume_percent,
         "--max-ram-percent",
-        "90",
+        args.headroom_max_ram_percent,
         "--max-gpu-mem-percent",
-        "90",
+        args.headroom_max_gpu_mem_percent,
         "--min-free-ram-gb",
-        "3",
+        args.min_free_ram_gb,
         "--preflight-timeout",
-        "120",
+        args.preflight_timeout,
         "--",
         "node",
         "renderers/webgl/src/render-smoke.mjs",
@@ -632,6 +638,14 @@ def write_recipe_metadata(
         },
         "scene_mode": args.scene_mode,
         "background_dir": rel(args.background_dir) if args.background_dir else "",
+        "headroom": {
+            "max_percent": args.headroom_max_percent,
+            "resume_percent": args.headroom_resume_percent,
+            "max_ram_percent": args.headroom_max_ram_percent,
+            "max_gpu_mem_percent": args.headroom_max_gpu_mem_percent,
+            "min_free_ram_gb": args.min_free_ram_gb,
+            "preflight_timeout": args.preflight_timeout,
+        },
         "checks": {
             "render_smoke_check": True,
             "detect_yolo_check": not args.skip_yolo_check,
@@ -667,7 +681,7 @@ def main() -> int:
     for variant in range(args.start_variant, args.start_variant + args.count):
         out_dir = out_root / f"variant_{variant:04d}"
         if not args.skip_render:
-            render_variant(variant, out_dir, args.scene_mode, args.background_dir)
+            render_variant(variant, out_dir, args.scene_mode, args.background_dir, args)
         check_variant(
             out_dir,
             allow_no_occluder=args.scene_mode in {"clean", "qa3"},
@@ -678,11 +692,11 @@ def main() -> int:
     contact_sheet = out_root / "contact_sheet.png"
     write_contact_sheet(variant_dirs, contact_sheet)
     data_yaml, data_obb_yaml, data_fragments_yaml = write_yolo_dataset(variant_dirs, out_root)
+    write_recipe_metadata(args, out_root, contact_sheet, data_yaml, data_obb_yaml, data_fragments_yaml)
     if not args.skip_yolo_check:
         run([sys.executable, "scripts/check_yolo_dataset.py", "--data", str(data_yaml)])
     if not args.skip_label_view_check:
         run([sys.executable, "scripts/check_webgl_label_views.py", "--root", str(out_root)])
-    write_recipe_metadata(args, out_root, contact_sheet, data_yaml, data_obb_yaml, data_fragments_yaml)
     print(f"wrote {contact_sheet.relative_to(ROOT)}")
     print(f"wrote {data_yaml.relative_to(ROOT)}")
     print(f"wrote {data_obb_yaml.relative_to(ROOT)}")
