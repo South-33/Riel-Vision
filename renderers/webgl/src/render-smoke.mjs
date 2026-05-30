@@ -107,6 +107,7 @@ scene.add(table);
 
 const loader = new THREE.TextureLoader();
 const meshes = [];
+const backingMeshes = [];
 const occluderMeshes = [];
 
 function bendGeometry(geometry, curl, ripple) {
@@ -128,6 +129,23 @@ async function addNotes() {
     texture.anisotropy = 4;
     const geometry = new THREE.PlaneGeometry(1.28, 0.56, 36, 16);
     bendGeometry(geometry, 0.075, 0.012);
+    const backingMaterial = new THREE.MeshStandardMaterial({
+      color: 0xf2ead7,
+      roughness: 0.92,
+      metalness: 0.0,
+      side: THREE.DoubleSide,
+      depthTest: false,
+      depthWrite: false
+    });
+    const backing = new THREE.Mesh(geometry.clone(), backingMaterial);
+    backing.position.set(...asset.position);
+    backing.rotation.set(...asset.rotation);
+    backing.renderOrder = 10 + asset.layer * 3;
+    backing.receiveShadow = true;
+    backing.userData = { material: backingMaterial };
+    backingMeshes.push(backing);
+    scene.add(backing);
+
     const material = new THREE.MeshStandardMaterial({
       map: texture,
       roughness: 0.74,
@@ -139,7 +157,7 @@ async function addNotes() {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(...asset.position);
     mesh.rotation.set(...asset.rotation);
-    mesh.renderOrder = 10 + asset.layer;
+    mesh.renderOrder = 11 + asset.layer * 3;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.userData = { material, idColor: asset.idColor, asset };
@@ -179,6 +197,7 @@ window.renderPass = (mode) => {
     table.visible = false;
     hemi.visible = false;
     key.visible = false;
+    for (const mesh of backingMeshes) mesh.visible = false;
     for (const mesh of meshes) {
       const [r, g, b] = mesh.userData.idColor;
       mesh.material = new THREE.MeshBasicMaterial({
@@ -200,6 +219,10 @@ window.renderPass = (mode) => {
     table.visible = true;
     hemi.visible = true;
     key.visible = true;
+    for (const mesh of backingMeshes) {
+      mesh.visible = true;
+      mesh.material = mesh.userData.material;
+    }
     for (const mesh of meshes) mesh.material = mesh.userData.material;
     for (const mesh of occluderMeshes) mesh.material = mesh.userData.material;
   }

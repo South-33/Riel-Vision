@@ -251,6 +251,7 @@ Current proof:
 - Output path: `data/synthetic/cashsnap_webgl_smoke/`.
 - Last smoke rendered `visual.png`, `id.png`, `visible_boxes.json`, `labels_visible.txt`, `layer_audit.json`, `metadata.json`, and the temporary `smoke.html`.
 - ID pass is exact after disabling WebGL antialiasing: black background plus one RGB ID color per visible note, no blended edge colors.
+- RGB note rendering includes an opaque paper backing behind each textured note so visual scenes read as stacked paper sheets instead of transparent scan planes.
 - Primitive finger occluders are top-layer capsule meshes. They render as skin-colored geometry in RGB and black in the ID pass, so covered bill pixels are removed from visible labels.
 - Note visibility uses explicit layer order (`renderOrder` with depth test/write disabled for banknote planes) so tilted sheets or fingers do not phase through upper layers and poison visible masks. The current smoke audited 88,156 overlapping pixels and 15,732 occluder pixels with zero layer-order violations. This is an intentional topological stacking shortcut until a real contact/physics solver exists.
 - Texture loading should stay file-backed (`file://`) instead of base64-inlining full scan PNGs into the HTML. Base64 inlining caused headroom pauses; file-backed textures completed the smoke quickly under the same wrapper caps.
