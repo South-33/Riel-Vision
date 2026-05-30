@@ -132,6 +132,12 @@ Run the gated WebGL smoke suite:
 rl python scripts\run_webgl_smoke_suite.py --skip-render
 ```
 
+Build the gated smoke-suite YOLO mix:
+
+```powershell
+rl python scripts\build_webgl_mix_yaml.py --out configs\cashsnap_webgl_smoke_suite_mix.yaml
+```
+
 Check WebGL smoke output:
 
 ```powershell
@@ -188,6 +194,7 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-05-30 21:31 | harness | keep | Added `check_webgl_smoke_gate.py` and wired `run_webgl_recipe.py` to gate smoke artifacts; negative, thin-edge, hand-occlusion, and clean smoke packages pass, while older fan artifacts need repackaging because they lack `recipe.json`. |
 | 2026-05-30 21:36 | harness | keep | Repackaged older fan and stack smoke through `run_webgl_recipe.py --skip-render`; packager now backfills missing `sceneMode` from the requested scene mode, and both `webgl_fan_fullschema_v1` plus `webgl_overlap_stack_v1` pass smoke gates. |
 | 2026-05-30 21:40 | harness | keep | Added `cashsnap_webgl_smoke_suite_v1` plus `run_webgl_smoke_suite.py`; `--skip-render` suite ran all 6 smoke-ready recipes (clean, stack, fan, thin-edge, hand-occlusion, negative) through smoke/YOLO/label-view/gate checks. |
+| 2026-05-30 21:46 | harness | keep | Added `build_webgl_mix_yaml.py` and `configs/cashsnap_webgl_smoke_suite_mix.yaml`; gated smoke mix validates as 19 images / 64 boxes, diagnostic-only and not a training-performance claim. |
 
 ## Current Active Assets
 

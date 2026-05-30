@@ -1,0 +1,54 @@
+path: ..
+train:
+- data/synthetic/cashsnap_webgl_clean_batch_smoke/images/train
+- data/synthetic/cashsnap_webgl_variant_batch_smoke/images/train
+- data/synthetic/cashsnap_webgl_fullschema_fan_batch_latest_smoke/images/train
+- data/synthetic/cashsnap_webgl_thin_edge_batch_smoke/images/train
+- data/synthetic/cashsnap_webgl_hand_occlusion_batch_smoke/images/train
+- data/synthetic/cashsnap_webgl_negative_batch_smoke/images/train
+val:
+- data/synthetic/cashsnap_webgl_clean_batch_smoke/images/train
+- data/synthetic/cashsnap_webgl_variant_batch_smoke/images/train
+- data/synthetic/cashsnap_webgl_fullschema_fan_batch_latest_smoke/images/train
+- data/synthetic/cashsnap_webgl_thin_edge_batch_smoke/images/train
+- data/synthetic/cashsnap_webgl_hand_occlusion_batch_smoke/images/train
+- data/synthetic/cashsnap_webgl_negative_batch_smoke/images/train
+names:
+  0: USD_1
+  1: USD_5
+  2: USD_10
+  3: USD_20
+  4: USD_50
+  5: USD_100
+  6: KHR_500
+  7: KHR_1000
+  8: KHR_2000
+  9: KHR_5000
+  10: KHR_10000
+  11: KHR_20000
+  12: KHR_50000
+cashsnap_sources:
+- recipe_id: webgl_clean_base_v1
+  scene_mode: clean
+  root: data/synthetic/cashsnap_webgl_clean_batch_smoke
+  data_yaml: data/synthetic/cashsnap_webgl_clean_batch_smoke/data.yaml
+- recipe_id: webgl_overlap_stack_v1
+  scene_mode: stack
+  root: data/synthetic/cashsnap_webgl_variant_batch_smoke
+  data_yaml: data/synthetic/cashsnap_webgl_variant_batch_smoke/data.yaml
+- recipe_id: webgl_fan_fullschema_v1
+  scene_mode: fan
+  root: data/synthetic/cashsnap_webgl_fullschema_fan_batch_latest_smoke
+  data_yaml: data/synthetic/cashsnap_webgl_fullschema_fan_batch_latest_smoke/data.yaml
+- recipe_id: webgl_thin_edge_partial_v1
+  scene_mode: thin_edge
+  root: data/synthetic/cashsnap_webgl_thin_edge_batch_smoke
+  data_yaml: data/synthetic/cashsnap_webgl_thin_edge_batch_smoke/data.yaml
+- recipe_id: webgl_hand_occlusion_fragments_v1
+  scene_mode: hand_occlusion
+  root: data/synthetic/cashsnap_webgl_hand_occlusion_batch_smoke
+  data_yaml: data/synthetic/cashsnap_webgl_hand_occlusion_batch_smoke/data.yaml
+- recipe_id: webgl_hard_negative_replay_v1
+  scene_mode: negative
+  root: data/synthetic/cashsnap_webgl_negative_batch_smoke
+  data_yaml: data/synthetic/cashsnap_webgl_negative_batch_smoke/data.yaml
