@@ -1,6 +1,8 @@
 # P1 Fragment Curation Runbook
 
-This is the shortest useful loop for the current CashSnap blocker: the focused old/common KHR classifier collapses many thin `KHR_5000` and `KHR_20000` crops into `KHR_10000`, and unreviewed P1 augmentation improves crop diagnostics while hurting the real shop-overlap fusion. The next win is reviewed real fragments, not another blind classifier trick.
+This is a useful loop for the old/common CashSnap blocker: the focused old/common KHR classifier collapses many thin `KHR_5000` and `KHR_20000` crops into `KHR_10000`, and unreviewed P1 augmentation improves crop diagnostics while hurting the real shop-overlap fusion.
+
+Current compass: P1 review packs are helpful diagnostics, but they are not the whole answer. The latest reviewed-P1, broad Roboflow-partial, and targeted Numista probes still top out below the current best shop-overlap diagnostic. The next big-gain data should be rights-clear phone captures and reviewed proposal crops, especially `khr_5000_face_number_overlap`, not another blind mix of public partial crops.
 
 ## Inputs
 

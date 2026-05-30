@@ -34,6 +34,12 @@ Use modal/visible-region boxes for the current YOLO detector:
 - Tight box around visible pixels, not the estimated full hidden note.
 - If a slice is too ambiguous to identify by denomination, skip it and record the ambiguity in notes rather than adding noisy labels.
 
+For draft benchmark labels, maintain `manifests/real_fan_benchmark_label_quality.csv` with one row per box. Use `quality=clear` or `partial_clear` only when a human can identify the denomination from visible evidence; use `ambiguous` or `ignore` when the box should not count toward model scoring. To produce a fair-to-score label file for evaluation, run:
+
+```powershell
+rl python scripts/filter_yolo_labels_by_quality.py --labels data/real_fan_benchmark/drafts/real_overlap_0003_commons_shop_5k_10k_20k.txt --out data/audit/real_overlap_0003_commons_shop_5k_10k_20k.scoreable.txt
+```
+
 Do not train on benchmark images. Keep them as validation/test-only assets.
 
 Run `scripts/check_real_fan_benchmark.py` after adding candidates or labels. It verifies local image readability, catches manifest/label-status mismatches, and validates YOLO visible-region label files under `data/real_fan_benchmark/labels/val/` once an image is promoted to `labeled`.

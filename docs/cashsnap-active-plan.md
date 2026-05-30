@@ -8,18 +8,27 @@ Build a small phone/browser-deployable CashSnap model that counts mixed USD and 
 
 ## Current Decision
 
-The active path is base-model strength first, then reviewed partial/fan specialization.
+The active path is a data/evaluation reset around trusted current-scope evidence, then partial/fan specialization.
 
-Use the 2.5D synthetic harness to make the base detector better before scaling hard overlap scenes. The next synthetic work should focus on clean and near-clean 2.5D scenes with realistic camera/domain knobs:
+Use Numista `in_circulation` raw folders as the clean KHR metadata backbone for issue/year/side scans. Non-Numista public data, including Roboflow and Wikimedia/Commons photos, is domain stress or review material until note design and circulation scope are checked. Do not let old, collector, or out-of-scope note designs silently define success.
+
+Use the 2.5D synthetic harness to strengthen base recognition only when the recipe is tied to that trusted scan atlas and clean validation does not regress. The next synthetic work should stay clean/near-clean and use realistic camera/domain knobs:
 
 - lens/aspect/crop variation
 - color temperature and tint
 - exposure, contrast, blur, grain, sharpening, and JPEG compression
 - real or visually QA'd backgrounds
 - class balancing for weak KHR classes, especially `KHR_20000` and `KHR_50000`
-- clean separation between current KHR, current rare KHR, old/common circulated KHR, and USD
+- clean separation between Numista/NBC current KHR, current rare KHR, old/common circulated KHR, and USD
 
-The first Numista 2.5D calibration probes improved real-overlap region coverage but still overcounted and confused old/common KHR backs. Do not scale the same synthetic recipe blindly. The immediate bottleneck is reviewed real fragment evidence for thin/edge `KHR_5000` and `KHR_20000` crops, especially the compact P1 failure queue in `docs/p1-fragment-curation-runbook.md`.
+The first Numista 2.5D calibration probes improved real-overlap region coverage but still overcounted and confused old/common KHR backs. Later reviewed-P1, broad Roboflow-partial, and targeted Numista `KHR_5000` face/number probes all preserved some crop metrics but did not beat the real shop-overlap diagnostic. Do not keep chasing tiny one-image gains with more generic partial mixing.
+
+The immediate bottleneck is high-quality, rights-clear, scoreable real evidence:
+
+- a benchmark/validation set whose labels are human-legible and quality-gated
+- targeted `KHR_5000` portrait-plus-5000 overlap photos matching the row-6 miss
+- reviewed `KHR_20000` thin/edge photos
+- enough clean replay so full-note and current-scope validation do not regress
 
 After reviewed fragments improve denomination identity without clean-validation regression, scale into:
 
@@ -45,12 +54,13 @@ OCR is optional auxiliary evidence only. Current Khmer OCR cues are too noisy to
 - Never train on `data/real_fan_benchmark/`.
 - Do not pass a mined background bank into training until its contact sheet has no visible banknote fragments.
 - Treat ambiguous synthetic fragments as `banknote_unknown` or ignore, not forced denomination labels.
+- Use `manifests/real_fan_benchmark_label_quality.csv` to decide which draft benchmark boxes are scoreable; do not punish models for ambiguous/non-human-identifiable fragments.
 
 ## Immediate Milestones
 
-### M1: Clean Asset Atlas
+### M1: Trusted Asset Atlas
 
-Rebuild or audit scan/cutout assets for current, rare, and old/common KHR scopes. The base model needs enough clean visual evidence for weak classes before hard occlusion is useful.
+Rebuild or audit scan/cutout assets from Numista `in_circulation` first, then NBC/current references if needed. Keep issue year, side, and circulation bucket explicit. The base model needs enough clean visual evidence for weak classes before hard occlusion is useful.
 
 ### M2: 2.5D Base Domain Data
 
@@ -60,9 +70,9 @@ Generate a modest clean/near-clean 2.5D dataset with phone-style scene augmentat
 
 Train from fresh YOLO26n-family weights under the headroom harness. Evaluate clean validation, weak KHR classes, and deployable ONNX/browser smoke before any hard-case fine-tune.
 
-### M4: Reviewed Fragment Loop
+### M4: Scoreable Real Fragment Loop
 
-Review the compact P1 old/common failure queue first, build a trusted fragment-classifier refresh only from accepted rows, and verify against both the P1 diagnostic set and the real shop-overlap draft. Keep clean and near-clean detector data in the mix so the model does not forget full-note recognition.
+Collect or review non-benchmark real fragments that match scoreable failures. Prioritize `khr_5000_face_number_overlap`, `thin_slice_khr_5000`, and `thin_slice_khr_20000`. Build a trusted fragment-classifier refresh only from accepted rows, verify against quality-filtered draft labels plus clean/base validation, and keep clean replay in the mix so the model does not forget full-note recognition.
 
 ### M5: 3D Decision
 

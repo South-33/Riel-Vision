@@ -5,16 +5,17 @@ Use this file as the first stop when the repo feels noisy. The project has many 
 ## Current Active Path
 
 1. Read `docs/cashsnap-active-plan.md` for the current north star and phase order.
-2. Strengthen the base detector first with clean/near-clean 2.5D data, phone-style domain knobs, and extra support for weak KHR classes like `KHR_20000` and `KHR_50000`.
-3. Keep current KHR, rare KHR, old/common circulated KHR, and USD scopes explicit when mixing data.
-4. After the base model is stable, scale into simple overlaps, thin slices, hand-held fans, and finger occlusion.
+2. Treat Numista `in_circulation` as the clean KHR scan/metadata backbone; treat Roboflow/Commons/public phone data as review/domain-stress material until circulation scope is checked.
+3. Keep scoreable real labels explicit with `manifests/real_fan_benchmark_label_quality.csv`; do not evaluate on ambiguous fragments.
+4. Prioritize targeted rights-clear phone captures for `KHR_5000` portrait-plus-number overlap and `KHR_20000` thin/edge cases before more generic partial training.
 5. Keep 3D/WebGL parked behind the proof gate in `docs/synthetic-strategy-evaluation.md`.
 
 ## Start Here
 
 - `docs/model-card-cashsnap-two-stage-oldcommon.md`: current deployable diagnostic stack, known limits, and browser smoke evidence.
 - `docs/cashsnap-active-plan.md`: current phase order, parked ideas, and immediate milestones.
-- `docs/p1-fragment-curation-runbook.md`: next concrete data loop for the old/common `KHR_5000`/`KHR_20000` collapse.
+- `docs/real-fan-capture-guide.md`: current capture and proposal-review workflow for scoreable real partial/fan evidence.
+- `docs/p1-fragment-curation-runbook.md`: historical/current curation loop for old/common `KHR_5000`/`KHR_20000` collapse; useful, but not a substitute for targeted rights-clear captures.
 - `docs/synthetic-strategy-evaluation.md`: current 2D/2.5D vs 3D decision memo.
 - `docs/synthetic-harness-runbook.md`: scan-bank audit, 2.5D generation, QA, and detector-probe commands.
 - `docs/data-prep.md`: source inventory, data rules, and generated artifact notes.

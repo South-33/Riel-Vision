@@ -120,6 +120,8 @@ def main() -> None:
         if label_path.stem not in source_ids:
             errors.append(f"{label_path.relative_to(ROOT)}: label file has no source manifest row")
     for draft_label_path in sorted(draft_label_dir.glob("*.txt")):
+        if draft_label_path.name.endswith(".scoreable.txt"):
+            continue
         if draft_label_path.stem not in source_ids:
             errors.append(f"{draft_label_path.relative_to(ROOT)}: draft label file has no source manifest row")
 
