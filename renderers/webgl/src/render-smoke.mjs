@@ -19,12 +19,6 @@ function argValue(name, defaultValue) {
 }
 
 const OUT_DIR = path.resolve(ROOT, argValue("--out-dir", path.join("data", "synthetic", "cashsnap_webgl_smoke")));
-const SCENE_COUNT = Number.parseInt(argValue("--scene-count", "1"), 10);
-const SEED = Number.parseInt(argValue("--seed", "26053003"), 10);
-
-if (!Number.isInteger(SCENE_COUNT) || SCENE_COUNT < 1) {
-  throw new Error("--scene-count must be a positive integer");
-}
 
 const assets = [
   {
