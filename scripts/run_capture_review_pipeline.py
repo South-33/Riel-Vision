@@ -1,15 +1,30 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 
+from PIL import ExifTags, Image
+
 
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
+EXIF_NAMES = {
+    "Make",
+    "Model",
+    "LensModel",
+    "FocalLength",
+    "FocalLengthIn35mmFilm",
+    "ExposureTime",
+    "FNumber",
+    "ISOSpeedRatings",
+    "PhotographicSensitivity",
+    "DateTimeOriginal",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -73,6 +88,45 @@ def output_stem(images_dir: Path, image_path: Path, recursive: bool) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", "_".join(source.parts)).strip("_") or "image"
 
 
+def jsonable_exif_value(value: object) -> object:
+    if hasattr(value, "numerator") and hasattr(value, "denominator"):
+        denominator = getattr(value, "denominator")
+        return None if denominator == 0 else float(value)
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    if isinstance(value, tuple):
+        return [jsonable_exif_value(item) for item in value]
+    return value
+
+
+def image_camera_metadata(image_path: Path) -> dict[str, object]:
+    with Image.open(image_path) as image:
+        record: dict[str, object] = {
+            "image_path": str(image_path),
+            "width": image.width,
+            "height": image.height,
+            "mode": image.mode,
+            "format": image.format,
+        }
+        exif = image.getexif()
+        if not exif:
+            record["has_exif"] = False
+            return record
+
+        record["has_exif"] = True
+        for tag_id, value in exif.items():
+            name = ExifTags.TAGS.get(tag_id, str(tag_id))
+            if name in EXIF_NAMES:
+                record[name] = jsonable_exif_value(value)
+        return record
+
+
+def write_camera_metadata(images: list[Path], out_path: Path) -> None:
+    with out_path.open("w", encoding="utf-8") as handle:
+        for image_path in images:
+            handle.write(json.dumps(image_camera_metadata(image_path), ensure_ascii=False, sort_keys=True) + "\n")
+
+
 def main() -> None:
     args = parse_args()
     images_dir = resolve(args.images_dir)
@@ -84,9 +138,11 @@ def main() -> None:
     fused_dir.mkdir(parents=True, exist_ok=True)
     preview_dir.mkdir(parents=True, exist_ok=True)
     env = project_env()
+    images = image_paths(images_dir, args.limit, args.recursive)
+    write_camera_metadata(images, out_dir / "camera_metadata.jsonl")
 
     pairs: list[tuple[Path, Path]] = []
-    for image_path in image_paths(images_dir, args.limit, args.recursive):
+    for image_path in images:
         stem = output_stem(images_dir, image_path, args.recursive)
         raw_csv = raw_dir / f"{stem}_raw.csv"
         raw_preview = preview_dir / f"{stem}_raw.jpg"
