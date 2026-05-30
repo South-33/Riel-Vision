@@ -111,12 +111,13 @@ def check_variant(out_dir: Path, allow_no_occluder: bool = False, allow_no_overl
     run(cmd)
 
 
-def write_contact_sheet(variant_dirs: list[tuple[int, Path]], out_path: Path) -> None:
+def write_contact_sheet(variant_dirs: list[tuple[int, Path]], out_path: Path) -> list[dict[str, object]]:
     cell_w, cell_h = 320, 240
     header_h = 30
     row_h = cell_h + header_h
     sheet = Image.new("RGB", (cell_w * 2, row_h * len(variant_dirs)), (24, 24, 24))
     draw = ImageDraw.Draw(sheet)
+    index_rows: list[dict[str, object]] = []
 
     for row, (variant, out_dir) in enumerate(variant_dirs):
         y = row * row_h
@@ -126,9 +127,18 @@ def write_contact_sheet(variant_dirs: list[tuple[int, Path]], out_path: Path) ->
         sheet.paste(mask, (cell_w, y + header_h))
         draw.text((8, y + 8), f"variant {variant} visual", fill=(255, 255, 255))
         draw.text((cell_w + 8, y + 8), f"variant {variant} id", fill=(255, 255, 255))
+        index_rows.append(
+            {
+                "variant": variant,
+                "row": row,
+                "visual_cell_xywh": [0, y + header_h, cell_w, cell_h],
+                "id_cell_xywh": [cell_w, y + header_h, cell_w, cell_h],
+            }
+        )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     sheet.save(out_path)
+    return index_rows
 
 
 def draw_label_previews(
@@ -769,10 +779,11 @@ def write_recipe_metadata(
             "fragment_data_yaml": rel(data_fragments_yaml),
             "manifest": rel(out_root / "manifest.json"),
             "qa_summary": rel(out_root / "qa" / "summary.json"),
-                "contact_sheet": rel(contact_sheet),
-                "preview_dir": rel(out_root / "qa" / "previews"),
-                "quarantine": rel(out_root / "qa" / "quarantine.json"),
-            },
+            "contact_sheet": rel(contact_sheet),
+            "contact_index": rel(out_root / "qa" / "contact_index.json"),
+            "preview_dir": rel(out_root / "qa" / "previews"),
+            "quarantine": rel(out_root / "qa" / "quarantine.json"),
+        },
         "policy": {
             "smoke": "pipeline functionality proof; do not train final claims from this artifact",
             "diagnostic": "use for visual/model diagnosis unless separately promoted",
@@ -804,8 +815,16 @@ def main() -> int:
         variant_dirs.append((variant, out_dir))
 
     contact_sheet = out_root / "contact_sheet.png"
-    write_contact_sheet(variant_dirs, contact_sheet)
+    contact_index = write_contact_sheet(variant_dirs, contact_sheet)
     data_yaml, data_obb_yaml, data_fragments_yaml = write_yolo_dataset(variant_dirs, out_root)
+    write_json(
+        out_root / "qa" / "contact_index.json",
+        {
+            "contact_sheet": str(contact_sheet.relative_to(out_root)),
+            "rows": contact_index,
+            "cell_size": {"width": 320, "height": 240, "header_height": 30},
+        },
+    )
     write_recipe_metadata(args, out_root, contact_sheet, data_yaml, data_obb_yaml, data_fragments_yaml)
     if not args.skip_yolo_check:
         run([sys.executable, "scripts/check_yolo_dataset.py", "--data", str(data_yaml)])

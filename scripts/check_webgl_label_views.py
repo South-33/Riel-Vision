@@ -137,6 +137,11 @@ def main() -> int:
         raise SystemExit("fragment summary ignored count mismatch")
     qa_summary = read_json(dataset_root / "qa" / "summary.json")
     quarantine = read_json(dataset_root / "qa" / "quarantine.json")
+    contact_index = read_json(dataset_root / "qa" / "contact_index.json")
+    if len(contact_index.get("rows", [])) != len(manifest):
+        raise SystemExit("contact index row count mismatch")
+    if not (dataset_root / contact_index.get("contact_sheet", "")).exists():
+        raise SystemExit("contact index points to missing contact sheet")
     if not isinstance(quarantine.get("rows"), list):
         raise SystemExit("quarantine rows must be a list")
     quarantine_counts = Counter(str(row.get("action", "")) for row in quarantine["rows"])

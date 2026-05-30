@@ -50,7 +50,8 @@ Definition of done for the synthetic pipeline:
 - [x] Batch QA writes detect and fragment preview overlays under `qa/previews/` and validates their existence.
 - [x] Batch QA writes visual+ID mask overlays under `qa/previews/` and validates their existence.
 - [x] Batch QA writes `qa/quarantine.json` for trainable-view exclusions and ignored below-threshold fragment components.
-- [ ] Full visual QA suite includes contact-sheet indexing, visual regression snapshots, and bad-scene quarantine promotion rules.
+- [x] Batch QA writes `qa/contact_index.json` mapping contact-sheet cells back to variants.
+- [ ] Full visual QA suite includes visual regression snapshots and bad-scene quarantine promotion rules.
 - [x] Named synthetic recipe slots exist for clean/base, overlap, fan, hand occlusion, thin-edge partials, back-side confusion, rare-class support, hard negatives, and calibration mixes in `configs/synthetic_recipes/cashsnap_webgl_recipe_catalog_v1.json`.
 - [x] Batch outputs include `recipe.json` with recipe name, smoke/diagnostic/trainable-candidate status, variant seed range, intended use, checks, outputs, and trainability policy.
 - [ ] Each trainable recipe has config, seed range, asset manifest, output path, QA summary, intended use, and a clear trainable-vs-diagnostic marker.
@@ -162,6 +163,7 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-05-30 20:53 | renderer | keep | WebGL batch packaging writes detect and fragment preview overlays under `qa/previews/`, records their hashes in `qa/summary.json`, and validates preview existence in label-view QA. |
 | 2026-05-30 20:57 | renderer | keep | WebGL batch packaging writes `qa/quarantine.json`; stack smoke records 3 OBB trainable exclusions and 2 ignored below-threshold fragment components with explicit policies. |
 | 2026-05-30 21:00 | renderer | keep | WebGL batch packaging writes visual+ID mask overlay previews, hashes them in `qa/summary.json`, and validates them in label-view QA. |
+| 2026-05-30 21:03 | renderer | keep | WebGL batch packaging writes `qa/contact_index.json` so contact-sheet visual and ID cells map back to variants; label-view QA validates the index. |
 
 ## Current Active Assets
 
@@ -340,6 +342,7 @@ Current proof:
 - WebGL batch packaging writes detect and fragment label-preview overlays under `qa/previews/`; manifest rows point to them, `qa/summary.json` stores their hashes, and `check_webgl_label_views.py` validates that they exist.
 - WebGL batch packaging writes visual+ID mask overlay previews under `qa/previews/`; these make ID-mask alignment visually reviewable without opening separate visual/mask files.
 - WebGL batch packaging writes `qa/quarantine.json` with explicit policies for trainable OBB exclusions and ignored below-threshold fragments. Stack smoke currently records 3 OBB exclusions and 2 ignored tiny fragment components.
+- WebGL batch packaging writes `qa/contact_index.json` to map contact-sheet visual/ID cells back to variants, and `check_webgl_label_views.py` validates the index.
 - Fragment packaging now writes `fragments/ignored_metadata/` for connected components below `FRAGMENT_MIN_PIXELS`; `fragments/summary.json`, `qa/summary.json`, and `check_webgl_label_views.py` validate ignored counts so tiny evidence is not silently forced into denomination labels.
 - WebGL batch outputs now include `recipe.json` with recipe name, artifact status (`smoke`, `diagnostic`, or `trainable-candidate`), variant seed range, checks, output paths, and trainability policy. Smoke verification used `--recipe-name webgl_stack_smoke_v0_3 --artifact-status smoke --intended-use "renderer and label-view smoke proof"` with `--skip-render`.
 - WebGL `clean` scene mode now supports separated/single-note smoke data. `webgl_clean_smoke_v0_2` passed with 3 images, 6 detect boxes, 6 fragments, and 3/3 trainable OBB images after running the packager with `--min-free-ram-gb 2`; the hard RAM cap stayed at 90%.
