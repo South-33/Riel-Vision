@@ -195,6 +195,10 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-05-30 21:36 | harness | keep | Repackaged older fan and stack smoke through `run_webgl_recipe.py --skip-render`; packager now backfills missing `sceneMode` from the requested scene mode, and both `webgl_fan_fullschema_v1` plus `webgl_overlap_stack_v1` pass smoke gates. |
 | 2026-05-30 21:40 | harness | keep | Added `cashsnap_webgl_smoke_suite_v1` plus `run_webgl_smoke_suite.py`; `--skip-render` suite ran all 6 smoke-ready recipes (clean, stack, fan, thin-edge, hand-occlusion, negative) through smoke/YOLO/label-view/gate checks. |
 | 2026-05-30 21:46 | harness | keep | Added `build_webgl_mix_yaml.py` and `configs/cashsnap_webgl_smoke_suite_mix.yaml`; gated smoke mix validates as 19 images / 64 boxes, diagnostic-only and not a training-performance claim. |
+| 2026-05-30 21:49 | training | note | `bench_train_with_headroom.py --data configs/cashsnap_webgl_smoke_suite_mix.yaml --dry-run` accepts the gated mix and selects GPU 0, batch 2, workers 0, repo-local `runs/cashsnap`; do not launch while free RAM is below the configured 4GB floor. |
+| 2026-05-30 21:51 | evaluation | note | P1 real/deploy guardrails are structurally present but not full scoreboards: `check_real_fan_benchmark.py` passes with 3 candidate sources, 0 promoted labeled images, and 1 draft-labeled 6-box overlap image; browser smoke manifest validates 5 cases. |
+| 2026-05-30 21:52 | evaluation | note | `filter_yolo_labels_by_quality.py` keeps 6/6 labels for the draft shop-overlap diagnostic at `data/audit/real_overlap_0003_commons_shop_5k_10k_20k.scoreable.txt`; this is local diagnostic material, not promoted benchmark truth. |
+| 2026-05-30 21:54 | evaluation | note | Current alpha `yolo26n_cashsnap_current_thin_legacy_clean_v1_e20_i416_b8` on the scoreable shop-overlap draft tops out at 3/6 same-class and 5/6 any-class (`416/conf=0.03` or `640/conf=0.03`); use this as a local diagnostic hurdle, not a final benchmark. |
 
 ## Current Active Assets
 
