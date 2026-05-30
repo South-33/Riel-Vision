@@ -43,11 +43,12 @@ Heavy CPU/RAM/GPU work must go through a headroom wrapper. Never train directly 
 - CPU: AMD Ryzen 5 7640HS, 6 cores / 12 logical processors, 4.3 GHz reported max clock.
 - RAM: about 16 GB physical memory.
 - GPU: NVIDIA GeForce RTX 4060 Laptop GPU, 8 GB VRAM, driver 596.21.
+- Re-scan command: `rl python scripts\profile_system.py --out .cache_runtime\system_profile.json`.
 - Current operating rule: laptop usability matters. Heavy jobs should prefer 90% max CPU/RAM/GPU/VRAM caps, resume around 82%, and never set caps above 95%.
 - If this hardware is unexpectedly slow, suspect RAM pressure first, then laptop GPU power/thermal limits, then data-loader worker count.
 - `scripts/run_with_headroom.py` now refuses caps above 95%, watches free RAM as well as RAM percent/VRAM/GPU/CPU, lowers child priority, and waits for initial headroom before launching a heavy child.
 - `scripts/bench_train_with_headroom.py` dry-run currently selects `batch=2`, `workers=0` on this laptop and passes `--min-free-ram-gb 4.0` to the live wrapper.
-- Prefer GPU for training/inference-heavy work when the NVIDIA GPU has headroom; leave CPU workers low so the laptop stays responsive.
+- Balance speed and headroom. Prefer GPU for training/inference when it is the faster engine and has room, but do not force GPU for CPU-native prep/rendering if the headroom wrapper keeps the laptop responsive.
 
 ## Active Commands
 
@@ -217,6 +218,15 @@ Compare against:
 - browser/export smoke
 
 Only scale to thousands of scenes if P1 improves real partial metrics without materially regressing clean validation.
+
+Current P1 render smoke:
+
+- Command ran through `scripts/run_with_headroom.py` so it could preflight/pause for laptop safety.
+- Output path: `data/synthetic/cashsnap_3d_p1_transfer_proof/`.
+- 240 scenes rendered; `check_yolo_dataset.py --data data\synthetic\cashsnap_3d_p1_transfer_proof\data.yaml` passed with 192 train images / 682 boxes and 48 val images / 164 boxes.
+- `qa/label_stats.json` reports 1,006 instances and 846 exported labels across `KHR_5000`, `KHR_10000`, and `KHR_20000`.
+- The current Python/OpenCV renderer is useful for label-contract proof, but it is CPU-native and visually simple. The next realism/speed step should be a small WebGL/GPU proof, not more training from this scaffold as if it were final data.
+- Local JS tooling exists (`node v24.11.1`, `pnpm 10.28.1`), but the repo has no active JS/WebGL package yet. Add one only when it directly advances the renderer proof.
 
 ## Known Results
 
