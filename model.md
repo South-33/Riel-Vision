@@ -58,6 +58,7 @@ Definition of done for the synthetic pipeline:
 - [ ] Full visual QA suite includes visual regression snapshots and bad-scene quarantine promotion rules.
 - [x] Named synthetic recipe slots exist for clean/base, overlap, fan, hand occlusion, thin-edge partials, back-side confusion, rare-class support, hard negatives, and calibration mixes in `configs/synthetic_recipes/cashsnap_webgl_recipe_catalog_v1.json`.
 - [x] Batch outputs include `recipe.json` with recipe name, smoke/diagnostic/trainable-candidate status, variant seed range, intended use, checks, outputs, and trainability policy.
+- [x] Smoke-ready WebGL recipes can be run or repackaged as a single gated suite.
 - [ ] Each trainable recipe has config, seed range, asset manifest, output path, QA summary, intended use, and a clear trainable-vs-diagnostic marker.
 - [ ] P1 transfer proof compares WebGL synthetic against no-synthetic and matched 2.5D baselines on clean validation, real partial/fan labels, count metrics, and browser smoke.
 - [ ] Fragment-to-physical-note fusion exists for real inference and handles split notes, repeated same-denomination notes, ambiguous backs, and count totals.
@@ -125,6 +126,12 @@ Run a named WebGL synthetic recipe:
 rl python scripts\run_webgl_recipe.py --recipe-id webgl_clean_base_v1 --count 3 --min-free-ram-gb 2
 ```
 
+Run the gated WebGL smoke suite:
+
+```powershell
+rl python scripts\run_webgl_smoke_suite.py --skip-render
+```
+
 Check WebGL smoke output:
 
 ```powershell
@@ -180,6 +187,7 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-05-30 21:26 | renderer | keep | WebGL `hand_occlusion` scene mode passed a 3-image smoke with 13 detect boxes, 32 fragments, 10 split parents, 6 ignored tiny components, 0/3 trainable OBB images, and zero layer-order violations; use for fragment diagnostics, not OBB training. |
 | 2026-05-30 21:31 | harness | keep | Added `check_webgl_smoke_gate.py` and wired `run_webgl_recipe.py` to gate smoke artifacts; negative, thin-edge, hand-occlusion, and clean smoke packages pass, while older fan artifacts need repackaging because they lack `recipe.json`. |
 | 2026-05-30 21:36 | harness | keep | Repackaged older fan and stack smoke through `run_webgl_recipe.py --skip-render`; packager now backfills missing `sceneMode` from the requested scene mode, and both `webgl_fan_fullschema_v1` plus `webgl_overlap_stack_v1` pass smoke gates. |
+| 2026-05-30 21:40 | harness | keep | Added `cashsnap_webgl_smoke_suite_v1` plus `run_webgl_smoke_suite.py`; `--skip-render` suite ran all 6 smoke-ready recipes (clean, stack, fan, thin-edge, hand-occlusion, negative) through smoke/YOLO/label-view/gate checks. |
 
 ## Current Active Assets
 

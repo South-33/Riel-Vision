@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "name": "cashsnap_webgl_smoke_suite_v1",
+  "description": "Small gated smoke suite for current WebGL synthetic scene modes. Smoke artifacts are diagnostics/proofs, not training claims.",
+  "recipes": [
+    {
+      "recipe_id": "webgl_clean_base_v1",
+      "scene_mode": "clean",
+      "out_root": "data/synthetic/cashsnap_webgl_clean_batch_smoke",
+      "start_variant": 0,
+      "count": 3
+    },
+    {
+      "recipe_id": "webgl_overlap_stack_v1",
+      "scene_mode": "stack",
+      "out_root": "data/synthetic/cashsnap_webgl_variant_batch_smoke",
+      "start_variant": 0,
+      "count": 4
+    },
+    {
+      "recipe_id": "webgl_fan_fullschema_v1",
+      "scene_mode": "fan",
+      "out_root": "data/synthetic/cashsnap_webgl_fullschema_fan_batch_latest_smoke",
+      "start_variant": 100,
+      "count": 4
+    },
+    {
+      "recipe_id": "webgl_thin_edge_partial_v1",
+      "scene_mode": "thin_edge",
+      "out_root": "data/synthetic/cashsnap_webgl_thin_edge_batch_smoke",
+      "start_variant": 0,
+      "count": 3
+    },
+    {
+      "recipe_id": "webgl_hand_occlusion_fragments_v1",
+      "scene_mode": "hand_occlusion",
+      "out_root": "data/synthetic/cashsnap_webgl_hand_occlusion_batch_smoke",
+      "start_variant": 0,
+      "count": 3
+    },
+    {
+      "recipe_id": "webgl_hard_negative_replay_v1",
+      "scene_mode": "negative",
+      "out_root": "data/synthetic/cashsnap_webgl_negative_batch_smoke",
+      "start_variant": 0,
+      "count": 2
+    }
+  ]
+}
