@@ -13,6 +13,7 @@ import psutil
 class LoadSample:
     cpu_percent: float
     ram_percent: float
+    ram_available_gb: float
     gpu_percent: float | None
     gpu_mem_percent: float | None
 
@@ -46,12 +47,24 @@ def parse_args() -> argparse.Namespace:
         help="Terminate the child if GPU memory reaches this percent.",
     )
     parser.add_argument(
+        "--min-free-ram-gb",
+        type=float,
+        default=2.0,
+        help="Treat RAM as pressured below this available-GB floor. Use 0 to disable.",
+    )
+    parser.add_argument(
         "--memory-action",
         choices=["pause", "exit"],
         default="pause",
         help="Pause on memory pressure, or exit with code 70 so a wrapper can relaunch smaller.",
     )
     parser.add_argument("--interval", type=float, default=2.0, help="Seconds between load checks.")
+    parser.add_argument(
+        "--preflight-timeout",
+        type=float,
+        default=300.0,
+        help="Seconds to wait for initial headroom before launching the child. Use 0 to disable.",
+    )
     parser.add_argument("--no-priority", action="store_true", help="Do not lower child process priority.")
     parser.add_argument("command", nargs=argparse.REMAINDER, help="Command to run after --.")
     args = parser.parse_args()
@@ -61,6 +74,9 @@ def parse_args() -> argparse.Namespace:
         raise SystemExit("Provide a command after --, for example: -- python scripts/train_yolo.py ...")
     if args.resume_percent >= args.max_percent:
         raise SystemExit("--resume-percent must be lower than --max-percent.")
+    for name in ("max_percent", "max_ram_percent", "max_gpu_mem_percent"):
+        if getattr(args, name) > 95.0:
+            raise SystemExit(f"--{name.replace('_', '-')} must stay <= 95 so the PC remains usable.")
     return args
 
 
@@ -98,9 +114,11 @@ def read_gpu_load() -> tuple[float | None, float | None]:
 
 def sample_load() -> LoadSample:
     gpu_percent, gpu_mem_percent = read_gpu_load()
+    ram = psutil.virtual_memory()
     return LoadSample(
         cpu_percent=psutil.cpu_percent(interval=None),
-        ram_percent=psutil.virtual_memory().percent,
+        ram_percent=ram.percent,
+        ram_available_gb=ram.available / (1024**3),
         gpu_percent=gpu_percent,
         gpu_mem_percent=gpu_mem_percent,
     )
@@ -120,6 +138,7 @@ def format_sample(sample: LoadSample) -> str:
     gpu_mem = "n/a" if sample.gpu_mem_percent is None else f"{sample.gpu_mem_percent:.0f}%"
     return (
         f"cpu={sample.cpu_percent:.0f}% ram={sample.ram_percent:.0f}% "
+        f"ram_free={sample.ram_available_gb:.1f}GB "
         f"gpu={gpu} gpu_mem={gpu_mem}"
     )
 
@@ -173,15 +192,47 @@ def terminate_tree(proc: psutil.Process) -> None:
             pass
 
 
-def memory_over_limit(sample: LoadSample, max_ram: float, max_gpu_mem: float) -> bool:
+def memory_over_limit(sample: LoadSample, max_ram: float, max_gpu_mem: float, min_free_ram_gb: float) -> bool:
     if sample.ram_percent >= max_ram:
         return True
+    if min_free_ram_gb > 0 and sample.ram_available_gb <= min_free_ram_gb:
+        return True
     return sample.gpu_mem_percent is not None and sample.gpu_mem_percent >= max_gpu_mem
+
+
+def wait_for_initial_headroom(args: argparse.Namespace) -> int | None:
+    if args.preflight_timeout <= 0:
+        return None
+    deadline = time.time() + args.preflight_timeout
+    last_print = 0.0
+    while True:
+        sample = sample_load()
+        load = throttle_load(sample)
+        memory_high = memory_over_limit(
+            sample,
+            args.max_ram_percent,
+            args.max_gpu_mem_percent,
+            args.min_free_ram_gb,
+        )
+        if load <= args.resume_percent and not memory_high:
+            return None
+        now = time.time()
+        if now - last_print >= 20:
+            print(f"[headroom] Waiting for initial headroom at {format_sample(sample)}", flush=True)
+            last_print = now
+        if now >= deadline:
+            print(f"[headroom] Initial headroom timeout at {format_sample(sample)}", flush=True)
+            return 75
+        time.sleep(args.interval)
 
 
 def main() -> int:
     args = parse_args()
     psutil.cpu_percent(interval=None)
+
+    preflight_code = wait_for_initial_headroom(args)
+    if preflight_code is not None:
+        return preflight_code
 
     print(f"[headroom] Starting: {' '.join(args.command)}", flush=True)
     child = subprocess.Popen(args.command)
@@ -196,7 +247,12 @@ def main() -> int:
             time.sleep(args.interval)
             sample = sample_load()
             load = throttle_load(sample)
-            memory_high = memory_over_limit(sample, args.max_ram_percent, args.max_gpu_mem_percent)
+            memory_high = memory_over_limit(
+                sample,
+                args.max_ram_percent,
+                args.max_gpu_mem_percent,
+                args.min_free_ram_gb,
+            )
 
             if memory_high and args.memory_action == "exit":
                 print(

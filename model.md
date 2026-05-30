@@ -37,6 +37,18 @@ Do not start another training run until the P0 renderer smoke proof can produce:
 
 Heavy CPU/RAM/GPU work must go through a headroom wrapper. Never train directly when a safe wrapper exists.
 
+## Local Machine Profile
+
+- Machine: Lenovo 82Y9 laptop.
+- CPU: AMD Ryzen 5 7640HS, 6 cores / 12 logical processors, 4.3 GHz reported max clock.
+- RAM: about 16 GB physical memory.
+- GPU: NVIDIA GeForce RTX 4060 Laptop GPU, 8 GB VRAM, driver 596.21.
+- Current operating rule: laptop usability matters. Heavy jobs should prefer 90% max CPU/RAM/GPU/VRAM caps, resume around 82%, and never set caps above 95%.
+- If this hardware is unexpectedly slow, suspect RAM pressure first, then laptop GPU power/thermal limits, then data-loader worker count.
+- `scripts/run_with_headroom.py` now refuses caps above 95%, watches free RAM as well as RAM percent/VRAM/GPU/CPU, lowers child priority, and waits for initial headroom before launching a heavy child.
+- `scripts/bench_train_with_headroom.py` dry-run currently selects `batch=2`, `workers=0` on this laptop and passes `--min-free-ram-gb 4.0` to the live wrapper.
+- Prefer GPU for training/inference-heavy work when the NVIDIA GPU has headroom; leave CPU workers low so the laptop stays responsive.
+
 ## Active Commands
 
 Initialize or append the local experiment ledger:
@@ -169,7 +181,7 @@ Current scaffold:
 - `scripts/render_3d_pipeline_probe.py` consumes the P0/P1 JSON config style.
 - It renders perspective-warped Numista notes with simple contact shadows, visual images, flat ID masks, visible-only YOLO detect labels, OBB sidecar labels, OBB metadata, scene metadata, `data.yaml`, label stats, contact sheets, and mask overlays.
 - P0 smoke output path: `data/synthetic/cashsnap_3d_p0_renderer_smoke/`.
-- Last P0 smoke: 20 scenes; `check_yolo_dataset.py --data data\synthetic\cashsnap_3d_p0_renderer_smoke\data.yaml` passed with 16 train images / 48 boxes and 4 val images / 9 boxes; `qa/label_stats.json` reports 63 instances and 57 exported labels.
+- Last P0 smoke: 20 scenes in about 20-30 seconds; deterministic contact-sheet hash matched across reruns; `check_yolo_dataset.py --data data\synthetic\cashsnap_3d_p0_renderer_smoke\data.yaml` passed with 16 train images / 47 boxes and 4 val images / 13 boxes; `qa/label_stats.json` reports 66 instances and 60 exported labels.
 - This scaffold is not the final 3D renderer. It proves the label/QA contract before WebGL/PBR/material realism.
 
 Success:

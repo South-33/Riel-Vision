@@ -206,10 +206,12 @@ def build_command(
         "--resume-percent",
         str(args.resume_percent),
         "--max-ram-percent",
-        str(args.max_ram_percent),
-        "--max-gpu-mem-percent",
-        str(args.max_gpu_mem_percent),
-        "--interval",
+            str(args.max_ram_percent),
+            "--max-gpu-mem-percent",
+            str(args.max_gpu_mem_percent),
+            "--min-free-ram-gb",
+            str(args.min_free_ram_gb),
+            "--interval",
         str(args.interval),
         "--memory-action",
         memory_action,
@@ -230,8 +232,13 @@ def main() -> int:
     args = parse_args()
     if args.resume_percent >= args.max_percent:
         raise SystemExit("--resume-percent must be lower than --max-percent.")
+    for name in ("max_percent", "max_ram_percent", "max_gpu_mem_percent"):
+        if getattr(args, name) > 95.0:
+            raise SystemExit(f"--{name.replace('_', '-')} must stay <= 95 so the PC remains usable.")
 
     cpu, ram, gpu = probe(args.probe_seconds)
+    if args.device is None and gpu is not None:
+        args.device = "0"
     batch = parse_auto_int(args.batch, choose_batch(gpu, ram, args.imgsz), "batch")
     workers = parse_auto_int(args.workers, choose_workers(cpu, ram), "workers")
 
@@ -248,6 +255,8 @@ def main() -> int:
         flush=True,
     )
     print(f"[bench-headroom] selected batch={batch} workers={workers}", flush=True)
+    if args.device is not None:
+        print(f"[bench-headroom] selected device={args.device}", flush=True)
 
     command = build_command(args, batch, workers, args.exist_ok, "exit")
     print("[bench-headroom] command:", " ".join(command), flush=True)

@@ -253,6 +253,53 @@ def apply_material(image: Image.Image, material: dict[str, Any], rng: random.Ran
     return Image.fromarray(arr.astype(np.uint8), "RGBA")
 
 
+def resize_texture(image: Image.Image, max_width: int = 640) -> Image.Image:
+    if image.width <= max_width:
+        return image
+    ratio = max_width / image.width
+    return image.resize((max_width, max(1, int(image.height * ratio))), Image.Resampling.LANCZOS)
+
+
+def deform_note(image: Image.Image, geometry: dict[str, Any], rng: random.Random) -> Image.Image:
+    rgba = np.array(image.convert("RGBA"))
+    height, width = rgba.shape[:2]
+    yy, xx = np.mgrid[0:height, 0:width].astype(np.float32)
+    x_norm = (xx / max(1, width - 1)) * 2.0 - 1.0
+    y_norm = (yy / max(1, height - 1)) * 2.0 - 1.0
+
+    curl_x = rand_range(geometry.get("curl_x_mm", [0, 0]), rng) * 0.55
+    curl_y = rand_range(geometry.get("curl_y_mm", [0, 0]), rng) * 0.45
+    ripple = rand_range(geometry.get("ripple_amp_mm", [0, 0]), rng) * 1.8
+    phase = rng.uniform(0, math.tau)
+    map_x = xx + curl_y * (y_norm**2) * np.sin(math.pi * (x_norm + 1.0) / 2.0)
+    map_y = yy + curl_x * (x_norm**2) * np.sin(math.pi * (y_norm + 1.0) / 2.0)
+    map_y += ripple * np.sin(2.5 * math.pi * x_norm + phase) * np.sin(math.pi * (y_norm + 1.0))
+
+    crease_count = rand_int_range(geometry.get("crease_count", [0, 0]), rng)
+    shade = np.ones((height, width), dtype=np.float32)
+    for _ in range(crease_count):
+        center = rng.uniform(-0.75, 0.75)
+        width_norm = rng.uniform(0.018, 0.055)
+        strength = rng.uniform(-0.10, 0.16)
+        crease = np.exp(-((x_norm - center) / width_norm) ** 2)
+        map_y += crease * rng.uniform(-3.0, 3.0)
+        shade += crease * strength
+
+    deformed = cv2.remap(
+        rgba,
+        map_x.astype(np.float32),
+        map_y.astype(np.float32),
+        interpolation=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=(0, 0, 0, 0),
+    ).astype(np.float32)
+    curl_shade = 1.0 - 0.08 * np.abs(x_norm) + 0.04 * np.sin(math.pi * y_norm + phase)
+    shade = np.clip(shade * curl_shade, 0.72, 1.18)
+    deformed[:, :, :3] *= shade[:, :, None]
+    deformed[:, :, :3] = np.clip(deformed[:, :, :3], 0, 255)
+    return Image.fromarray(deformed.astype(np.uint8), "RGBA")
+
+
 def render_scene(
     config: dict[str, Any],
     assets: list[Asset],
@@ -273,7 +320,9 @@ def render_scene(
 
     for plan in plans:
         with Image.open(plan.asset.path) as raw:
-            note = apply_material(raw, material, rng)
+            note = resize_texture(raw.convert("RGBA"))
+            note = apply_material(note, material, rng)
+            note = deform_note(note, config.get("geometry", {}), rng)
         warped = warp_rgba(note, plan.quad, (width, height))
         alpha = warped[:, :, 3]
         if alpha.max() == 0:

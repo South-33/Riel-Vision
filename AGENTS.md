@@ -5,6 +5,10 @@ This is the project's AGENTS.md
 - Keep this file lean: only durable repo rules that a future agent needs before reading `model.md`.
 - Current mission: small phone/browser USD+KHR banknote counter; counterfeit detection is out of scope.
 - Current active phase: 3D synthetic-pipeline reset before the next training push; validate the renderer proof configs before training.
+- Local rig profile: Lenovo 82Y9 laptop, AMD Ryzen 5 7640HS (6 cores / 12 threads), about 16 GB RAM, NVIDIA GeForce RTX 4060 Laptop GPU with 8 GB VRAM, driver 596.21.
+- Treat this as a constrained laptop, not a workstation: default heavy-job caps should stay below 95% CPU/RAM/GPU/VRAM, with 90% preferred and 82% resume thresholds unless `model.md` says otherwise.
+- `scripts/run_with_headroom.py` has a preflight headroom wait and refuses caps above 95%; use it for generic heavy work and `scripts/bench_train_with_headroom.py` for YOLO training.
+- Prefer GPU execution for training/inference-heavy work on this laptop when NVIDIA headroom is available; keep CPU data-loader pressure low (`workers=0` is often correct here).
 - Never train on `data/real_fan_benchmark/`; it is evaluation/stress data only.
 - Use `rl` for terminal work in LongRun/RunLong mode, and route heavy CPU/RAM/GPU jobs through `scripts/run_with_headroom.py` or `scripts/bench_train_with_headroom.py`.
 - Keep YOLO runs under repo-local ignored `runs/`, not `C:\Users\Venom\runs`.
