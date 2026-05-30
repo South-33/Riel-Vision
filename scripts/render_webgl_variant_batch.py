@@ -46,6 +46,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--background-dir", type=Path, help="Optional reviewed-clean background image directory.")
     parser.add_argument("--skip-render", action="store_true", help="Only recheck/contact-sheet existing outputs.")
     parser.add_argument("--skip-yolo-check", action="store_true", help="Do not run check_yolo_dataset.py on the packaged dataset.")
+    parser.add_argument("--skip-label-view-check", action="store_true", help="Do not run check_webgl_label_views.py on packaged label views.")
     return parser.parse_args()
 
 
@@ -448,6 +449,8 @@ def main() -> int:
     data_yaml, data_obb_yaml, data_fragments_yaml = write_yolo_dataset(variant_dirs, out_root)
     if not args.skip_yolo_check:
         run([sys.executable, "scripts/check_yolo_dataset.py", "--data", str(data_yaml)])
+    if not args.skip_label_view_check:
+        run([sys.executable, "scripts/check_webgl_label_views.py", "--root", str(out_root)])
     print(f"wrote {contact_sheet.relative_to(ROOT)}")
     print(f"wrote {data_yaml.relative_to(ROOT)}")
     print(f"wrote {data_obb_yaml.relative_to(ROOT)}")
