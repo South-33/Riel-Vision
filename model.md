@@ -69,7 +69,7 @@ Definition of done for the synthetic pipeline:
 - [ ] Operations are one-command reproducible: render, QA/package, train under headroom, evaluate clean/real/browser guards, and clean scratch outputs.
 - [ ] Promotion rules require real-scoreboard improvement, clean-validation guardrails, browser/deploy guardrails, and enough metadata to diagnose regressions.
 
-Current completion status: the first bounded WebGL trainable-candidate suite is refreshed at 1440x1080 with `visual_scale: 1`, rendered, gated, visually accepted, and train-smoke proven under headroom. Its mix YAML validates as 304 images / 1160 boxes, packages export physical count targets separate from fragment evidence, and the sampled 84-row visual audit pack is accepted by Codex contact-sheet review. One visible-denomination/mild-overlap sanity label is promoted by Codex visual audit, but P1 transfer remains blocked by 0 promoted real fan/overlap stress labels.
+Current completion status: the first bounded WebGL trainable-candidate suite is refreshed at 1440x1080 with `visual_scale: 1`, rendered, gated, visually accepted, and train-smoke proven under headroom. Its mix YAML validates as 304 images / 1160 boxes, packages export physical count targets separate from fragment evidence, and the sampled 84-row visual audit pack is accepted by Codex contact-sheet review. One visible-denomination/mild-overlap sanity label is promoted by Codex visual audit, but P1 transfer remains blocked by 0 promoted real fan/overlap stress labels; current public/raw candidates are useful diagnostics only, not scoreable P1 substitutes.
 
 ## Work Loop
 
@@ -232,6 +232,7 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-05-31 | backgrounds | reject | Existing extracted no-note background banks are rejected by Codex contact-sheet audit; a stricter reject-model probe yielded only two crops and one was outdoor/cushion context, so do not retry that path blindly without curated table-source photos. |
 | 2026-05-31 | rendering | adjust | Full-suite refresh at 1440x1080 hit the 3 GB free-RAM launch gate during supersampled WebGL renders; trainable-candidate defaults now use `visual_scale: 1` to keep output resolution while avoiding high system-RAM canvas overhead on the laptop. |
 | 2026-05-31 | operations | keep | Headless Edge is already GPU-backed on this laptop (`ANGLE` on RTX 4060/D3D11). Suite rows own `visual_scale`; global `--visual-scale` is only an explicit override. Hard-negative mode uses primitive non-banknote props so zero-box frames are not blank tables. |
+| 2026-05-31 | real data | blocked | Existing real/raw stress candidates do not unblock P1: `real_fan_0001_voa_commons` is too ambiguous to promote from model hints, `real_overlap_0002_commons_museum` is not a fan/dense-overlap stress substitute, and `data/review/roboflow_cuurecy_detection_is_multinote_probe_v1/contact_sheet.jpg` shows useful Roboflow hand/fan stress references but not scoreable labels because of public/reproduction/split and visible-region policy caveats. Next unblocker is rights-clean phone fan/overlap capture(s) or human-audited stress labels. |
 
 ## Trainable Candidate Artifacts
 
@@ -240,12 +241,12 @@ Generated artifacts live under ignored `data/synthetic/` roots and should not be
 | Recipe | Root | Train views | Gate status | Use / caveat |
 | --- | --- | --- | --- | --- |
 | `webgl_clean_base_v1` | `data/synthetic/cashsnap_webgl_clean_base_candidate_v1` | detect, fragment, OBB | Passed: 32 accepted images, 65 detect/fragment boxes, 32/32 trainable OBB images, 0 visual rejects, `phone_auto` spread across all 4 named profiles. | Clean synthetic baseline candidate. |
-| `webgl_overlap_stack_v1` | `data/synthetic/cashsnap_webgl_overlap_stack_candidate_v1` | detect, fragment | Passed at `--visual-scale 1.5`: 64 accepted images, 285 detect boxes, 383 trainable fragments, 109 ignored ambiguous fragments, OBB mostly rejected (6 accepted / 58 rejected). | Dense-overlap and fragment-fusion stress; not an OBB training source. |
-| `webgl_fan_fullschema_v1` | `data/synthetic/cashsnap_webgl_fan_fullschema_candidate_v1` | detect | Passed at `--visual-scale 1.5`: 64 accepted images, 345 detect boxes, 566 fragment components in metadata, 403 ignored fragments, 71 review-required fragments, OBB mostly rejected (3 accepted / 61 rejected). | Handheld-fan detect candidate; fragment labels are diagnostic until fan fragment/fusion policy improves. |
-| `webgl_hand_occlusion_fragments_v1` | `data/synthetic/cashsnap_webgl_hand_occlusion_candidate_v1` | detect | Passed at `--visual-scale 1.5`: 48 accepted images, 216 detect boxes, 418 fragment components in metadata, 170 ignored fragments, 27 review-required fragments, 0/48 trainable OBB images. | Hand/finger occlusion detect candidate; class-skewed to 5 denominations, so do not use as balanced hand coverage. |
-| `webgl_thin_edge_partial_v1` | `data/synthetic/cashsnap_webgl_thin_edge_partial_candidate_v1` | detect | Passed at `--visual-scale 1`: 32 accepted images, 99 detect boxes, 113 fragment components in metadata, 213 ignored fragments, 14 review-required fragments, OBB mostly rejected (5 accepted / 27 rejected). | Thin-edge KHR sliver candidate; class-skewed to 4 KHR denominations. `--visual-scale 1.5` hit RAM pause-loop behavior on this laptop, so use scale 1 unless memory headroom is better. |
+| `webgl_overlap_stack_v1` | `data/synthetic/cashsnap_webgl_overlap_stack_candidate_v1` | detect, fragment | Passed at 1440x1080 `visual_scale: 1`: 64 accepted images, 283 detect boxes, 373 trainable fragments, 120 ignored fragments, OBB mostly rejected (8 accepted / 56 rejected). | Dense-overlap and fragment-fusion stress; not an OBB training source. |
+| `webgl_fan_fullschema_v1` | `data/synthetic/cashsnap_webgl_fan_fullschema_candidate_v1` | detect | Passed at 1440x1080 `visual_scale: 1`: 64 accepted images, 349 detect boxes, 576 fragment components in metadata, 376 ignored fragments, 83 review-required fragments, OBB rejected on all 64 images. | Handheld-fan detect candidate; fragment labels are diagnostic until fan fragment/fusion policy improves. |
+| `webgl_hand_occlusion_fragments_v1` | `data/synthetic/cashsnap_webgl_hand_occlusion_candidate_v1` | detect | Passed at 1440x1080 `visual_scale: 1`: 48 accepted images, 216 detect boxes, 402 fragment components in metadata, 183 ignored fragments, 31 review-required fragments, OBB mostly rejected (1 accepted / 47 rejected). | Hand/finger occlusion detect candidate; class-skewed to 5 denominations, so do not use as balanced hand coverage. |
+| `webgl_thin_edge_partial_v1` | `data/synthetic/cashsnap_webgl_thin_edge_partial_candidate_v1` | detect | Passed at 1440x1080 `visual_scale: 1`: 32 accepted images, 105 detect boxes, 121 fragment components in metadata, 183 ignored fragments, 17 review-required fragments, OBB mostly rejected (1 accepted / 31 rejected). | Thin-edge KHR sliver candidate; class-skewed to 4 KHR denominations. `--visual-scale 1.5` hit RAM pause-loop behavior on this laptop, so use scale 1 unless memory headroom is better. |
 | `webgl_hard_negative_replay_v1` | `data/synthetic/cashsnap_webgl_hard_negative_candidate_v1` | detect | Passed at `--visual-scale 1`: 32 accepted zero-box images, 0 visible banknotes, 0 fragments, 0 visual rejects. | False-positive guardrail candidate with primitive non-banknote props; still not a substitute for a reviewed real/background prop library. |
-| `webgl_back_side_confusion_v1` | `data/synthetic/cashsnap_webgl_back_side_confusion_candidate_v1` | detect | Passed at `--visual-scale 1.5`: 32 accepted images, 142 detect boxes, 191 fragment components in metadata, 34 ignored fragments, 6 review-required fragments, OBB mostly rejected (6 accepted / 26 rejected). | Balanced front/back stack candidate; `front_back_mix` satisfied on all 32 images. |
+| `webgl_back_side_confusion_v1` | `data/synthetic/cashsnap_webgl_back_side_confusion_candidate_v1` | detect | Passed at 1440x1080 `visual_scale: 1`: 32 accepted images, 142 detect boxes, 192 fragment components in metadata, 45 ignored fragments, 5 review-required fragments, OBB mostly rejected (5 accepted / 27 rejected). | Balanced front/back stack candidate; `front_back_mix` satisfied on all 32 images. |
 
 ## Current Active Assets
 
@@ -282,7 +283,7 @@ Generated scratch folders removed from the table: old `data/synthetic/`, generat
 
 ### Tier 2: Useful But Conditional
 
-- `data/raw_datasets/roboflow_cuurecy_detection_is/`: useful real phone partial/overlap material, but public/reproduction and split caveats mean it is review/domain-stress data until curated.
+- `data/raw_datasets/roboflow_cuurecy_detection_is/`: useful real phone partial/overlap material; `data/review/roboflow_cuurecy_detection_is_multinote_probe_v1/contact_sheet.jpg` samples dense hand/fan references, but public/reproduction, split, and visible-region label-policy caveats mean it stays review/domain-stress data until curated.
 - `data/review/`: keep reviewed or actively reviewed packs; they are more valuable than unreviewed generated classifier datasets.
 - `data/backgrounds/`: use only after contact-sheet QA proves no note fragments leaked into backgrounds.
 - `data/asset_candidates/*picwish*`: cutout candidates only; hand/skin contamination has repeatedly hurt transfer.
@@ -487,7 +488,7 @@ Decision from this pass: do not chase full PBR or a full hand mesh yet. Build a 
 - Browser stack is deployable-size but not quality-solved. It protects USD/KHR guard cases but still miscounts the shop-overlap draft.
 - OCR is not a shortcut. Khmer OCR cues were noisy and wrong on shop-overlap crops.
 - Template matching is not a shortcut. SIFT/ORB/AKAZE performed poorly on the compact P1 failure queue.
-- Broad dataset searches in May 2026 did not find a better public KHR partial/fan dataset. Stop broad hunting unless a specific new lead appears.
+- Broad dataset searches in May 2026 found useful public KHR/USD partial/fan references, but no rights-clean scoreable P1 benchmark substitute. Stop broad hunting unless a specific new lead appears.
 - Roboflow `cuurecy-detection-is` is useful but not clean proof: it has real partial/overlap examples, front/back masks, and repeated layouts/split caveats.
 - PicWish can generate lots of cutouts, but skin/hand contamination repeatedly caused regressions.
 - Numista clean scan fragments alone did not fix `KHR_5000 -> KHR_10000` partial confusion.
