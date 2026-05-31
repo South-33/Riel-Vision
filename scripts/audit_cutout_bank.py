@@ -134,6 +134,69 @@ def flags_for(row: dict[str, str], metrics: dict[str, float | int | str]) -> lis
     return flags
 
 
+def first_present(row: dict[str, str], keys: list[str], default: str = "") -> str:
+    for key in keys:
+        value = row.get(key, "").strip()
+        if value:
+            return value
+    return default
+
+
+def license_status_for(row: dict[str, str]) -> str:
+    explicit = first_present(row, ["license_status", "license", "rights_status"])
+    if explicit:
+        return explicit
+    source_path = row.get("source_path", "").replace("\\", "/").lower()
+    if "numista_raw" in source_path:
+        return "usage_review_required"
+    return "unknown"
+
+
+def usage_note_for(row: dict[str, str], license_status: str) -> str:
+    explicit = first_present(row, ["usage_note", "rights_note", "license_note"])
+    if explicit:
+        return explicit
+    if license_status == "usage_review_required":
+        return "internal_reference_only_until_source_license_is_reviewed"
+    return "missing_usage_note"
+
+
+def circulation_priority_for(row: dict[str, str]) -> str:
+    status = row.get("source_status", row.get("status", "")).strip()
+    if status == "in_circulation":
+        return "primary_current_circulation"
+    if status:
+        return "secondary_not_current_circulation"
+    return "unknown"
+
+
+def design_generation_for(row: dict[str, str]) -> str:
+    years = row.get("years", "").strip()
+    if years:
+        return years
+    max_year = row.get("max_year", "").strip()
+    return max_year or "unknown"
+
+
+def alpha_quality_for(flags: list[str]) -> str:
+    alpha_flags = {"bad_note_aspect", "ragged_or_partial_alpha", "tiny_foreground", "empty", "unreadable"}
+    return "needs_review" if any(flag in alpha_flags for flag in flags) else "auto_pass"
+
+
+def dimension_ranges(rows: list[dict[str, str]]) -> dict[str, dict[str, int | None]]:
+    ranges: dict[str, dict[str, int | None]] = {}
+    for class_name in CLASS_NAMES:
+        widths = [int(row["width"]) for row in rows if row.get("class_name") == class_name and row.get("width", "").isdigit()]
+        heights = [int(row["height"]) for row in rows if row.get("class_name") == class_name and row.get("height", "").isdigit()]
+        ranges[class_name] = {
+            "min_width": min(widths) if widths else None,
+            "max_width": max(widths) if widths else None,
+            "min_height": min(heights) if heights else None,
+            "max_height": max(heights) if heights else None,
+        }
+    return ranges
+
+
 def write_csv(path: Path, rows: list[dict[str, str]]) -> None:
     if not rows:
         return
@@ -209,10 +272,18 @@ def main() -> None:
         asset = resolve_asset(row, bank).resolve()
         metrics = alpha_metrics(asset)
         flags = flags_for(row, metrics)
+        license_status = license_status_for(row)
+        visual_qa_status = "needs_review" if flags else "auto_pass"
         rows.append(
             {
                 **row,
                 "source_status": row.get("source_status", row.get("status", "")),
+                "license_status": license_status,
+                "usage_note": usage_note_for(row, license_status),
+                "circulation_priority": circulation_priority_for(row),
+                "design_generation": design_generation_for(row),
+                "alpha_quality": alpha_quality_for(flags),
+                "visual_qa_status": visual_qa_status,
                 **{key: f"{value:.6f}" if isinstance(value, float) else str(value) for key, value in metrics.items()},
                 "resolved_asset_path": str(asset),
                 "flags": ";".join(flags),
@@ -228,7 +299,24 @@ def main() -> None:
     side_counts = Counter((row.get("class_name", "unknown"), row.get("side", "unknown")) for row in rows)
     flag_counts = Counter(flag for row in suspects for flag in row["flags"].split(";") if flag)
     source_status_counts = Counter(row.get("source_status", "unknown") for row in rows)
+    license_status_counts = Counter(row.get("license_status", "unknown") for row in rows)
+    usage_note_counts = Counter(row.get("usage_note", "unknown") for row in rows)
+    circulation_priority_counts = Counter(row.get("circulation_priority", "unknown") for row in rows)
+    alpha_quality_counts = Counter(row.get("alpha_quality", "unknown") for row in rows)
+    visual_qa_status_counts = Counter(row.get("visual_qa_status", "unknown") for row in rows)
     currency_counts = Counter(row.get("currency", "unknown") for row in rows)
+    design_generation_counts_by_class = {
+        class_name: dict(
+            sorted(
+                Counter(
+                    row.get("design_generation", "unknown")
+                    for row in rows
+                    if row.get("class_name") == class_name
+                ).items()
+            )
+        )
+        for class_name in CLASS_NAMES
+    }
     side_coverage = {}
     missing_class_sides = []
     for class_name in CLASS_NAMES:
@@ -262,9 +350,29 @@ def main() -> None:
             "side_coverage": side_coverage,
             "missing_class_sides": missing_class_sides,
             "source_status_counts": dict(sorted(source_status_counts.items())),
+            "license_status_counts": dict(sorted(license_status_counts.items())),
+            "usage_note_counts": dict(sorted(usage_note_counts.items())),
+            "circulation_priority_counts": dict(sorted(circulation_priority_counts.items())),
+            "alpha_quality_counts": dict(sorted(alpha_quality_counts.items())),
+            "visual_qa_status_counts": dict(sorted(visual_qa_status_counts.items())),
             "currency_counts": dict(sorted(currency_counts.items())),
+            "design_generation_counts_by_class": design_generation_counts_by_class,
+            "dimension_ranges_by_class": dimension_ranges(rows),
             "flag_counts": dict(sorted(flag_counts.items())),
             "years_by_class": years_by_class,
+            "audit_fields": [
+                "class_name",
+                "side",
+                "design_generation",
+                "circulation_priority",
+                "source_status",
+                "license_status",
+                "usage_note",
+                "alpha_quality",
+                "width",
+                "height",
+                "visual_qa_status",
+            ],
             "outputs": {
                 "all_assets_csv": str((out_dir / "all_assets.csv").relative_to(ROOT)),
                 "suspects_csv": str((out_dir / "suspects.csv").relative_to(ROOT)),
@@ -272,6 +380,7 @@ def main() -> None:
             },
             "policy": {
                 "missing_class_sides": "must be empty before a full-schema trainable recipe can claim complete class/side coverage",
+                "license_status": "usage_review_required is allowed for internal synthetic experiments but blocks public dataset/model release claims",
                 "suspects": "review contact sheet before using suspect assets in trainable recipes",
                 "large_red_mark_suspect": "KHR red/pink design areas can be false positives; review visually before excluding",
             },

@@ -36,7 +36,7 @@ Goal: make synthetic data a controlled experiment generator, not just an image g
 Definition of done for the synthetic pipeline:
 
 - [x] Real-target matrix exists: required photo conditions, parked conditions, scoreable benchmark slices, and success metrics are named in `configs/synthetic_targets/cashsnap_real_target_matrix_v1.json`.
-- [ ] Asset bank is audited by class, side, design generation, circulation priority, source, license/usage status, alpha quality, dimensions, and visual QA.
+- [x] Asset bank is audited by class, side, design generation, circulation priority, source, license/usage status, alpha quality, dimensions, and visual QA.
 - [x] Numista cutout audit writes `audit/summary.json` with class counts, front/back coverage, source-status counts, year ranges, suspect flags, and audit output paths.
 - [ ] Scene generator covers normal notes, loose stacks, dense overlap, fans, partial edges, repeated denominations, front/back mixes, hand/finger occlusion, reviewed backgrounds, and phone-like framing.
 - [ ] Camera and postprocess profiles are derived from real captures where possible: lens/FOV, perspective, crop, blur, noise, compression, exposure, white balance, glare, and lighting.
@@ -69,7 +69,7 @@ Definition of done for the synthetic pipeline:
 - [ ] Operations are one-command reproducible: render, QA/package, train under headroom, evaluate clean/real/browser guards, and clean scratch outputs.
 - [ ] Promotion rules require real-scoreboard improvement, clean-validation guardrails, browser/deploy guardrails, and enough metadata to diagnose regressions.
 
-Current completion status: renderer and label contract are proven at P0, target/recipe coverage is now explicit, and WebGL packages carry QA, recipe, ignored-fragment metadata, fragment evidence-review metadata, fragment ambiguity ignore policy, geometric postprocess label guards, deterministic visual-quality gates, human visual-review packs, smoke/trainable-candidate gates, clean-scene smoke, hard-negative zero-box smoke, thin-edge sliver smoke, and hand-occlusion fragment smoke. The production training-data factory is still not complete. The next bottleneck is promoting smoke-ready recipes through real-gated P1 training experiments, then improving promotion rules and full operations.
+Current completion status: asset-bank audit coverage, renderer, and label contract are proven at P0; target/recipe coverage is explicit; and WebGL packages carry QA, recipe, ignored-fragment metadata, fragment evidence-review metadata, fragment ambiguity ignore policy, geometric postprocess label guards, deterministic visual-quality gates, human visual-review packs, smoke/trainable-candidate gates, clean-scene smoke, hard-negative zero-box smoke, thin-edge sliver smoke, and hand-occlusion fragment smoke. The production training-data factory is still not complete. The next bottleneck is promoting smoke-ready recipes through real-gated P1 training experiments, then improving promotion rules and full operations.
 
 ## Work Loop
 
@@ -262,6 +262,7 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-05-31 21:51 | renderer | keep | Added `--fragment-review-policy`; diagnostic packages keep review-required fragment labels, while trainable fragment views can move ambiguous components to ignored metadata with `requires_human_review`. Hand-occlusion trainable fragment probe passed with 28 trainable fragments, 10 ignored fragments, and 0 review-required labels. |
 | 2026-05-31 21:54 | renderer | keep | Added a label-transform guard to `check_webgl_label_views.py`: geometric postprocess keys such as crop, resize, radial distortion, perspective, homography, warp, or scale now fail unless an exact shared RGB/ID/label transform path is implemented. Current WebGL packages declare non-geometric RGB-only postprocess. |
 | 2026-05-31 21:57 | harness | keep | Added `run_webgl_trainable_candidate_pipeline.py` to chain trainable suite checks/renders, trainable-gated mix build, WebGL visual review pack/check, P1 readiness, and optional tiny train smoke from one audited command sequence. |
+| 2026-05-31 22:00 | assets | keep | Extended `audit_cutout_bank.py` to summarize design generation, circulation priority, license/usage status, alpha quality, dimensions, and visual QA status. Current Numista bank remains internal/reference until usage review is complete; the script now makes that blocker explicit. |
 
 ## Current Active Assets
 
