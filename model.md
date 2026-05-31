@@ -69,7 +69,7 @@ Definition of done for the synthetic pipeline:
 - [ ] Operations are one-command reproducible: render, QA/package, train under headroom, evaluate clean/real/browser guards, and clean scratch outputs.
 - [ ] Promotion rules require real-scoreboard improvement, clean-validation guardrails, browser/deploy guardrails, and enough metadata to diagnose regressions.
 
-Current completion status: the first bounded WebGL trainable-candidate suite is rendered and gated. Its mix YAML validates as 304 images / 1152 boxes, and the sampled 84-row visual review pack is generated but still pending human review. P1 transfer remains blocked by 0 promoted real benchmark labels, so the next bottleneck is real-label promotion before trusting training gains.
+Current completion status: the first bounded WebGL trainable-candidate suite is rendered and gated. Its mix YAML validates as 304 images / 1152 boxes, packages now export physical count targets separate from fragment evidence, and the sampled 84-row visual review pack is generated but still pending human review. P1 transfer remains blocked by 0 promoted real benchmark labels; use the local benchmark review index to make that review/promotion step small and explicit.
 
 ## Work Loop
 
@@ -202,6 +202,7 @@ rl python scripts\check_real_fan_benchmark.py
 Dry-run reviewed real-label promotion:
 
 ```powershell
+rl python scripts\build_benchmark_review_index.py
 rl python scripts\promote_real_benchmark_label.py --image-id real_overlap_0003_commons_shop_5k_10k_20k
 ```
 
@@ -222,10 +223,10 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-05-30 | data | keep | Numista cutout bank is the canonical clean asset source for now: 76 assets with full 13-class front/back coverage. It remains internal/reference until usage review is complete, and the audit still flags 3 red-mark visual suspects. |
 | 2026-05-30 | targets | keep | `cashsnap_real_target_matrix_v1` and the WebGL recipe catalog map real target conditions to synthetic recipe slots, promotion gates, and blockers; use `check_synthetic_recipe_catalog.py` before changing coverage. |
 | 2026-05-30 | packaging | keep | WebGL packages are auditable: `qa/summary.json`, `recipe.json`, preview overlays, visual+ID mask overlays, `qa/quarantine.json`, `qa/contact_index.json`, deterministic hashes, and label-view QA are all part of the contract. |
-| 2026-05-30 | smoke | keep | Smoke-ready WebGL modes are clean, stack, fan, negative, thin-edge, and hand-occlusion. The gated smoke mix is diagnostic-only (19 images / 64 boxes), not a training-performance claim. |
+| 2026-05-30 | smoke | keep | Smoke-ready WebGL modes are clean, stack, fan, negative, thin-edge, and hand-occlusion. The refreshed gated smoke mix is diagnostic-only (19 images / 67 boxes), not a training-performance claim. |
 | 2026-05-31 | evaluation | blocked | P1 transfer is still blocked by 0 promoted real benchmark labels. `real_overlap_0003_commons_shop_5k_10k_20k` is a 6-box draft candidate, but it needs explicit human review before it becomes benchmark truth. |
 | 2026-05-31 | training | note | The smoke tiny train is only a harness proof: after YAML root normalization, 1 epoch under headroom completed with diagnostic mAP50-95 around `0.002`. Do not read it as model quality. |
-| 2026-05-31 | gates | keep | Trainable-candidate gates pass for all 7 rendered roots; the gated mix validates as 304 images / 1152 boxes, and the sampled 84-row visual review pack is pending human review. Full P1 remains blocked by 0 promoted real labels. |
+| 2026-05-31 | gates | keep | Trainable-candidate gates pass for all 7 rendered roots; the gated mix validates as 304 images / 1152 boxes, package QA verifies physical count targets separately from fragment evidence, and the sampled 84-row visual review pack is pending human review. Full P1 remains blocked by 0 promoted real labels. |
 | 2026-05-31 | policy | keep | Current trainable policy includes deterministic visual QA, fragment review/ignore metadata, geometric transform guards, explicit asset-side policy, explicit phone camera profiles, and background-bank review gates. No trainable background bank is accepted yet. |
 | 2026-05-31 | operations | keep | Headless Edge is already GPU-backed on this laptop (`ANGLE` on RTX 4060/D3D11). Suite rows own `visual_scale`; global `--visual-scale` is only an explicit override. Hard-negative mode uses primitive non-banknote props so zero-box frames are not blank tables. |
 

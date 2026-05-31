@@ -487,6 +487,11 @@ def write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
+def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps(row, sort_keys=True) + "\n" for row in rows), encoding="utf-8")
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -515,6 +520,108 @@ def summarize_values(values: list[float]) -> dict[str, float]:
     }
 
 
+def counter_payload(counter: Counter[str]) -> dict[str, int]:
+    return {key: int(counter[key]) for key in sorted(counter)}
+
+
+def count_by_class(rows: list[dict[str, object]]) -> Counter[str]:
+    return Counter(str(row.get("className", "unknown")) for row in rows)
+
+
+def parent_fused_counts(fragment_rows: list[dict[str, object]]) -> Counter[str]:
+    parent_keys = {
+        (int(row["parentVisibleIndex"]), str(row.get("className", "unknown")))
+        for row in fragment_rows
+    }
+    return Counter(class_name for _parent_index, class_name in parent_keys)
+
+
+def split_parent_count(fragment_rows: list[dict[str, object]]) -> int:
+    parent_fragment_counts: Counter[tuple[int, str]] = Counter(
+        (int(row["parentVisibleIndex"]), str(row.get("className", "unknown")))
+        for row in fragment_rows
+    )
+    return sum(1 for count in parent_fragment_counts.values() if count > 1)
+
+
+def count_block(counter: Counter[str]) -> dict[str, object]:
+    return {"total": int(sum(counter.values())), "by_class": counter_payload(counter)}
+
+
+def build_count_target(
+    *,
+    variant: int,
+    image_path: Path,
+    out_root: Path,
+    visible_boxes: list[dict[str, object]],
+    fragment_metadata: list[dict[str, object]],
+    ignored_fragment_metadata: list[dict[str, object]],
+) -> dict[str, object]:
+    physical_counts = count_by_class(visible_boxes)
+    kept_fragment_counts = count_by_class(fragment_metadata)
+    ignored_fragment_counts = count_by_class(ignored_fragment_metadata)
+    all_fragment_metadata = [*fragment_metadata, *ignored_fragment_metadata]
+    parent_fused_kept_counts = parent_fused_counts(fragment_metadata)
+    parent_fused_all_counts = parent_fused_counts(all_fragment_metadata)
+    physical_total = int(sum(physical_counts.values()))
+    kept_total = len(fragment_metadata)
+    all_total = len(all_fragment_metadata)
+    return {
+        "variant": variant,
+        "image": str(image_path.relative_to(out_root)),
+        "physical_visible_instances": count_block(physical_counts),
+        "kept_fragments": count_block(kept_fragment_counts),
+        "ignored_fragments": count_block(ignored_fragment_counts),
+        "parent_fused_kept_fragments": count_block(parent_fused_kept_counts),
+        "parent_fused_all_fragments": count_block(parent_fused_all_counts),
+        "naive_kept_fragment_overcount": int(kept_total - physical_total),
+        "naive_all_fragment_overcount": int(all_total - physical_total),
+        "kept_split_parent_count": split_parent_count(fragment_metadata),
+        "all_split_parent_count": split_parent_count(all_fragment_metadata),
+        "policy": {
+            "count_truth": "physical_visible_instances",
+            "fragment_counts": "visible evidence components; do not use directly as bill totals",
+            "parent_fused_all_fragments": "synthetic oracle fusion target that should match physical_visible_instances",
+        },
+    }
+
+
+def merge_count_blocks(rows: list[dict[str, object]], key: str) -> Counter[str]:
+    merged: Counter[str] = Counter()
+    for row in rows:
+        block = row.get(key, {})
+        by_class = block.get("by_class", {}) if isinstance(block, dict) else {}
+        if isinstance(by_class, dict):
+            merged.update({str(name): int(count) for name, count in by_class.items()})
+    return merged
+
+
+def summarize_count_targets(rows: list[dict[str, object]]) -> dict[str, object]:
+    physical_counts = merge_count_blocks(rows, "physical_visible_instances")
+    kept_fragment_counts = merge_count_blocks(rows, "kept_fragments")
+    ignored_fragment_counts = merge_count_blocks(rows, "ignored_fragments")
+    parent_fused_kept_counts = merge_count_blocks(rows, "parent_fused_kept_fragments")
+    parent_fused_all_counts = merge_count_blocks(rows, "parent_fused_all_fragments")
+    return {
+        "images": len(rows),
+        "physical_visible_instances": count_block(physical_counts),
+        "kept_fragments": count_block(kept_fragment_counts),
+        "ignored_fragments": count_block(ignored_fragment_counts),
+        "parent_fused_kept_fragments": count_block(parent_fused_kept_counts),
+        "parent_fused_all_fragments": count_block(parent_fused_all_counts),
+        "parent_fused_all_matches_physical": parent_fused_all_counts == physical_counts,
+        "naive_kept_fragment_overcount": int(sum(int(row["naive_kept_fragment_overcount"]) for row in rows)),
+        "naive_all_fragment_overcount": int(sum(int(row["naive_all_fragment_overcount"]) for row in rows)),
+        "kept_split_parent_count": int(sum(int(row["kept_split_parent_count"]) for row in rows)),
+        "all_split_parent_count": int(sum(int(row["all_split_parent_count"]) for row in rows)),
+        "policy": {
+            "count_truth": "physical_visible_instances",
+            "fragment_counts": "visible evidence components; do not use directly as bill totals",
+            "parent_fused_all_fragments": "synthetic oracle fusion target that should match physical_visible_instances",
+        },
+    }
+
+
 def prepare_empty_dir(directory: Path, out_root: Path) -> None:
     resolved_directory = directory.resolve()
     resolved_root = out_root.resolve()
@@ -530,7 +637,7 @@ def write_yolo_dataset(
     out_root: Path,
     fallback_scene_mode: str,
     fragment_review_policy: str,
-) -> tuple[Path, Path, Path]:
+) -> tuple[Path, Path, Path, Path, Path]:
     images_dir = out_root / "images" / "train"
     labels_dir = out_root / "labels" / "train"
     ids_dir = out_root / "ids" / "train"
@@ -544,6 +651,7 @@ def write_yolo_dataset(
     fragment_labels_dir = out_root / "fragments" / "labels" / "train"
     fragment_metadata_dir = out_root / "fragments" / "metadata" / "train"
     fragment_ignored_metadata_dir = out_root / "fragments" / "ignored_metadata" / "train"
+    counts_dir = out_root / "counts"
     qa_dir = out_root / "qa"
     preview_dir = qa_dir / "previews"
     for directory in (
@@ -560,6 +668,7 @@ def write_yolo_dataset(
         fragment_labels_dir,
         fragment_metadata_dir,
         fragment_ignored_metadata_dir,
+        counts_dir,
         qa_dir,
         preview_dir,
     ):
@@ -589,6 +698,7 @@ def write_yolo_dataset(
     fragments_per_parent_values: list[float] = []
     obb_reject_reason_counts: Counter[str] = Counter()
     image_summary_rows: list[dict[str, object]] = []
+    count_target_rows: list[dict[str, object]] = []
     quarantine_rows: list[dict[str, object]] = []
     visual_quality_rows: list[dict[str, object]] = []
     visual_quality_status_counts: Counter[str] = Counter()
@@ -680,6 +790,16 @@ def write_yolo_dataset(
         write_lines(fragment_label_path, fragment_rows)
         write_json(fragment_metadata_path, fragment_metadata)
         write_json(fragment_ignored_metadata_path, ignored_fragment_metadata)
+        count_target_rows.append(
+            build_count_target(
+                variant=variant,
+                image_path=image_path,
+                out_root=out_root,
+                visible_boxes=visible_boxes,
+                fragment_metadata=fragment_metadata,
+                ignored_fragment_metadata=ignored_fragment_metadata,
+            )
+        )
         draw_label_previews(image_path, visible_boxes, fragment_metadata, detect_preview_path, fragment_preview_path)
         write_id_overlay(image_path, id_path, id_overlay_path)
         fragment_counts["images"] += 1
@@ -862,6 +982,13 @@ def write_yolo_dataset(
             "policy": "Deterministic blankness/exposure gate; accepted status is necessary but not sufficient for human visual realism review.",
         },
     )
+    count_targets_path = counts_dir / "targets.jsonl"
+    count_summary_path = counts_dir / "summary.json"
+    count_summary = summarize_count_targets(count_target_rows)
+    if not count_summary["parent_fused_all_matches_physical"]:
+        raise RuntimeError("synthetic parent-fused fragment counts do not match physical visible counts")
+    write_jsonl(count_targets_path, count_target_rows)
+    write_json(count_summary_path, count_summary)
     write_json(
         out_root / "obb" / "summary.json",
         {
@@ -943,6 +1070,7 @@ def write_yolo_dataset(
                 "review_min_parent_fraction": FRAGMENT_REVIEW_MIN_PARENT_FRACTION,
                 "fragment_review_policy": fragment_review_policy,
             },
+            "count_targets": count_summary,
             "obb": {
                 "image_status_counts": dict(sorted(obb_image_status_counts.items())),
                 "instance_status_counts": dict(sorted(obb_instance_status_counts.items())),
@@ -1019,7 +1147,7 @@ def write_yolo_dataset(
         ),
         encoding="utf-8",
     )
-    return data_yaml, data_obb_yaml, data_fragments_yaml
+    return data_yaml, data_obb_yaml, data_fragments_yaml, count_targets_path, count_summary_path
 
 
 def rel(path: Path, root: Path = ROOT) -> str:
@@ -1036,6 +1164,8 @@ def write_recipe_metadata(
     data_yaml: Path,
     data_obb_yaml: Path,
     data_fragments_yaml: Path,
+    count_targets_path: Path,
+    count_summary_path: Path,
 ) -> None:
     recipe_name = args.recipe_name or f"webgl_{args.scene_mode}_variants_{args.start_variant}_{args.start_variant + args.count - 1}"
     payload = {
@@ -1083,6 +1213,8 @@ def write_recipe_metadata(
             "detect_data_yaml": rel(data_yaml),
             "obb_data_yaml": rel(data_obb_yaml),
             "fragment_data_yaml": rel(data_fragments_yaml),
+            "count_targets": rel(count_targets_path),
+            "count_summary": rel(count_summary_path),
             "manifest": rel(out_root / "manifest.json"),
             "qa_summary": rel(out_root / "qa" / "summary.json"),
             "contact_sheet": rel(contact_sheet),
@@ -1125,7 +1257,7 @@ def main() -> int:
 
     contact_sheet = out_root / "contact_sheet.png"
     contact_index = write_contact_sheet(variant_dirs, contact_sheet)
-    data_yaml, data_obb_yaml, data_fragments_yaml = write_yolo_dataset(
+    data_yaml, data_obb_yaml, data_fragments_yaml, count_targets_path, count_summary_path = write_yolo_dataset(
         variant_dirs,
         out_root,
         args.scene_mode,
@@ -1139,7 +1271,16 @@ def main() -> int:
             "cell_size": {"width": 320, "height": 240, "header_height": 30},
         },
     )
-    write_recipe_metadata(args, out_root, contact_sheet, data_yaml, data_obb_yaml, data_fragments_yaml)
+    write_recipe_metadata(
+        args,
+        out_root,
+        contact_sheet,
+        data_yaml,
+        data_obb_yaml,
+        data_fragments_yaml,
+        count_targets_path,
+        count_summary_path,
+    )
     if not args.skip_yolo_check:
         run([sys.executable, "scripts/check_yolo_dataset.py", "--data", str(data_yaml)])
     if not args.skip_label_view_check:
@@ -1148,6 +1289,8 @@ def main() -> int:
     print(f"wrote {data_yaml.relative_to(ROOT)}")
     print(f"wrote {data_obb_yaml.relative_to(ROOT)}")
     print(f"wrote {data_fragments_yaml.relative_to(ROOT)}")
+    print(f"wrote {count_targets_path.relative_to(ROOT)}")
+    print(f"wrote {count_summary_path.relative_to(ROOT)}")
     print(f"wrote {(out_root / 'recipe.json').relative_to(ROOT)}")
     return 0
 

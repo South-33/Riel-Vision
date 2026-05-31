@@ -45,6 +45,24 @@ def read_json(path: Path) -> object:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def read_jsonl(path: Path) -> list[dict[str, object]]:
+    if not path.exists():
+        raise SystemExit(f"missing JSONL file: {path}")
+    rows = []
+    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"{path}:{line_number}: invalid JSONL row") from exc
+        if not isinstance(row, dict):
+            raise SystemExit(f"{path}:{line_number}: JSONL row must be an object")
+        rows.append(row)
+    return rows
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -97,6 +115,107 @@ def assert_no_geometric_postprocess(metadata: object, metadata_path: Path) -> No
         )
 
 
+def counter_payload(counter: Counter[str]) -> dict[str, int]:
+    return {key: int(counter[key]) for key in sorted(counter)}
+
+
+def count_by_class(rows: list[dict[str, object]]) -> Counter[str]:
+    return Counter(str(row.get("className", "unknown")) for row in rows)
+
+
+def parent_fused_counts(fragment_rows: list[dict[str, object]]) -> Counter[str]:
+    parent_keys = {
+        (int(row["parentVisibleIndex"]), str(row.get("className", "unknown")))
+        for row in fragment_rows
+    }
+    return Counter(class_name for _parent_index, class_name in parent_keys)
+
+
+def split_parent_count(fragment_rows: list[dict[str, object]]) -> int:
+    parent_fragment_counts: Counter[tuple[int, str]] = Counter(
+        (int(row["parentVisibleIndex"]), str(row.get("className", "unknown")))
+        for row in fragment_rows
+    )
+    return sum(1 for count in parent_fragment_counts.values() if count > 1)
+
+
+def count_block(counter: Counter[str]) -> dict[str, object]:
+    return {"total": int(sum(counter.values())), "by_class": counter_payload(counter)}
+
+
+def build_count_target(
+    *,
+    variant: int,
+    image: str,
+    visible_boxes: list[dict[str, object]],
+    fragment_metadata: list[dict[str, object]],
+    ignored_fragment_metadata: list[dict[str, object]],
+) -> dict[str, object]:
+    physical_counts = count_by_class(visible_boxes)
+    kept_fragment_counts = count_by_class(fragment_metadata)
+    ignored_fragment_counts = count_by_class(ignored_fragment_metadata)
+    all_fragment_metadata = [*fragment_metadata, *ignored_fragment_metadata]
+    parent_fused_kept_counts = parent_fused_counts(fragment_metadata)
+    parent_fused_all_counts = parent_fused_counts(all_fragment_metadata)
+    physical_total = int(sum(physical_counts.values()))
+    kept_total = len(fragment_metadata)
+    all_total = len(all_fragment_metadata)
+    return {
+        "variant": variant,
+        "image": image,
+        "physical_visible_instances": count_block(physical_counts),
+        "kept_fragments": count_block(kept_fragment_counts),
+        "ignored_fragments": count_block(ignored_fragment_counts),
+        "parent_fused_kept_fragments": count_block(parent_fused_kept_counts),
+        "parent_fused_all_fragments": count_block(parent_fused_all_counts),
+        "naive_kept_fragment_overcount": int(kept_total - physical_total),
+        "naive_all_fragment_overcount": int(all_total - physical_total),
+        "kept_split_parent_count": split_parent_count(fragment_metadata),
+        "all_split_parent_count": split_parent_count(all_fragment_metadata),
+        "policy": {
+            "count_truth": "physical_visible_instances",
+            "fragment_counts": "visible evidence components; do not use directly as bill totals",
+            "parent_fused_all_fragments": "synthetic oracle fusion target that should match physical_visible_instances",
+        },
+    }
+
+
+def merge_count_blocks(rows: list[dict[str, object]], key: str) -> Counter[str]:
+    merged: Counter[str] = Counter()
+    for row in rows:
+        block = row.get(key, {})
+        by_class = block.get("by_class", {}) if isinstance(block, dict) else {}
+        if isinstance(by_class, dict):
+            merged.update({str(name): int(count) for name, count in by_class.items()})
+    return merged
+
+
+def summarize_count_targets(rows: list[dict[str, object]]) -> dict[str, object]:
+    physical_counts = merge_count_blocks(rows, "physical_visible_instances")
+    kept_fragment_counts = merge_count_blocks(rows, "kept_fragments")
+    ignored_fragment_counts = merge_count_blocks(rows, "ignored_fragments")
+    parent_fused_kept_counts = merge_count_blocks(rows, "parent_fused_kept_fragments")
+    parent_fused_all_counts = merge_count_blocks(rows, "parent_fused_all_fragments")
+    return {
+        "images": len(rows),
+        "physical_visible_instances": count_block(physical_counts),
+        "kept_fragments": count_block(kept_fragment_counts),
+        "ignored_fragments": count_block(ignored_fragment_counts),
+        "parent_fused_kept_fragments": count_block(parent_fused_kept_counts),
+        "parent_fused_all_fragments": count_block(parent_fused_all_counts),
+        "parent_fused_all_matches_physical": parent_fused_all_counts == physical_counts,
+        "naive_kept_fragment_overcount": int(sum(int(row["naive_kept_fragment_overcount"]) for row in rows)),
+        "naive_all_fragment_overcount": int(sum(int(row["naive_all_fragment_overcount"]) for row in rows)),
+        "kept_split_parent_count": int(sum(int(row["kept_split_parent_count"]) for row in rows)),
+        "all_split_parent_count": int(sum(int(row["all_split_parent_count"]) for row in rows)),
+        "policy": {
+            "count_truth": "physical_visible_instances",
+            "fragment_counts": "visible evidence components; do not use directly as bill totals",
+            "parent_fused_all_fragments": "synthetic oracle fusion target that should match physical_visible_instances",
+        },
+    }
+
+
 def main() -> int:
     args = parse_args()
     dataset_root = resolve_path(args.root)
@@ -104,6 +223,11 @@ def main() -> int:
     if not isinstance(manifest, list) or not manifest:
         raise SystemExit("manifest.json must be a non-empty list")
     manifest_by_variant = {}
+    count_target_rows = read_jsonl(dataset_root / "counts" / "targets.jsonl")
+    if len(count_target_rows) != len(manifest):
+        raise SystemExit("count target row count mismatch")
+    count_targets_by_variant = {int(row["variant"]): row for row in count_target_rows}
+    expected_count_targets: list[dict[str, object]] = []
 
     trainable_obb_images = 0
     rejected_obb_images = 0
@@ -117,7 +241,8 @@ def main() -> int:
     for row in manifest:
         if not isinstance(row, dict):
             raise SystemExit("manifest row must be an object")
-        manifest_by_variant[int(row["variant"])] = row
+        variant = int(row["variant"])
+        manifest_by_variant[variant] = row
         boxes_doc = read_json(dataset_root / row["visible_boxes"])
         source_metadata_path = dataset_root / row["source_metadata"]
         assert_no_geometric_postprocess(read_json(source_metadata_path), source_metadata_path)
@@ -179,6 +304,16 @@ def main() -> int:
             if fragment.get("evidence_status") != "ignored":
                 raise SystemExit(f"{row['fragment_ignored_metadata']}: ignored fragment evidence_status must be ignored")
         ignored_fragment_count += len(ignored_fragment_metadata)
+        expected_count_target = build_count_target(
+            variant=variant,
+            image=str(row["image"]),
+            visible_boxes=visible_boxes,
+            fragment_metadata=fragment_metadata,
+            ignored_fragment_metadata=ignored_fragment_metadata,
+        )
+        expected_count_targets.append(expected_count_target)
+        if count_targets_by_variant.get(variant) != expected_count_target:
+            raise SystemExit(f"counts/targets.jsonl: count target mismatch for variant {variant}")
 
         obb_status = row.get("obb_status")
         if obb_status == "accepted":
@@ -199,6 +334,14 @@ def main() -> int:
 
     obb_summary = read_json(dataset_root / "obb" / "summary.json")
     fragment_summary = read_json(dataset_root / "fragments" / "summary.json")
+    count_summary = read_json(dataset_root / "counts" / "summary.json")
+    expected_count_summary = summarize_count_targets(expected_count_targets)
+    if set(count_targets_by_variant) != set(manifest_by_variant):
+        raise SystemExit("count target variants do not match manifest")
+    if count_summary != expected_count_summary:
+        raise SystemExit("count summary mismatch")
+    if not expected_count_summary["parent_fused_all_matches_physical"]:
+        raise SystemExit("parent-fused all-fragment counts do not match physical counts")
     if obb_summary.get("trainable_obb_images") != trainable_obb_images:
         raise SystemExit("obb summary trainable image count mismatch")
     if obb_summary.get("rejected_obb_images") != rejected_obb_images:
@@ -245,6 +388,8 @@ def main() -> int:
         raise SystemExit("qa summary fragment evidence status count mismatch")
     if qa_summary.get("fragments", {}).get("evidence_warning_counts") != dict(sorted(fragment_evidence_warning_counts.items())):
         raise SystemExit("qa summary fragment evidence warning count mismatch")
+    if qa_summary.get("count_targets") != expected_count_summary:
+        raise SystemExit("qa summary count target mismatch")
     if qa_summary.get("class_counts") != dict(sorted(class_counts.items())):
         raise SystemExit("qa summary class count mismatch")
     if qa_summary.get("layer_audit_totals") != dict(sorted(layer_audit_totals.items())):
@@ -287,10 +432,19 @@ def main() -> int:
         expected = str((dataset_root / "qa" / "visual_quality.json").relative_to(ROOT))
         if outputs["visual_quality"] != expected:
             raise SystemExit("recipe visual_quality output path mismatch")
+    if outputs.get("count_targets"):
+        expected = str((dataset_root / "counts" / "targets.jsonl").relative_to(ROOT))
+        if outputs["count_targets"] != expected:
+            raise SystemExit("recipe count_targets output path mismatch")
+    if outputs.get("count_summary"):
+        expected = str((dataset_root / "counts" / "summary.json").relative_to(ROOT))
+        if outputs["count_summary"] != expected:
+            raise SystemExit("recipe count_summary output path mismatch")
 
     print(
         f"ok: {len(manifest)} images, {fragment_count} fragments, "
-        f"{trainable_obb_images} trainable OBB images, {rejected_obb_images} rejected OBB images"
+        f"{trainable_obb_images} trainable OBB images, {rejected_obb_images} rejected OBB images, "
+        f"{expected_count_summary['physical_visible_instances']['total']} physical count targets"
     )
     return 0
 
