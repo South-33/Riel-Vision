@@ -23,6 +23,10 @@ VALID_CAMERA_PROFILES = {
     "iphone_12_wide_like",
     "budget_android_wide_like",
     "browser_upload_resized",
+    "phone_top_down_like",
+    "phone_oblique_30_like",
+    "phone_oblique_45_like",
+    "phone_low_front_like",
 }
 RUNNABLE_STATUSES = {"smoke_ready", "label_policy_ready", "diagnostic", "trainable-candidate", "promoted"}
 

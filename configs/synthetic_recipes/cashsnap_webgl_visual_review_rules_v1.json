@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "name": "cashsnap_webgl_visual_review_rules_v1",
-  "description": "Human review rules for WebGL synthetic packages. Deterministic visual_quality acceptance is necessary but not sufficient for trainable promotion.",
+  "description": "Visual audit rules for WebGL synthetic packages. Deterministic visual_quality acceptance is necessary but not sufficient for trainable promotion.",
   "accepted_statuses": ["accept"],
   "blocking_statuses": ["reject", "needs_fix", "defer"],
   "review_statuses": [

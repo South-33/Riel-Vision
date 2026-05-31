@@ -28,6 +28,12 @@ def parse_args() -> argparse.Namespace:
         default=12,
         help="Sample this many packaged scenes per recipe for visual review; 0 means include every image.",
     )
+    parser.add_argument(
+        "--review-selection-policy",
+        choices=["easy", "random"],
+        default="easy",
+        help="Choose lower-clutter scenes first, or random scenes, when sampling the visual review pack.",
+    )
     parser.add_argument("--require-visual-review", action="store_true", help="Require review.csv to have accepted rows only.")
     parser.add_argument("--skip-p1-readiness", action="store_true")
     parser.add_argument("--train-smoke", action="store_true", help="Run a tiny headroom training smoke on the candidate mix.")
@@ -121,6 +127,8 @@ def main() -> int:
                 review_out,
                 "--max-images-per-recipe",
                 str(args.max_review_images_per_recipe),
+                "--selection-policy",
+                args.review_selection_policy,
             ],
             args.dry_run,
         )

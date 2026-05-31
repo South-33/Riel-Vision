@@ -77,6 +77,10 @@ def parse_args() -> argparse.Namespace:
             "iphone_12_wide_like",
             "budget_android_wide_like",
             "browser_upload_resized",
+            "phone_top_down_like",
+            "phone_oblique_30_like",
+            "phone_oblique_45_like",
+            "phone_low_front_like",
         ],
         default="generic_phone_jitter",
         help="Select WebGL camera/FOV/framing profile.",
@@ -447,7 +451,7 @@ def build_fragment_labels(
                         **component_metadata,
                         "evidence_status": "ignored",
                         "evidence_warnings": evidence_warnings,
-                        "ignore_reason": "requires_human_review",
+                        "ignore_reason": "requires_visual_audit",
                         "min_fragment_pixels": FRAGMENT_MIN_PIXELS,
                         "review_min_fragment_pixels": FRAGMENT_REVIEW_MIN_PIXELS,
                         "review_min_parent_fraction": FRAGMENT_REVIEW_MIN_PARENT_FRACTION,
@@ -887,7 +891,7 @@ def write_yolo_dataset(
                     "view": "fragment",
                     "action": (
                         "ignored_ambiguous_fragment_components"
-                        if ignored_reasons == ["requires_human_review"]
+                        if ignored_reasons == ["requires_visual_audit"]
                         else "ignored_fragment_components"
                     ),
                     "reasons": ignored_reasons,
@@ -979,7 +983,7 @@ def write_yolo_dataset(
                 "max_dark_fraction": VISUAL_MAX_DARK_FRACTION,
                 "max_light_fraction": VISUAL_MAX_LIGHT_FRACTION,
             },
-            "policy": "Deterministic blankness/exposure gate; accepted status is necessary but not sufficient for human visual realism review.",
+            "policy": "Deterministic blankness/exposure gate; accepted status is necessary but not sufficient for visual realism audit.",
         },
     )
     count_targets_path = counts_dir / "targets.jsonl"

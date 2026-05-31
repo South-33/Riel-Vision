@@ -57,7 +57,7 @@ Definition of done for the synthetic pipeline:
 - [x] Hard-negative scene mode emits valid zero-box/zero-fragment packages with empty YOLO labels and full smoke QA.
 - [x] Thin-edge scene mode emits visible sliver packages with card/paper occluders and records unsafe OBB/fragment exclusions.
 - [x] Broader hand-occlusion scene mode emits multi-finger split-fragment packages and quarantines unsafe OBB views.
-- [x] Full human visual QA suite includes realism snapshots and bad-scene review rules beyond deterministic blankness/exposure gates.
+- [x] Full visual QA suite includes realism snapshots and bad-scene audit rules beyond deterministic blankness/exposure gates.
 - [x] Named synthetic recipe slots exist for clean/base, overlap, fan, hand occlusion, thin-edge partials, back-side confusion, rare-class support, hard negatives, and calibration mixes in `configs/synthetic_recipes/cashsnap_webgl_recipe_catalog_v1.json`.
 - [x] Batch outputs include `recipe.json` with recipe name, smoke/diagnostic/trainable-candidate status, variant seed range, intended use, checks, outputs, and trainability policy.
 - [x] Smoke-ready WebGL recipes can be run or repackaged as a single gated suite.
@@ -69,7 +69,7 @@ Definition of done for the synthetic pipeline:
 - [ ] Operations are one-command reproducible: render, QA/package, train under headroom, evaluate clean/real/browser guards, and clean scratch outputs.
 - [ ] Promotion rules require real-scoreboard improvement, clean-validation guardrails, browser/deploy guardrails, and enough metadata to diagnose regressions.
 
-Current completion status: the first bounded WebGL trainable-candidate suite is rendered and gated. Its mix YAML validates as 304 images / 1152 boxes, packages now export physical count targets separate from fragment evidence, and the sampled 84-row visual review pack is generated but still pending human review. P1 transfer remains blocked by 0 promoted real fan/overlap stress labels; `real_overlap_0003_commons_shop_5k_10k_20k` is only a visible-denomination/mild-overlap sanity label, not a dense-overlap proof.
+Current completion status: the first bounded WebGL trainable-candidate suite is rendered, gated, and train-smoke proven under headroom. Its mix YAML validates as 304 images / 1152 boxes, packages export physical count targets separate from fragment evidence, and the sampled 84-row visual audit pack now defaults to lower-clutter scenes. One visible-denomination/mild-overlap sanity label is promoted by Codex visual audit, but P1 transfer remains blocked by 0 promoted real fan/overlap stress labels.
 
 ## Work Loop
 
@@ -224,9 +224,10 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-05-30 | targets | keep | `cashsnap_real_target_matrix_v1` and the WebGL recipe catalog map real target conditions to synthetic recipe slots, promotion gates, and blockers; use `check_synthetic_recipe_catalog.py` before changing coverage. |
 | 2026-05-30 | packaging | keep | WebGL packages are auditable: `qa/summary.json`, `recipe.json`, preview overlays, visual+ID mask overlays, `qa/quarantine.json`, `qa/contact_index.json`, deterministic hashes, and label-view QA are all part of the contract. |
 | 2026-05-30 | smoke | keep | Smoke-ready WebGL modes are clean, stack, fan, negative, thin-edge, and hand-occlusion. The refreshed gated smoke mix is diagnostic-only (19 images / 67 boxes), not a training-performance claim. |
-| 2026-05-31 | evaluation | blocked | P1 transfer is still blocked by 0 promoted real fan/overlap stress labels. `real_overlap_0003_commons_shop_5k_10k_20k` is a 6-box visible-denomination/mild-overlap draft only; useful sanity data, but not a full overlap/fan proof. |
+| 2026-05-31 | evaluation | blocked | `real_overlap_0003_commons_shop_5k_10k_20k` is promoted as a 6-box visible-denomination/mild-overlap sanity label by Codex visual audit. P1 transfer is still blocked by 0 promoted real fan/overlap stress labels. |
 | 2026-05-31 | training | note | The smoke tiny train is only a harness proof: after YAML root normalization, 1 epoch under headroom completed with diagnostic mAP50-95 around `0.002`. Do not read it as model quality. |
-| 2026-05-31 | gates | keep | Trainable-candidate gates pass for all 7 rendered roots; the gated mix validates as 304 images / 1152 boxes, package QA verifies physical count targets separately from fragment evidence, and the sampled 84-row visual review pack is pending human review. Full P1 remains blocked by 0 promoted real labels. |
+| 2026-05-31 | training | note | The 304-image WebGL trainable-candidate mix runs through YOLO training under headroom. Batch 2 hit the 90% RAM cap, the wrapper relaunched at batch 1/pause-resume, and the diagnostic 1-epoch smoke ended around mAP50-95 `0.000385`; this is trainability evidence only. |
+| 2026-05-31 | gates | keep | Trainable-candidate gates pass for all 7 rendered roots; the gated mix validates as 304 images / 1152 boxes, package QA verifies physical count targets separately from fragment evidence, and the sampled 84-row visual audit pack defaults to easier low-clutter rows. Full P1 remains blocked by 0 promoted real stress labels. |
 | 2026-05-31 | policy | keep | Current trainable policy includes deterministic visual QA, fragment review/ignore metadata, geometric transform guards, explicit asset-side policy, explicit phone camera profiles, and background-bank review gates. No trainable background bank is accepted yet. |
 | 2026-05-31 | operations | keep | Headless Edge is already GPU-backed on this laptop (`ANGLE` on RTX 4060/D3D11). Suite rows own `visual_scale`; global `--visual-scale` is only an explicit override. Hard-negative mode uses primitive non-banknote props so zero-box frames are not blank tables. |
 

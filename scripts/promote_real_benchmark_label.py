@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Promote a reviewed real benchmark YOLO label file into the scoreable val set."""
+"""Promote a visually audited real benchmark YOLO label file into the scoreable val set."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--quality-manifest", type=Path, default=DEFAULT_QUALITY, help="Per-box quality manifest.")
     parser.add_argument("--promotion-log", type=Path, default=DEFAULT_PROMOTION_LOG, help="Append-only promotion audit CSV.")
     parser.add_argument("--preview-out", type=Path, default=None, help="Optional promoted-label preview image path.")
-    parser.add_argument("--reviewed-by", default="", help="Reviewer name/id required with --confirm-reviewed.")
+    parser.add_argument("--reviewed-by", default="", help="Reviewer/agent name or id required with --confirm-reviewed.")
     parser.add_argument("--review-notes", default="", help="Short audit note for the promotion log.")
     parser.add_argument("--allow-missing-quality", action="store_true", help="Allow promotion without full scoreable quality rows.")
     parser.add_argument("--skip-preview", action="store_true", help="Do not render a promoted-label preview.")
@@ -280,7 +280,7 @@ def main() -> int:
     print(f"label_count: {len(class_ids)}")
     print(f"class_counts: {', '.join(f'{CLASS_NAMES[class_id]}={class_ids.count(class_id)}' for class_id in sorted(set(class_ids)))}")
     if not args.confirm_reviewed:
-        print("dry-run: add --confirm-reviewed --reviewed-by NAME after human review to update benchmark manifests")
+        print("dry-run: add --confirm-reviewed --reviewed-by NAME after visual audit to update benchmark manifests")
         return 0
 
     label_dir.mkdir(parents=True, exist_ok=True)

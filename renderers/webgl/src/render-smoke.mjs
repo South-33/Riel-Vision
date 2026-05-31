@@ -95,8 +95,19 @@ if (!["any", "front_only", "back_only", "front_back_mix"].includes(ASSET_SIDE_PO
   throw new Error("--asset-side-policy must be one of: any, front_only, back_only, front_back_mix");
 }
 
-if (!["generic_phone_jitter", "phone_auto", "iphone_8_like", "iphone_12_wide_like", "budget_android_wide_like", "browser_upload_resized"].includes(CAMERA_PROFILE)) {
-  throw new Error("--camera-profile must be one of: generic_phone_jitter, phone_auto, iphone_8_like, iphone_12_wide_like, budget_android_wide_like, browser_upload_resized");
+if (![
+  "generic_phone_jitter",
+  "phone_auto",
+  "iphone_8_like",
+  "iphone_12_wide_like",
+  "budget_android_wide_like",
+  "browser_upload_resized",
+  "phone_top_down_like",
+  "phone_oblique_30_like",
+  "phone_oblique_45_like",
+  "phone_low_front_like",
+].includes(CAMERA_PROFILE)) {
+  throw new Error("--camera-profile must be one of: generic_phone_jitter, phone_auto, iphone_8_like, iphone_12_wide_like, budget_android_wide_like, browser_upload_resized, phone_top_down_like, phone_oblique_30_like, phone_oblique_45_like, phone_low_front_like");
 }
 
 const effectiveSceneMode = SCENE_MODE === "auto" ? (VARIANT >= 100 ? "fan" : "stack") : SCENE_MODE;
@@ -198,13 +209,65 @@ const CAMERA_PROFILES = {
     lookAtX: [-0.05, 0.05],
     lookAtY: [-0.03, 0.05],
   },
+  phone_top_down_like: {
+    source: "cashsnap_viewpoint_v1",
+    weight: 0.20,
+    targetResolution: [1440, 1080],
+    fov: [48, 64],
+    positionX: [-0.12, 0.12],
+    positionY: [-0.22, 0.10],
+    positionZ: [2.10, 2.65],
+    lookAtX: [-0.05, 0.05],
+    lookAtY: [-0.04, 0.06],
+  },
+  phone_oblique_30_like: {
+    source: "cashsnap_viewpoint_v1",
+    weight: 0.30,
+    targetResolution: [1440, 1080],
+    fov: [52, 68],
+    positionX: [-0.18, 0.18],
+    positionY: [-0.90, -0.55],
+    positionZ: [1.55, 2.05],
+    lookAtX: [-0.06, 0.06],
+    lookAtY: [-0.02, 0.12],
+  },
+  phone_oblique_45_like: {
+    source: "cashsnap_viewpoint_v1",
+    weight: 0.25,
+    targetResolution: [1440, 1080],
+    fov: [58, 76],
+    positionX: [-0.22, 0.22],
+    positionY: [-1.45, -0.95],
+    positionZ: [1.25, 1.75],
+    lookAtX: [-0.08, 0.08],
+    lookAtY: [0.00, 0.18],
+  },
+  phone_low_front_like: {
+    source: "cashsnap_viewpoint_v1",
+    weight: 0.12,
+    targetResolution: [1440, 1080],
+    fov: [64, 82],
+    positionX: [-0.25, 0.25],
+    positionY: [-1.95, -1.35],
+    positionZ: [0.95, 1.35],
+    lookAtX: [-0.10, 0.10],
+    lookAtY: [0.08, 0.28],
+  },
 };
 
 function chooseCameraProfile(rng, requestedProfile) {
   if (requestedProfile !== "phone_auto") {
     return { name: requestedProfile, ...CAMERA_PROFILES[requestedProfile] };
   }
-  const candidates = ["iphone_8_like", "iphone_12_wide_like", "budget_android_wide_like", "browser_upload_resized"];
+  const candidates = [
+    "phone_top_down_like",
+    "phone_oblique_30_like",
+    "phone_oblique_45_like",
+    "phone_low_front_like",
+    "iphone_12_wide_like",
+    "budget_android_wide_like",
+    "browser_upload_resized",
+  ];
   const totalWeight = candidates.reduce((total, name) => total + CAMERA_PROFILES[name].weight, 0);
   let threshold = rng() * totalWeight;
   for (const name of candidates) {
@@ -215,10 +278,35 @@ function chooseCameraProfile(rng, requestedProfile) {
   return { name: fallback, ...CAMERA_PROFILES[fallback] };
 }
 
+function cameraViewAngles(position, lookAt) {
+  const dx = position[0] - lookAt[0];
+  const dy = position[1] - lookAt[1];
+  const dz = position[2] - lookAt[2];
+  const horizontalDistance = Math.hypot(dx, dy);
+  const verticalDistance = Math.abs(dz);
+  const fromVertical = Math.atan2(horizontalDistance, verticalDistance) * 180 / Math.PI;
+  const aboveTable = Math.atan2(verticalDistance, horizontalDistance || 1e-6) * 180 / Math.PI;
+  return {
+    fromVerticalDeg: Number(fromVertical.toFixed(2)),
+    aboveTableDeg: Number(aboveTable.toFixed(2)),
+  };
+}
+
 function sceneConfig(variant, mode, backgroundPath) {
   const modeOffset = mode === "fan" ? 1009 : mode === "clean" ? 2003 : mode === "qa3" ? 3001 : mode === "negative" ? 4001 : mode === "thin_edge" ? 5003 : mode === "hand_occlusion" ? 6007 : 0;
   const rng = mulberry32(26058003 + variant * 191 + modeOffset);
   const cameraProfile = chooseCameraProfile(rng, CAMERA_PROFILE);
+  const cameraPosition = [
+    randomBetween(rng, ...cameraProfile.positionX),
+    randomBetween(rng, ...cameraProfile.positionY),
+    randomBetween(rng, ...cameraProfile.positionZ),
+  ];
+  const cameraLookAt = [
+    randomBetween(rng, ...cameraProfile.lookAtX),
+    randomBetween(rng, ...cameraProfile.lookAtY),
+    0,
+  ];
+  const cameraAngles = cameraViewAngles(cameraPosition, cameraLookAt);
   const surfaces = [
     { name: "warm_wood", base: "#9b784a", light: "#fff2d6", dark: "#231810", scene: "#9b927d", repeat: [2.5, 2.0] },
     { name: "gray_counter", base: "#827f77", light: "#dedbd2", dark: "#3a3834", scene: "#86837b", repeat: [1.8, 1.8] },
@@ -245,16 +333,10 @@ function sceneConfig(variant, mode, backgroundPath) {
       profileSource: cameraProfile.source,
       targetResolution: cameraProfile.targetResolution,
       fov: randomBetween(rng, ...cameraProfile.fov),
-      position: [
-        randomBetween(rng, ...cameraProfile.positionX),
-        randomBetween(rng, ...cameraProfile.positionY),
-        randomBetween(rng, ...cameraProfile.positionZ),
-      ],
-      lookAt: [
-        randomBetween(rng, ...cameraProfile.lookAtX),
-        randomBetween(rng, ...cameraProfile.lookAtY),
-        0,
-      ],
+      position: cameraPosition,
+      lookAt: cameraLookAt,
+      viewAngleFromVerticalDeg: cameraAngles.fromVerticalDeg,
+      viewAngleAboveTableDeg: cameraAngles.aboveTableDeg,
       lensDistortion: "not_applied_until_rgb_id_and_labels_share_the_same_exact_transform",
     },
     lighting: {
@@ -953,7 +1035,7 @@ scene.add(key);
 
 const loader = new THREE.TextureLoader();
 const table = new THREE.Mesh(
-  new THREE.PlaneGeometry(4.0, 3.0, 4, 4),
+  new THREE.PlaneGeometry(30.0, 20.0, 8, 8),
   new THREE.MeshStandardMaterial({ color: 0xffffff, map: makeTableTexture(), roughness: 0.88 })
 );
 table.receiveShadow = true;

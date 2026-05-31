@@ -50,6 +50,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rules", type=Path, default=DEFAULT_RULES)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--max-images-per-recipe", type=int, default=0, help="0 means include every packaged image.")
+    parser.add_argument(
+        "--selection-policy",
+        choices=["easy", "random"],
+        default="easy",
+        help="How to choose rows when --max-images-per-recipe is non-zero.",
+    )
     parser.add_argument("--seed", type=int, default=33)
     return parser.parse_args()
 
@@ -115,9 +121,31 @@ def detail_by_variant(summary: object) -> dict[int, dict]:
     return details
 
 
-def choose_rows(rows: list[dict], limit: int, rng: random.Random) -> list[dict]:
+def int_value(row: dict[str, str], key: str) -> int:
+    try:
+        return int(row.get(key, "") or 0)
+    except ValueError:
+        return 0
+
+
+def review_complexity(row: dict[str, str]) -> tuple[int, int, int, int, int, int]:
+    quarantine_count = len([item for item in row.get("quarantine_actions", "").split(";") if item])
+    obb_penalty = 1 if row.get("obb_status", "") == "rejected" else 0
+    return (
+        quarantine_count,
+        int_value(row, "review_required_fragments"),
+        int_value(row, "ignored_fragments"),
+        int_value(row, "fragments"),
+        int_value(row, "visible_instances"),
+        obb_penalty,
+    )
+
+
+def choose_rows(rows: list[dict[str, str]], limit: int, rng: random.Random, selection_policy: str) -> list[dict[str, str]]:
     if limit <= 0 or len(rows) <= limit:
         return rows
+    if selection_policy == "easy":
+        return sorted(rows, key=lambda row: (review_complexity(row), int(row.get("variant", 0))))[:limit]
     return sorted(rng.sample(rows, limit), key=lambda row: int(row.get("variant", 0)))
 
 
@@ -136,7 +164,13 @@ def manifest_path(root: Path, row: dict, field: str, recipe_id: str, variant: in
     return path
 
 
-def collect_recipe_rows(suite_name: str, suite_row: dict, limit: int, rng: random.Random) -> list[dict[str, str]]:
+def collect_recipe_rows(
+    suite_name: str,
+    suite_row: dict,
+    limit: int,
+    rng: random.Random,
+    selection_policy: str,
+) -> list[dict[str, str]]:
     recipe_id = str(suite_row.get("recipe_id", ""))
     scene_mode = str(suite_row.get("scene_mode", ""))
     root = resolve(Path(str(suite_row.get("out_root", ""))))
@@ -157,7 +191,7 @@ def collect_recipe_rows(suite_name: str, suite_row: dict, limit: int, rng: rando
     contact_sheet = recipe_contact_sheet(root, recipe)
     require(contact_sheet.exists(), f"{recipe_id}: missing contact sheet: {contact_sheet}")
     rows: list[dict[str, str]] = []
-    for row in choose_rows([item for item in manifest if isinstance(item, dict)], limit, rng):
+    for row in [item for item in manifest if isinstance(item, dict)]:
         try:
             variant = int(row.get("variant", ""))
         except (TypeError, ValueError) as exc:
@@ -198,7 +232,7 @@ def collect_recipe_rows(suite_name: str, suite_row: dict, limit: int, rng: rando
                 "review_notes": "",
             }
         )
-    return rows
+    return choose_rows(rows, limit, rng, selection_policy)
 
 
 def write_csv(rows: list[dict[str, str]], out_path: Path) -> None:
@@ -276,7 +310,15 @@ def main() -> int:
     for suite_row in suite_rows:
         if not isinstance(suite_row, dict):
             raise SystemExit("suite recipe rows must be objects")
-        rows.extend(collect_recipe_rows(str(suite.get("name", "")), suite_row, args.max_images_per_recipe, rng))
+        rows.extend(
+            collect_recipe_rows(
+                str(suite.get("name", "")),
+                suite_row,
+                args.max_images_per_recipe,
+                rng,
+                args.selection_policy,
+            )
+        )
 
     out_dir = resolve(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

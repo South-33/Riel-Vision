@@ -63,8 +63,8 @@ def command_for(image_id: str) -> str:
     return (
         "rl python scripts\\promote_real_benchmark_label.py "
         f"--image-id {image_id} "
-        "--confirm-reviewed --reviewed-by Venom "
-        '--review-notes "Human reviewed local draft-label overlay; boxes and classes accepted."'
+        "--confirm-reviewed --reviewed-by Codex "
+        '--review-notes "Codex visual audit accepted local draft-label overlay; boxes and classes accepted."'
     )
 
 
@@ -77,7 +77,8 @@ def row_html(source: dict[str, str], task: dict[str, str], draft_dir: Path, out_
     status = source.get("label_status") or task.get("label_status", "")
     role = source.get("benchmark_role") or task.get("benchmark_role", "")
     preview = preview_path(image_id, image_path)
-    review_ready = draft_count > 0
+    promoted = status.strip() == "labeled" or source.get("benchmark_status", "").strip() == "labeled"
+    review_ready = draft_count > 0 and not promoted
     is_focus = image_id == focus_image_id
     item_classes = "item focus" if is_focus else "item"
     command = command_for(image_id)
@@ -89,14 +90,14 @@ def row_html(source: dict[str, str], task: dict[str, str], draft_dir: Path, out_
     command_block = (
         f"""
           <div class="command">
-            <div class="command-title">After you visually accept this draft, run:</div>
+            <div class="command-title">After visual audit accepts this draft, run:</div>
             <textarea readonly onclick="this.select()">{html.escape(command)}</textarea>
           </div>
         """
         if review_ready
         else ""
     )
-    badge = "Ready to unblock P1" if review_ready else "Needs labels"
+    badge = "Promoted sanity label" if promoted else "Ready for visual audit" if review_ready else "Needs labels"
     return f"""
       <article class="{item_classes}">
         <a class="thumb" href="{html.escape(local_href(preview, out_dir))}">
@@ -171,7 +172,7 @@ def main() -> None:
   <body>
     <main>
       <h1>CashSnap Benchmark Review</h1>
-      <p class="lede">Use this page for the quick visual check before promoting a draft real benchmark label. The first card is the current P1 unblock candidate. If the overlay boxes/classes look right, run the command shown on that card.</p>
+      <p class="lede">Use this page for quick visual audit before promoting a draft real benchmark label. The first card is the current visible-denomination sanity candidate, not a full fan/overlap stress proof. If the overlay boxes/classes look right, run the command shown on that card.</p>
       {items}
     </main>
   </body>
