@@ -22,6 +22,7 @@ const OUT_DIR = path.resolve(ROOT, argValue("--out-dir", path.join("data", "synt
 const VARIANT = Number.parseInt(argValue("--variant", "0"), 10);
 const SCENE_MODE = argValue("--scene-mode", "auto");
 const BACKGROUND_DIR = argValue("--background-dir", "");
+const ASSET_SIDE_POLICY = argValue("--asset-side-policy", "any");
 const WIDTH = Number.parseInt(argValue("--width", "1440"), 10);
 const HEIGHT = Number.parseInt(argValue("--height", "1080"), 10);
 const VISUAL_SCALE = Number.parseFloat(argValue("--visual-scale", "2"));
@@ -86,6 +87,10 @@ if (!Number.isInteger(MIN_VISIBLE_PIXELS) || MIN_VISIBLE_PIXELS < 1) {
 
 if (!["auto", "clean", "negative", "stack", "fan", "thin_edge", "hand_occlusion", "qa3"].includes(SCENE_MODE)) {
   throw new Error("--scene-mode must be one of: auto, clean, negative, stack, fan, thin_edge, hand_occlusion, qa3");
+}
+
+if (!["any", "front_only", "back_only", "front_back_mix"].includes(ASSET_SIDE_POLICY)) {
+  throw new Error("--asset-side-policy must be one of: any, front_only, back_only, front_back_mix");
 }
 
 const effectiveSceneMode = SCENE_MODE === "auto" ? (VARIANT >= 100 ? "fan" : "stack") : SCENE_MODE;
@@ -233,6 +238,61 @@ for (const [className, paths] of Object.entries(assetPathPools)) {
   }
 }
 
+function sideForAssetPath(assetPath) {
+  const name = path.basename(assetPath).toLowerCase();
+  if (name.includes("_front")) return "front";
+  if (name.includes("_back")) return "back";
+  return "unknown";
+}
+
+const assetPathPoolsBySide = Object.fromEntries(
+  CLASS_NAMES.map((className) => {
+    const paths = assetPathPools[className];
+    return [
+      className,
+      {
+        front: paths.filter((assetPath) => sideForAssetPath(assetPath) === "front"),
+        back: paths.filter((assetPath) => sideForAssetPath(assetPath) === "back"),
+        unknown: paths.filter((assetPath) => sideForAssetPath(assetPath) === "unknown"),
+      },
+    ];
+  }),
+);
+
+function targetSideForAsset(index) {
+  if (ASSET_SIDE_POLICY === "front_only") return "front";
+  if (ASSET_SIDE_POLICY === "back_only") return "back";
+  if (ASSET_SIDE_POLICY === "front_back_mix") return index % 2 === 0 ? "front" : "back";
+  return "any";
+}
+
+function selectAssetPath(className, variant, index) {
+  const targetSide = targetSideForAsset(index);
+  const pool = targetSide === "any" ? assetPathPools[className] : assetPathPoolsBySide[className][targetSide];
+  if (!pool || pool.length === 0) {
+    throw new Error(`No ${targetSide} scan assets for ${className}; cannot satisfy asset side policy ${ASSET_SIDE_POLICY}`);
+  }
+  return pool[(variant + index) % pool.length];
+}
+
+function enrichAsset(asset, variant, index) {
+  const assetPath = selectAssetPath(asset.className, variant, index);
+  return {
+    ...asset,
+    path: assetPath,
+    side: sideForAssetPath(assetPath),
+    assetSidePolicy: ASSET_SIDE_POLICY,
+  };
+}
+
+function annotateAsset(asset) {
+  return {
+    ...asset,
+    side: sideForAssetPath(asset.path),
+    assetSidePolicy: ASSET_SIDE_POLICY,
+  };
+}
+
 const baseOccluders = [
   {
     kind: "finger_capsule",
@@ -261,7 +321,8 @@ function variantAssets(variant) {
   if (effectiveSceneMode === "thin_edge") return thinEdgeAssets(variant);
   if (effectiveSceneMode === "hand_occlusion") return handOcclusionAssets(variant);
   if (effectiveSceneMode === "clean") return cleanAssets(variant);
-  if (variant === 0) return baseAssets;
+  if (variant === 0 && ASSET_SIDE_POLICY === "any") return baseAssets.map(annotateAsset);
+  if (variant === 0) return baseAssets.map((asset, index) => enrichAsset(asset, variant, index));
   const rng = mulberry32(26053003 + variant * 101);
   const noteCount = 3 + variant % 4;
   const layerOrder = Array.from({ length: noteCount }, (_, index) => index).sort(() => rng() - 0.5);
@@ -279,12 +340,11 @@ function variantAssets(variant) {
     const base = baseAssets[index % baseAssets.length];
     const anchor = anchors[index % anchors.length];
     const layer = layerOrder.indexOf(index);
-    return {
+    return enrichAsset({
       ...base,
       classIndex,
       className,
       idColor: INSTANCE_ID_COLORS[index],
-      path: assetPathPools[className][(variant + index) % assetPathPools[className].length],
       physicalWidthMm: PHYSICAL_WIDTH_MM[className],
       position: [
         anchor[0] + randomBetween(rng, -0.10, 0.10),
@@ -300,7 +360,7 @@ function variantAssets(variant) {
       ripple: 0.0,
       roughness: randomBetween(rng, 0.70, 0.90),
       layer,
-    };
+    }, variant, index);
   });
 }
 
@@ -341,12 +401,11 @@ function cleanAssets(variant) {
     const className = CLASS_NAMES[classIndex];
     const base = baseAssets[index % baseAssets.length];
     const anchor = anchors[index];
-    return {
+    return enrichAsset({
       ...base,
       classIndex,
       className,
       idColor: INSTANCE_ID_COLORS[index],
-      path: assetPathPools[className][(variant + index) % assetPathPools[className].length],
       physicalWidthMm: PHYSICAL_WIDTH_MM[className],
       position: [
         anchor[0] + randomBetween(rng, -0.04, 0.04),
@@ -363,7 +422,7 @@ function cleanAssets(variant) {
       roughness: randomBetween(rng, 0.72, 0.88),
       layer: index,
       clean: true,
-    };
+    }, variant, index);
   });
 }
 
@@ -391,17 +450,16 @@ function qa3Assets(variant) {
   ];
   return classes.map((className, index) => {
     const classIndex = CLASS_NAMES.indexOf(className);
-    return {
+    return enrichAsset({
       ...baseAssets[index % baseAssets.length],
       classIndex,
       className,
       idColor: INSTANCE_ID_COLORS[index],
-      path: assetPathPools[className][variant % assetPathPools[className].length],
       physicalWidthMm: PHYSICAL_WIDTH_MM[className],
       roughness: 0.80,
       ripple: 0.0,
       ...placements[index],
-    };
+    }, variant, index);
   });
 }
 
@@ -467,12 +525,11 @@ function thinEdgeLayout(variant) {
 function thinEdgeAssets(variant) {
   return thinEdgeLayout(variant).map((item, index) => {
     const base = baseAssets[index % baseAssets.length];
-    return {
+    return enrichAsset({
       ...base,
       classIndex: item.classIndex,
       className: item.className,
       idColor: INSTANCE_ID_COLORS[index],
-      path: assetPathPools[item.className][(variant + index) % assetPathPools[item.className].length],
       physicalWidthMm: PHYSICAL_WIDTH_MM[item.className],
       position: item.position,
       rotation: item.rotation,
@@ -481,7 +538,7 @@ function thinEdgeAssets(variant) {
       roughness: 0.82,
       layer: item.layer,
       thinEdge: true,
-    };
+    }, variant, index);
   });
 }
 
@@ -517,12 +574,11 @@ function handOcclusionAssets(variant) {
     const classIndex = CLASS_NAMES.indexOf(className);
     const base = baseAssets[index % baseAssets.length];
     const placement = placements[index];
-    return {
+    return enrichAsset({
       ...base,
       classIndex,
       className,
       idColor: INSTANCE_ID_COLORS[index],
-      path: assetPathPools[className][(variant + index) % assetPathPools[className].length],
       physicalWidthMm: PHYSICAL_WIDTH_MM[className],
       position: [
         placement[0] + randomBetween(rng, -0.055, 0.055),
@@ -539,7 +595,7 @@ function handOcclusionAssets(variant) {
       roughness: randomBetween(rng, 0.74, 0.90),
       layer: index,
       handOcclusion: true,
-    };
+    }, variant, index);
   });
 }
 
@@ -597,12 +653,11 @@ function fanAssets(variant) {
       pivot[0] - localPivotRotated[0] + randomBetween(rng, -0.012, 0.012),
       pivot[1] - localPivotRotated[1] + randomBetween(rng, -0.012, 0.012),
     ];
-    return {
+    return enrichAsset({
       ...base,
       classIndex,
       className,
       idColor: INSTANCE_ID_COLORS[index],
-      path: assetPathPools[className][(variant + index) % assetPathPools[className].length],
       physicalWidthMm: PHYSICAL_WIDTH_MM[className],
       position: [
         center[0],
@@ -624,7 +679,7 @@ function fanAssets(variant) {
         theta,
         spread,
       },
-    };
+    }, variant, index);
   });
 }
 
@@ -668,6 +723,12 @@ const occluders = variantOccluders(VARIANT);
 const backgroundFiles = listImageFiles(BACKGROUND_DIR);
 const selectedBackgroundPath = backgroundFiles.length ? backgroundFiles[VARIANT % backgroundFiles.length] : null;
 const config = sceneConfig(VARIANT, effectiveSceneMode, selectedBackgroundPath);
+const assetSideCounts = assets.reduce((counts, asset) => {
+  const side = asset.side ?? "unknown";
+  counts[side] = (counts[side] ?? 0) + 1;
+  return counts;
+}, {});
+const frontBackMixSatisfied = assetSideCounts.front > 0 && assetSideCounts.back > 0;
 
 function html(textureAssets) {
   return `<!doctype html>
@@ -1187,6 +1248,11 @@ async function main() {
         visualScale: VISUAL_SCALE,
         minVisiblePixels: MIN_VISIBLE_PIXELS,
         sceneConfig: config,
+        assetSelection: {
+          sidePolicy: ASSET_SIDE_POLICY,
+          sideCounts: assetSideCounts,
+          frontBackMixSatisfied,
+        },
         visibilityModel: "explicit-layer-order",
         noteDepthPolicy: "banknote planes use renderOrder with depthTest/depthWrite disabled to avoid impossible surface interpenetration in visible masks",
         assets: textureAssets,

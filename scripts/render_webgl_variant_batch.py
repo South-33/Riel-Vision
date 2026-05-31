@@ -52,6 +52,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--count", type=int, default=4)
     parser.add_argument("--scene-mode", choices=["auto", "clean", "negative", "stack", "fan", "thin_edge", "hand_occlusion", "qa3"], default="auto")
     parser.add_argument("--background-dir", type=Path, help="Optional reviewed-clean background image directory.")
+    parser.add_argument(
+        "--asset-side-policy",
+        choices=["any", "front_only", "back_only", "front_back_mix"],
+        default="any",
+        help="Constrain banknote scan side sampling for front/back confusion recipes.",
+    )
     parser.add_argument("--recipe-name", default="", help="Human-readable recipe name to write into recipe.json.")
     parser.add_argument(
         "--artifact-status",
@@ -107,6 +113,8 @@ def render_variant(variant: int, out_dir: Path, scene_mode: str, background_dir:
         str(variant),
         "--scene-mode",
         scene_mode,
+        "--asset-side-policy",
+        args.asset_side_policy,
         "--out-dir",
         str(out_dir),
     ]
@@ -518,6 +526,9 @@ def write_yolo_dataset(
     scene_mode_counts: Counter[str] = Counter()
     surface_counts: Counter[str] = Counter()
     background_counts: Counter[str] = Counter()
+    asset_side_policy_counts: Counter[str] = Counter()
+    asset_side_counts: Counter[str] = Counter()
+    front_back_mix_counts: Counter[str] = Counter()
     visible_pixels_per_instance: list[float] = []
     visible_instances_per_image: list[float] = []
     fragments_per_image: list[float] = []
@@ -590,6 +601,18 @@ def write_yolo_dataset(
                 surface_counts[str(surface.get("name", "unknown"))] += 1
                 background = surface.get("background")
                 background_counts["file" if background else "procedural"] += 1
+        asset_selection = source_metadata.get("assetSelection", {})
+        if isinstance(asset_selection, dict):
+            side_policy = str(asset_selection.get("sidePolicy", "unknown"))
+            asset_side_policy_counts[side_policy] += 1
+            side_counts = asset_selection.get("sideCounts", {})
+            if isinstance(side_counts, dict):
+                for side, count in side_counts.items():
+                    asset_side_counts[str(side)] += int(count)
+            if side_policy == "front_back_mix":
+                front_back_mix_counts[
+                    "satisfied" if bool(asset_selection.get("frontBackMixSatisfied")) else "unsatisfied"
+                ] += 1
         fragment_rows, fragment_metadata, ignored_fragment_metadata = build_fragment_labels(
             id_path,
             boxes_path,
@@ -715,6 +738,7 @@ def write_yolo_dataset(
                 "variant": variant,
                 "image": str(image_path.relative_to(out_root)),
                 "scene_mode": source_scene_mode,
+                "asset_selection": asset_selection if isinstance(asset_selection, dict) else {},
                 "visible_instances": len(visible_boxes),
                 "visible_pixels": int(sum(visible_pixels)),
                 "fragments": len(fragment_rows),
@@ -831,6 +855,11 @@ def write_yolo_dataset(
             "scene_modes": dict(sorted(scene_mode_counts.items())),
             "surfaces": dict(sorted(surface_counts.items())),
             "backgrounds": dict(sorted(background_counts.items())),
+            "asset_selection": {
+                "side_policy_counts": dict(sorted(asset_side_policy_counts.items())),
+                "side_counts": dict(sorted(asset_side_counts.items())),
+                "front_back_mix_counts": dict(sorted(front_back_mix_counts.items())),
+            },
             "class_counts": dict(sorted(class_counts.items())),
             "visible_instances": {
                 "total": int(sum(visible_instances_per_image)),
@@ -879,6 +908,7 @@ def write_yolo_dataset(
                 "fragments": "visible connected evidence components, not direct count labels",
                 "obb": "trainable only when every visible instance in the image has an honest OBB",
                 "counting": "physical parent counts live in visible_boxes/source metadata and require fusion for fragment outputs",
+                "asset_side_policy": "front/back policies constrain scan-side sampling before render; front_back_mix should show both sides in multi-note images",
             },
             "images_detail": image_summary_rows,
         },
@@ -958,6 +988,7 @@ def write_recipe_metadata(
             "end": args.start_variant + args.count - 1,
         },
         "scene_mode": args.scene_mode,
+        "asset_side_policy": args.asset_side_policy,
         "background_dir": rel(args.background_dir) if args.background_dir else "",
         "fragment_review_policy": args.fragment_review_policy,
         "label_transform_policy": {

@@ -57,6 +57,8 @@ def build_command(row: dict, args: argparse.Namespace) -> list[str]:
         str(row["count"]),
         "--scene-mode",
         str(row["scene_mode"]),
+        "--asset-side-policy",
+        str(row.get("asset_side_policy", "any")),
         "--artifact-status",
         "trainable-candidate",
         "--train-views",

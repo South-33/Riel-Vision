@@ -13,6 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VALID_TRAIN_VIEWS = {"detect", "fragment", "obb"}
+VALID_ASSET_SIDE_POLICIES = {"any", "front_only", "back_only", "front_back_mix"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -21,6 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-images", type=int, default=1)
     parser.add_argument("--require-recipe", default="")
     parser.add_argument("--require-scene-mode", default="")
+    parser.add_argument("--require-asset-side-policy", default="")
     parser.add_argument("--train-views", default="detect", help="Comma-separated views intended for training: detect,fragment,obb.")
     parser.add_argument(
         "--allow-artifact-status",
@@ -91,6 +93,31 @@ def main() -> int:
     require(isinstance(scene_modes, dict) and scene_modes, "qa summary must name scene_modes")
     if args.require_scene_mode:
         require(scene_modes == {args.require_scene_mode: images}, f"unexpected scene_modes: {scene_modes}")
+    if args.require_asset_side_policy:
+        require(
+            args.require_asset_side_policy in VALID_ASSET_SIDE_POLICIES,
+            f"--require-asset-side-policy must be one of {sorted(VALID_ASSET_SIDE_POLICIES)}",
+        )
+        require(
+            recipe.get("asset_side_policy", "any") == args.require_asset_side_policy,
+            f"expected recipe asset_side_policy={args.require_asset_side_policy!r}, got {recipe.get('asset_side_policy', 'any')!r}",
+        )
+        asset_selection = summary.get("asset_selection", {})
+        require(isinstance(asset_selection, dict), "qa summary must include asset_selection")
+        side_policy_counts = asset_selection.get("side_policy_counts", {})
+        require(isinstance(side_policy_counts, dict), "asset_selection.side_policy_counts must be an object")
+        require(
+            side_policy_counts == {args.require_asset_side_policy: images},
+            f"unexpected asset side policy counts: {side_policy_counts}",
+        )
+        if args.require_asset_side_policy == "front_back_mix":
+            mix_counts = asset_selection.get("front_back_mix_counts", {})
+            require(isinstance(mix_counts, dict), "asset_selection.front_back_mix_counts must be an object")
+            require(int(mix_counts.get("unsatisfied", 0)) == 0, "front_back_mix has unsatisfied images")
+            side_counts = asset_selection.get("side_counts", {})
+            require(isinstance(side_counts, dict), "asset_selection.side_counts must be an object")
+            require(int(side_counts.get("front", 0)) > 0, "front_back_mix rendered no fronts")
+            require(int(side_counts.get("back", 0)) > 0, "front_back_mix rendered no backs")
     require(summary.get("layer_audit_totals", {}).get("violations") == 0, "layer-order violations must be zero")
 
     visual_quality_counts = visual_quality.get("counts", {})

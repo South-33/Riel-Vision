@@ -14,6 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CATALOG = ROOT / "configs" / "synthetic_recipes" / "cashsnap_webgl_recipe_catalog_v1.json"
 RUNNABLE_SCENE_MODES = {"auto", "clean", "negative", "stack", "fan", "thin_edge", "hand_occlusion", "qa3"}
+ASSET_SIDE_POLICIES = {"any", "front_only", "back_only", "front_back_mix"}
 STATUS_TO_BATCH_STATUS = {
     "planned": "diagnostic",
     "smoke_ready": "smoke",
@@ -32,6 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start-variant", type=int, default=0)
     parser.add_argument("--count", type=int, default=4)
     parser.add_argument("--scene-mode", default="", help="Override the first runnable scene mode from the catalog.")
+    parser.add_argument("--asset-side-policy", default="", help="Override catalog asset-side sampling policy.")
     parser.add_argument("--artifact-status", choices=["smoke", "diagnostic", "trainable-candidate"], default="")
     parser.add_argument("--background-dir", type=Path, default=None)
     parser.add_argument("--min-free-ram-gb", default="3")
@@ -88,11 +90,19 @@ def parse_train_views(value: str) -> set[str]:
     return {item.strip() for item in re.split(r"[,;\s]+", value) if item.strip()}
 
 
+def choose_asset_side_policy(recipe: dict, override: str) -> str:
+    policy = override or str(recipe.get("asset_side_policy", "any"))
+    if policy not in ASSET_SIDE_POLICIES:
+        raise SystemExit(f"--asset-side-policy must be one of {sorted(ASSET_SIDE_POLICIES)}")
+    return policy
+
+
 def main() -> int:
     args = parse_args()
     catalog = read_json(resolve(args.catalog))
     recipe = find_recipe(catalog, args.recipe_id)
     scene_mode = choose_scene_mode(recipe, args.scene_mode)
+    asset_side_policy = choose_asset_side_policy(recipe, args.asset_side_policy)
     artifact_status = args.artifact_status or STATUS_TO_BATCH_STATUS.get(str(recipe.get("artifact_status")), "diagnostic")
     fragment_review_policy = args.fragment_review_policy
     if fragment_review_policy == "auto":
@@ -115,6 +125,8 @@ def main() -> int:
         str(args.count),
         "--scene-mode",
         scene_mode,
+        "--asset-side-policy",
+        asset_side_policy,
         "--recipe-name",
         args.recipe_id,
         "--artifact-status",
@@ -152,6 +164,7 @@ def main() -> int:
         ]
         if scene_mode != "auto":
             gate_cmd.extend(["--require-scene-mode", scene_mode])
+        gate_cmd.extend(["--require-asset-side-policy", asset_side_policy])
         print(" ".join(gate_cmd), flush=True)
         subprocess.run(gate_cmd, cwd=ROOT, check=True)
     if artifact_status == "trainable-candidate" and not args.skip_trainable_gate:
@@ -167,6 +180,7 @@ def main() -> int:
         ]
         if scene_mode != "auto":
             gate_cmd.extend(["--require-scene-mode", scene_mode])
+        gate_cmd.extend(["--require-asset-side-policy", asset_side_policy])
         if args.allow_zero_visible_trainable:
             gate_cmd.append("--allow-zero-visible")
         print(" ".join(gate_cmd), flush=True)

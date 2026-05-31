@@ -64,6 +64,7 @@ def parse_train_views(value: object) -> set[str]:
 def run_gate(row: dict, root: Path, gate_kind: str) -> None:
     recipe_id = str(row["recipe_id"])
     scene_mode = str(row["scene_mode"])
+    asset_side_policy = str(row.get("asset_side_policy", "any"))
     if gate_kind == "none":
         return
     if gate_kind == "smoke":
@@ -77,6 +78,8 @@ def run_gate(row: dict, root: Path, gate_kind: str) -> None:
                 recipe_id,
                 "--require-scene-mode",
                 scene_mode,
+                "--require-asset-side-policy",
+                asset_side_policy,
             ],
             cwd=ROOT,
             check=True,
@@ -95,6 +98,8 @@ def run_gate(row: dict, root: Path, gate_kind: str) -> None:
             recipe_id,
             "--require-scene-mode",
             scene_mode,
+            "--require-asset-side-policy",
+            asset_side_policy,
             "--train-views",
             ",".join(sorted(train_views)),
         ]
@@ -157,6 +162,7 @@ def main() -> int:
                 "root": rel(root),
                 "data_yaml": rel(root / "data.yaml"),
                 "gate_kind": args.gate_kind,
+                "asset_side_policy": str(row.get("asset_side_policy", "any")),
                 "train_views": sorted(parse_train_views(row.get("train_views", ["detect"]))),
             }
         )

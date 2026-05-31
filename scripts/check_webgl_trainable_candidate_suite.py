@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SUITE = ROOT / "configs" / "synthetic_recipes" / "cashsnap_webgl_trainable_candidates_v1.json"
 DEFAULT_CATALOG = ROOT / "configs" / "synthetic_recipes" / "cashsnap_webgl_recipe_catalog_v1.json"
 VALID_TRAIN_VIEWS = {"detect", "fragment", "obb"}
+VALID_ASSET_SIDE_POLICIES = {"any", "front_only", "back_only", "front_back_mix"}
 RUNNABLE_STATUSES = {"smoke_ready", "label_policy_ready", "diagnostic", "trainable-candidate", "promoted"}
 
 
@@ -75,6 +76,8 @@ def check_existing(row: dict, out_root: Path, train_views: list[str]) -> None:
         str(row["recipe_id"]),
         "--require-scene-mode",
         str(row["scene_mode"]),
+        "--require-asset-side-policy",
+        str(row["asset_side_policy"]),
         "--min-images",
         str(row["count"]),
         "--train-views",
@@ -94,7 +97,30 @@ def check_existing(row: dict, out_root: Path, train_views: list[str]) -> None:
     require(seed_range.get("start") == row["start_variant"], f"{row['recipe_id']}: rendered start_variant mismatch")
     require(seed_range.get("count") == row["count"], f"{row['recipe_id']}: rendered count mismatch")
     require(seed_range.get("end") == expected_end, f"{row['recipe_id']}: rendered end_variant mismatch")
+    require(
+        recipe.get("asset_side_policy", "any") == row["asset_side_policy"],
+        f"{row['recipe_id']}: rendered asset_side_policy mismatch",
+    )
     require(summary.get("images") == row["count"], f"{row['recipe_id']}: QA image count mismatch")
+    asset_selection = summary.get("asset_selection", {})
+    require(isinstance(asset_selection, dict), f"{row['recipe_id']}: QA summary must include asset_selection")
+    side_policy_counts = asset_selection.get("side_policy_counts", {})
+    require(isinstance(side_policy_counts, dict), f"{row['recipe_id']}: asset_selection.side_policy_counts must be an object")
+    require(
+        set(side_policy_counts) == {row["asset_side_policy"]},
+        f"{row['recipe_id']}: QA side policy counts must only contain {row['asset_side_policy']!r}",
+    )
+    if row["asset_side_policy"] == "front_back_mix":
+        front_back_mix_counts = asset_selection.get("front_back_mix_counts", {})
+        require(isinstance(front_back_mix_counts, dict), f"{row['recipe_id']}: front_back_mix_counts must be an object")
+        require(
+            int(front_back_mix_counts.get("unsatisfied", 0)) == 0,
+            f"{row['recipe_id']}: front_back_mix has unsatisfied rendered images",
+        )
+        side_counts = asset_selection.get("side_counts", {})
+        require(isinstance(side_counts, dict), f"{row['recipe_id']}: side_counts must be an object")
+        require(int(side_counts.get("front", 0)) > 0, f"{row['recipe_id']}: front_back_mix rendered no fronts")
+        require(int(side_counts.get("back", 0)) > 0, f"{row['recipe_id']}: front_back_mix rendered no backs")
     for suffix in ("manifest.json", "qa/summary.json", "data.yaml", "recipe.json"):
         require((out_root / suffix).exists(), f"{row['recipe_id']}: missing rendered output {out_root / suffix}")
 
@@ -124,6 +150,7 @@ def main() -> int:
         for key in (
             "recipe_id",
             "scene_mode",
+            "asset_side_policy",
             "out_root",
             "start_variant",
             "count",
@@ -145,6 +172,16 @@ def main() -> int:
         require(catalog_status in RUNNABLE_STATUSES, f"{recipe_id}: catalog status {catalog_status!r} is not runnable")
         catalog_modes = {str(item) for item in catalog_row.get("scene_modes", [])}
         require(str(row["scene_mode"]) in catalog_modes, f"{recipe_id}: scene_mode {row['scene_mode']!r} is not in catalog modes {sorted(catalog_modes)}")
+        asset_side_policy = str(row["asset_side_policy"])
+        require(
+            asset_side_policy in VALID_ASSET_SIDE_POLICIES,
+            f"{recipe_id}: asset_side_policy must be one of {sorted(VALID_ASSET_SIDE_POLICIES)}",
+        )
+        catalog_asset_side_policy = str(catalog_row.get("asset_side_policy", "any"))
+        require(
+            asset_side_policy == catalog_asset_side_policy,
+            f"{recipe_id}: suite asset_side_policy {asset_side_policy!r} does not match catalog {catalog_asset_side_policy!r}",
+        )
 
         try:
             start_variant = int(row["start_variant"])
@@ -175,8 +212,11 @@ def main() -> int:
         allow_zero_visible = bool(row.get("allow_zero_visible"))
         if str(row["scene_mode"]) == "negative":
             require(allow_zero_visible, f"{recipe_id}: negative candidate must set allow_zero_visible=true")
+            require(asset_side_policy == "any", f"{recipe_id}: negative candidate must use asset_side_policy=any")
         else:
             require(not allow_zero_visible, f"{recipe_id}: only negative candidates may set allow_zero_visible=true")
+        if recipe_id == "webgl_back_side_confusion_v1":
+            require(asset_side_policy == "front_back_mix", f"{recipe_id}: must require front_back_mix sampling")
 
         for variant in range(start_variant, start_variant + count):
             range_key = (str(row["scene_mode"]), variant)
