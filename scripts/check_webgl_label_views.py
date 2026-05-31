@@ -74,6 +74,8 @@ def main() -> int:
     rejected_obb_images = 0
     fragment_count = 0
     ignored_fragment_count = 0
+    fragment_evidence_status_counts: Counter[str] = Counter()
+    fragment_evidence_warning_counts: Counter[str] = Counter()
     visible_instance_count = 0
     class_counts: Counter[str] = Counter()
     layer_audit_totals: Counter[str] = Counter()
@@ -107,6 +109,18 @@ def main() -> int:
             parent_index = fragment.get("parentVisibleIndex")
             if not isinstance(parent_index, int) or parent_index < 0 or parent_index >= len(visible_boxes):
                 raise SystemExit(f"{row['fragment_metadata']}: invalid parentVisibleIndex {parent_index}")
+            evidence_status = str(fragment.get("evidence_status", ""))
+            if evidence_status not in {"trainable", "review_required"}:
+                raise SystemExit(f"{row['fragment_metadata']}: invalid evidence_status {evidence_status!r}")
+            evidence_warnings = fragment.get("evidence_warnings", [])
+            if not isinstance(evidence_warnings, list):
+                raise SystemExit(f"{row['fragment_metadata']}: evidence_warnings must be a list")
+            if evidence_status == "review_required" and not evidence_warnings:
+                raise SystemExit(f"{row['fragment_metadata']}: review_required fragment missing evidence_warnings")
+            if evidence_status == "trainable" and evidence_warnings:
+                raise SystemExit(f"{row['fragment_metadata']}: trainable fragment has evidence_warnings")
+            fragment_evidence_status_counts[evidence_status] += 1
+            fragment_evidence_warning_counts.update(str(reason) for reason in evidence_warnings)
         fragment_count += len(fragment_rows)
         ignored_fragment_metadata = read_json(dataset_root / row["fragment_ignored_metadata"])
         if not isinstance(ignored_fragment_metadata, list):
@@ -117,6 +131,8 @@ def main() -> int:
                 raise SystemExit(f"{row['fragment_ignored_metadata']}: invalid parentVisibleIndex {parent_index}")
             if not str(fragment.get("ignore_reason", "")).strip():
                 raise SystemExit(f"{row['fragment_ignored_metadata']}: ignored fragment missing ignore_reason")
+            if fragment.get("evidence_status") != "ignored":
+                raise SystemExit(f"{row['fragment_ignored_metadata']}: ignored fragment evidence_status must be ignored")
         ignored_fragment_count += len(ignored_fragment_metadata)
 
         obb_status = row.get("obb_status")
@@ -146,6 +162,8 @@ def main() -> int:
         raise SystemExit("fragment summary count mismatch")
     if fragment_summary.get("ignored_fragments") != ignored_fragment_count:
         raise SystemExit("fragment summary ignored count mismatch")
+    if fragment_summary.get("evidence_status_counts") != dict(sorted(fragment_evidence_status_counts.items())):
+        raise SystemExit("fragment summary evidence status count mismatch")
     qa_summary = read_json(dataset_root / "qa" / "summary.json")
     quarantine = read_json(dataset_root / "qa" / "quarantine.json")
     contact_index = read_json(dataset_root / "qa" / "contact_index.json")
@@ -178,6 +196,10 @@ def main() -> int:
         raise SystemExit("qa summary fragment count mismatch")
     if qa_summary.get("fragments", {}).get("ignored_total") != ignored_fragment_count:
         raise SystemExit("qa summary ignored fragment count mismatch")
+    if qa_summary.get("fragments", {}).get("evidence_status_counts") != dict(sorted(fragment_evidence_status_counts.items())):
+        raise SystemExit("qa summary fragment evidence status count mismatch")
+    if qa_summary.get("fragments", {}).get("evidence_warning_counts") != dict(sorted(fragment_evidence_warning_counts.items())):
+        raise SystemExit("qa summary fragment evidence warning count mismatch")
     if qa_summary.get("class_counts") != dict(sorted(class_counts.items())):
         raise SystemExit("qa summary class count mismatch")
     if qa_summary.get("layer_audit_totals") != dict(sorted(layer_audit_totals.items())):

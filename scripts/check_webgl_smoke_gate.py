@@ -84,6 +84,8 @@ def main() -> int:
     visible = int_at(summary, "visible_instances", "total")
     fragments = int_at(summary, "fragments", "total")
     ignored = int_at(summary, "fragments", "ignored_total")
+    evidence_status_counts = summary.get("fragments", {}).get("evidence_status_counts", {})
+    require(isinstance(evidence_status_counts, dict), "fragment evidence_status_counts must be an object")
     split_parents = int_at(summary, "fragments", "split_parent_count")
     overlap_pixels = int_at(summary, "layer_audit_totals", "overlapPixels")
     occluder_pixels = int_at(summary, "layer_audit_totals", "occluderPixels")

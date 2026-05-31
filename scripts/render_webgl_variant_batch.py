@@ -36,6 +36,8 @@ CLASS_NAMES = [
 OBB_MIN_LARGEST_COMPONENT_FRAC = 0.85
 OBB_MIN_RECT_FILL_FRAC = 0.35
 FRAGMENT_MIN_PIXELS = 500
+FRAGMENT_REVIEW_MIN_PIXELS = 1000
+FRAGMENT_REVIEW_MIN_PARENT_FRACTION = 0.01
 VISUAL_MIN_MEAN_LUMA = 20.0
 VISUAL_MAX_MEAN_LUMA = 235.0
 VISUAL_MIN_LUMA_STD = 1.0
@@ -357,11 +359,18 @@ def build_fragment_labels(id_path: Path, boxes_path: Path) -> tuple[list[str], l
                 ignored_rows.append(
                     {
                         **component_metadata,
+                        "evidence_status": "ignored",
+                        "evidence_warnings": ["below_min_fragment_pixels"],
                         "ignore_reason": "below_min_fragment_pixels",
                         "min_fragment_pixels": FRAGMENT_MIN_PIXELS,
                     }
                 )
                 continue
+            evidence_warnings = []
+            if pixels < FRAGMENT_REVIEW_MIN_PIXELS:
+                evidence_warnings.append("below_review_fragment_pixels")
+            if component_metadata["component_fraction_of_parent"] < FRAGMENT_REVIEW_MIN_PARENT_FRACTION:
+                evidence_warnings.append("low_parent_visible_fraction")
             cx = (x + component_width / 2) / width
             cy = (y + component_height / 2) / height
             normalized_width = component_width / width
@@ -374,6 +383,10 @@ def build_fragment_labels(id_path: Path, boxes_path: Path) -> tuple[list[str], l
                 {
                     **component_metadata,
                     "componentIndex": kept_component_index,
+                    "evidence_status": "review_required" if evidence_warnings else "trainable",
+                    "evidence_warnings": evidence_warnings,
+                    "review_min_fragment_pixels": FRAGMENT_REVIEW_MIN_PIXELS,
+                    "review_min_parent_fraction": FRAGMENT_REVIEW_MIN_PARENT_FRACTION,
                     "ignore_reason": "",
                 }
             )
@@ -470,6 +483,8 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path, fal
     fragment_counts: Counter[str] = Counter()
     ignored_fragment_counts: Counter[str] = Counter()
     ignored_fragment_reason_counts: Counter[str] = Counter()
+    fragment_evidence_status_counts: Counter[str] = Counter()
+    fragment_evidence_warning_counts: Counter[str] = Counter()
     class_counts: Counter[str] = Counter()
     layer_audit_totals: Counter[str] = Counter()
     scene_mode_counts: Counter[str] = Counter()
@@ -558,6 +573,12 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path, fal
         fragment_counts["fragments"] += len(fragment_rows)
         ignored_fragment_counts["ignored_fragments"] += len(ignored_fragment_metadata)
         ignored_fragment_reason_counts.update(str(row["ignore_reason"]) for row in ignored_fragment_metadata)
+        fragment_evidence_status_counts.update(str(row["evidence_status"]) for row in fragment_metadata)
+        for row in fragment_metadata:
+            fragment_evidence_warning_counts.update(str(reason) for reason in row.get("evidence_warnings", []))
+        review_required_fragments = [
+            row for row in fragment_metadata if row.get("evidence_status") == "review_required"
+        ]
         fragments_per_image.append(float(len(fragment_rows)))
         parent_fragment_counts: Counter[tuple[int, str]] = Counter(
             (int(fragment["parentVisibleIndex"]), str(fragment["className"]))
@@ -635,6 +656,23 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path, fal
                     "ignored_fragments": len(ignored_fragment_metadata),
                 }
             )
+        if review_required_fragments:
+            quarantine_rows.append(
+                {
+                    "variant": variant,
+                    "image": str(image_path.relative_to(out_root)),
+                    "view": "fragment",
+                    "action": "fragment_evidence_review_required",
+                    "reasons": sorted(
+                        {
+                            str(reason)
+                            for row in review_required_fragments
+                            for reason in row.get("evidence_warnings", [])
+                        }
+                    ),
+                    "review_required_fragments": len(review_required_fragments),
+                }
+            )
         image_summary_rows.append(
             {
                 "variant": variant,
@@ -644,6 +682,7 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path, fal
                 "visible_pixels": int(sum(visible_pixels)),
                 "fragments": len(fragment_rows),
                 "ignored_fragments": len(ignored_fragment_metadata),
+                "review_required_fragments": len(review_required_fragments),
                 "split_parents": sum(1 for count in parent_fragment_counts.values() if count > 1),
                 "obb_status": manifest_row["obb_status"],
                 "obb_reject_reasons": obb_reject_reasons,
@@ -681,6 +720,7 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path, fal
                 "visual_quality_rejected": "visual image failed deterministic brightness/blankness gates and must not be promoted without review",
                 "excluded_from_trainable_obb": "image remains valid for detect/fragment views, but is excluded from the trainable OBB split",
                 "ignored_below_threshold_components": "tiny connected components are recorded for review and not forced into fragment training labels",
+                "fragment_evidence_review_required": "fragment is labeled for diagnostics but should not enter trainable-candidate mixes until accepted by policy or review",
             },
         },
     )
@@ -722,10 +762,15 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path, fal
             "fragments": fragment_counts["fragments"],
             "ignored_fragments": ignored_fragment_counts["ignored_fragments"],
             "ignored_reason_counts": dict(sorted(ignored_fragment_reason_counts.items())),
+            "evidence_status_counts": dict(sorted(fragment_evidence_status_counts.items())),
+            "evidence_warning_counts": dict(sorted(fragment_evidence_warning_counts.items())),
             "min_fragment_pixels": FRAGMENT_MIN_PIXELS,
+            "review_min_fragment_pixels": FRAGMENT_REVIEW_MIN_PIXELS,
+            "review_min_parent_fraction": FRAGMENT_REVIEW_MIN_PARENT_FRACTION,
             "policy": {
                 "label_meaning": "visible connected evidence components, not physical bill counts",
                 "ignored_fragments": "components below min_fragment_pixels are recorded as ignored metadata instead of forced training labels",
+                "review_required": "small/low-fraction components keep labels for diagnostics but require review before trainable-candidate promotion",
                 "counting": "use parent metadata or downstream fusion to merge components from one physical bill",
             },
         },
@@ -751,10 +796,14 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path, fal
                 "total": fragment_counts["fragments"],
                 "ignored_total": ignored_fragment_counts["ignored_fragments"],
                 "ignored_reason_counts": dict(sorted(ignored_fragment_reason_counts.items())),
+                "evidence_status_counts": dict(sorted(fragment_evidence_status_counts.items())),
+                "evidence_warning_counts": dict(sorted(fragment_evidence_warning_counts.items())),
                 "per_image": summarize_values(fragments_per_image),
                 "per_parent": summarize_values(fragments_per_parent_values),
                 "split_parent_count": sum(1 for value in fragments_per_parent_values if value > 1),
                 "min_fragment_pixels": FRAGMENT_MIN_PIXELS,
+                "review_min_fragment_pixels": FRAGMENT_REVIEW_MIN_PIXELS,
+                "review_min_parent_fraction": FRAGMENT_REVIEW_MIN_PARENT_FRACTION,
             },
             "obb": {
                 "image_status_counts": dict(sorted(obb_image_status_counts.items())),

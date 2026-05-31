@@ -44,6 +44,7 @@ Definition of done for the synthetic pipeline:
 - [x] OBB labels are audited and rejected when the visible mask is fragmented or too loose for an honest rotated rectangle.
 - [x] Fragment/evidence labels are exported separately from physical count truth.
 - [x] Below-threshold visible fragments are recorded as ignored metadata instead of forced training labels.
+- [x] Kept fragment labels carry `trainable` vs `review_required` evidence metadata so small/low-fraction fragments are visible to promotion gates.
 - [ ] Ambiguous human-unidentifiable fragments have a full ignore/unknown policy beyond the current pixel threshold.
 - [ ] Label transforms remain exact after any crop, resize, distortion, or other geometric postprocess.
 - [x] Batch QA writes a machine-readable summary for class balance, visible area, fragment counts, fragments per parent, OBB rejection reasons, layer-audit totals, and deterministic file hashes.
@@ -66,7 +67,7 @@ Definition of done for the synthetic pipeline:
 - [ ] Operations are one-command reproducible: render, QA/package, train under headroom, evaluate clean/real/browser guards, and clean scratch outputs.
 - [ ] Promotion rules require real-scoreboard improvement, clean-validation guardrails, browser/deploy guardrails, and enough metadata to diagnose regressions.
 
-Current completion status: renderer and label contract are proven at P0, target/recipe coverage is now explicit, and WebGL packages carry QA, recipe, ignored-fragment metadata, deterministic visual-quality gates, smoke gates, clean-scene smoke, hard-negative zero-box smoke, thin-edge sliver smoke, and hand-occlusion fragment smoke. The production training-data factory is still not complete. The next bottleneck is promoting smoke-ready recipes through real-gated P1 training experiments, then improving ambiguity/ignore policy and human visual QA promotion rules.
+Current completion status: renderer and label contract are proven at P0, target/recipe coverage is now explicit, and WebGL packages carry QA, recipe, ignored-fragment metadata, fragment evidence-review metadata, deterministic visual-quality gates, smoke gates, clean-scene smoke, hard-negative zero-box smoke, thin-edge sliver smoke, and hand-occlusion fragment smoke. The production training-data factory is still not complete. The next bottleneck is promoting smoke-ready recipes through real-gated P1 training experiments, then improving full ignore/unknown policy and human visual QA promotion rules.
 
 ## Work Loop
 
@@ -225,6 +226,7 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-05-31 14:15 | evaluation | note | `check_webgl_p1_readiness.py` now reports review-ready draft image ids; current blocker is still 0 promoted labels, but `real_overlap_0003_commons_shop_5k_10k_20k` is identified as a 6-box draft candidate ready for explicit human-review promotion. |
 | 2026-05-31 14:19 | training | note | `run_webgl_p1_diagnostic_pipeline.py --train-smoke --skip-alpha-eval` passed end-to-end, including headroom tiny training; headroom paused/resumed once on CPU pressure, train CSV still reports diagnostic mAP50-95 `0.00214`, and final best-checkpoint validation printed mAP50-95 `0.00231`. |
 | 2026-05-31 14:24 | renderer | keep | Added deterministic WebGL visual-quality QA: packager writes `qa/visual_quality.json`, summary status counts, and visual quarantine rows; label-view QA validates the file and smoke gates require zero visual rejects. Repacked smoke suite shows all 19 smoke images accepted with no visual-quality failures. |
+| 2026-05-31 14:28 | renderer | keep | Added fragment evidence-review metadata: kept fragments now record `trainable` or `review_required` plus warning reasons for small/low-parent-fraction evidence, summaries count these statuses, and quarantine marks affected images. Repacked smoke suite flags 8 review-required fragments while keeping smoke labels intact. |
 
 ## Current Active Assets
 
