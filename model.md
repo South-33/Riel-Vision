@@ -187,6 +187,12 @@ rl python scripts\make_webgl_visual_review_pack.py --suite configs\synthetic_rec
 rl python scripts\check_webgl_visual_review.py --review-csv data\review\webgl_smoke_visual_review_v1\review.csv
 ```
 
+Dry-run the WebGL trainable-candidate operations sequence:
+
+```powershell
+rl python scripts\run_webgl_trainable_candidate_pipeline.py --dry-run --train-smoke
+```
+
 Protect the real benchmark boundary:
 
 ```powershell
@@ -255,6 +261,7 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-05-31 21:45 | renderer | keep | Added WebGL human visual-review rules plus `make_webgl_visual_review_pack.py` and `check_webgl_visual_review.py`; a smoke-suite probe wrote 12 review rows with RGB/detect/fragment/ID previews, and both pending-review validation plus synthetic all-accepted strict validation passed. |
 | 2026-05-31 21:51 | renderer | keep | Added `--fragment-review-policy`; diagnostic packages keep review-required fragment labels, while trainable fragment views can move ambiguous components to ignored metadata with `requires_human_review`. Hand-occlusion trainable fragment probe passed with 28 trainable fragments, 10 ignored fragments, and 0 review-required labels. |
 | 2026-05-31 21:54 | renderer | keep | Added a label-transform guard to `check_webgl_label_views.py`: geometric postprocess keys such as crop, resize, radial distortion, perspective, homography, warp, or scale now fail unless an exact shared RGB/ID/label transform path is implemented. Current WebGL packages declare non-geometric RGB-only postprocess. |
+| 2026-05-31 21:57 | harness | keep | Added `run_webgl_trainable_candidate_pipeline.py` to chain trainable suite checks/renders, trainable-gated mix build, WebGL visual review pack/check, P1 readiness, and optional tiny train smoke from one audited command sequence. |
 
 ## Current Active Assets
 

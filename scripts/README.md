@@ -50,6 +50,7 @@ This directory is intentionally script-heavy because CashSnap has a lot of histo
 - `build_webgl_mix_yaml.py`: builds a combined YOLO data YAML from gated WebGL package outputs.
 - `check_webgl_p1_readiness.py`: runs lightweight synthetic/real/browser guard checks and reports remaining P1 transfer blockers.
 - `run_webgl_p1_diagnostic_pipeline.py`: one-command WebGL P1 diagnostic sequence for smoke suite, mix, readiness, draft-label filtering, alpha eval, and optional train smoke.
+- `run_webgl_trainable_candidate_pipeline.py`: one-command trainable-candidate sequence for suite render/package, mix gates, visual review pack, P1 readiness, and optional train smoke.
 - `check_synthetic_recipe_catalog.py`: validates the synthetic target matrix and recipe catalog coverage.
 - `curate_reference_images.py`: bucket KHR reference assets by circulation priority.
 - `build_current_khr_cutout_bank.py`, `build_numista_cutout_bank.py`: reproducible scan/reference cutout banks.
