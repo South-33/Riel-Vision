@@ -353,6 +353,8 @@ function sceneConfig(variant, mode, backgroundPath) {
       contrast: randomBetween(rng, 1.00, 1.07),
       saturation: randomBetween(rng, 0.90, 1.07),
       brightness: randomBetween(rng, 0.96, 1.05),
+      focusBlurPx: rng() < 0.68 ? randomBetween(rng, 0.05, 0.32) : 0,
+      grainStrength: randomBetween(rng, 24, 46),
       grainAlpha: randomBetween(rng, 14, 30),
       vignette: randomBetween(rng, 42, 78),
     },
@@ -1010,7 +1012,7 @@ function buildCameraOverlay() {
     for (let x = 0; x < grainCanvas.width; x += 1) {
       const i = (y * grainCanvas.width + x) * 4;
       const hash = Math.sin((x + 1) * 12.9898 + (y + 1) * 78.233) * 43758.5453;
-      const grain = (hash - Math.floor(hash) - 0.5) * 38;
+      const grain = (hash - Math.floor(hash) - 0.5) * sceneConfig.postprocess.grainStrength;
       const radius = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2) / maxRadius;
       const vignette = Math.max(0, radius - 0.48) * sceneConfig.postprocess.vignette;
       const value = Math.max(0, Math.min(255, 128 + grain - vignette));
@@ -1236,7 +1238,13 @@ window.renderPass = (mode) => {
     for (const mesh of occluderMeshes) mesh.material = mesh.userData.material;
   }
   grainCanvas.style.display = mode === "id" ? "none" : "block";
-  visualRenderer.domElement.style.filter = mode === "id" ? "none" : "contrast(" + sceneConfig.postprocess.contrast + ") saturate(" + sceneConfig.postprocess.saturation + ") brightness(" + sceneConfig.postprocess.brightness + ")";
+  const visualFilter = [
+    "contrast(" + sceneConfig.postprocess.contrast + ")",
+    "saturate(" + sceneConfig.postprocess.saturation + ")",
+    "brightness(" + sceneConfig.postprocess.brightness + ")",
+    sceneConfig.postprocess.focusBlurPx > 0 ? "blur(" + sceneConfig.postprocess.focusBlurPx + "px)" : "",
+  ].filter(Boolean).join(" ");
+  visualRenderer.domElement.style.filter = mode === "id" ? "none" : visualFilter;
   const activeRenderer = mode === "id" ? idRenderer : visualRenderer;
   activeRenderer.render(scene, camera);
 };
