@@ -14,6 +14,14 @@ DEFAULT_TARGETS = ROOT / "configs" / "synthetic_targets" / "cashsnap_real_target
 DEFAULT_RECIPES = ROOT / "configs" / "synthetic_recipes" / "cashsnap_webgl_recipe_catalog_v1.json"
 VALID_RECIPE_STATUSES = {"planned", "smoke_ready", "label_policy_ready", "diagnostic", "trainable-candidate", "promoted"}
 VALID_ASSET_SIDE_POLICIES = {"any", "front_only", "back_only", "front_back_mix"}
+VALID_CAMERA_PROFILES = {
+    "generic_phone_jitter",
+    "phone_auto",
+    "iphone_8_like",
+    "iphone_12_wide_like",
+    "budget_android_wide_like",
+    "browser_upload_resized",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -81,6 +89,8 @@ def main() -> int:
         require(str(row.get("current_blocker", "")).strip(), f"{recipe_id}: missing current_blocker")
         asset_side_policy = str(row.get("asset_side_policy", ""))
         require(asset_side_policy in VALID_ASSET_SIDE_POLICIES, f"{recipe_id}: invalid asset_side_policy {asset_side_policy!r}")
+        camera_profile = str(row.get("camera_profile", ""))
+        require(camera_profile in VALID_CAMERA_PROFILES, f"{recipe_id}: invalid camera_profile {camera_profile!r}")
         for target_id in target_ids:
             coverage[str(target_id)].append(recipe_id)
 

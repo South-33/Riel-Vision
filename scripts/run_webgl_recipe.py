@@ -15,6 +15,14 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CATALOG = ROOT / "configs" / "synthetic_recipes" / "cashsnap_webgl_recipe_catalog_v1.json"
 RUNNABLE_SCENE_MODES = {"auto", "clean", "negative", "stack", "fan", "thin_edge", "hand_occlusion", "qa3"}
 ASSET_SIDE_POLICIES = {"any", "front_only", "back_only", "front_back_mix"}
+CAMERA_PROFILES = {
+    "generic_phone_jitter",
+    "phone_auto",
+    "iphone_8_like",
+    "iphone_12_wide_like",
+    "budget_android_wide_like",
+    "browser_upload_resized",
+}
 STATUS_TO_BATCH_STATUS = {
     "planned": "diagnostic",
     "smoke_ready": "smoke",
@@ -34,6 +42,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--count", type=int, default=4)
     parser.add_argument("--scene-mode", default="", help="Override the first runnable scene mode from the catalog.")
     parser.add_argument("--asset-side-policy", default="", help="Override catalog asset-side sampling policy.")
+    parser.add_argument("--camera-profile", default="", help="Override catalog WebGL camera/FOV/framing profile.")
     parser.add_argument("--artifact-status", choices=["smoke", "diagnostic", "trainable-candidate"], default="")
     parser.add_argument("--background-dir", type=Path, default=None)
     parser.add_argument("--min-free-ram-gb", default="3")
@@ -97,12 +106,20 @@ def choose_asset_side_policy(recipe: dict, override: str) -> str:
     return policy
 
 
+def choose_camera_profile(recipe: dict, override: str) -> str:
+    profile = override or str(recipe.get("camera_profile", "generic_phone_jitter"))
+    if profile not in CAMERA_PROFILES:
+        raise SystemExit(f"--camera-profile must be one of {sorted(CAMERA_PROFILES)}")
+    return profile
+
+
 def main() -> int:
     args = parse_args()
     catalog = read_json(resolve(args.catalog))
     recipe = find_recipe(catalog, args.recipe_id)
     scene_mode = choose_scene_mode(recipe, args.scene_mode)
     asset_side_policy = choose_asset_side_policy(recipe, args.asset_side_policy)
+    camera_profile = choose_camera_profile(recipe, args.camera_profile)
     artifact_status = args.artifact_status or STATUS_TO_BATCH_STATUS.get(str(recipe.get("artifact_status")), "diagnostic")
     fragment_review_policy = args.fragment_review_policy
     if fragment_review_policy == "auto":
@@ -127,6 +144,8 @@ def main() -> int:
         scene_mode,
         "--asset-side-policy",
         asset_side_policy,
+        "--camera-profile",
+        camera_profile,
         "--recipe-name",
         args.recipe_id,
         "--artifact-status",
@@ -165,6 +184,7 @@ def main() -> int:
         if scene_mode != "auto":
             gate_cmd.extend(["--require-scene-mode", scene_mode])
         gate_cmd.extend(["--require-asset-side-policy", asset_side_policy])
+        gate_cmd.extend(["--require-camera-profile", camera_profile])
         print(" ".join(gate_cmd), flush=True)
         subprocess.run(gate_cmd, cwd=ROOT, check=True)
     if artifact_status == "trainable-candidate" and not args.skip_trainable_gate:
@@ -181,6 +201,7 @@ def main() -> int:
         if scene_mode != "auto":
             gate_cmd.extend(["--require-scene-mode", scene_mode])
         gate_cmd.extend(["--require-asset-side-policy", asset_side_policy])
+        gate_cmd.extend(["--require-camera-profile", camera_profile])
         if args.allow_zero_visible_trainable:
             gate_cmd.append("--allow-zero-visible")
         print(" ".join(gate_cmd), flush=True)

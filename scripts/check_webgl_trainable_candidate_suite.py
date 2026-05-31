@@ -16,6 +16,14 @@ DEFAULT_SUITE = ROOT / "configs" / "synthetic_recipes" / "cashsnap_webgl_trainab
 DEFAULT_CATALOG = ROOT / "configs" / "synthetic_recipes" / "cashsnap_webgl_recipe_catalog_v1.json"
 VALID_TRAIN_VIEWS = {"detect", "fragment", "obb"}
 VALID_ASSET_SIDE_POLICIES = {"any", "front_only", "back_only", "front_back_mix"}
+VALID_CAMERA_PROFILES = {
+    "generic_phone_jitter",
+    "phone_auto",
+    "iphone_8_like",
+    "iphone_12_wide_like",
+    "budget_android_wide_like",
+    "browser_upload_resized",
+}
 RUNNABLE_STATUSES = {"smoke_ready", "label_policy_ready", "diagnostic", "trainable-candidate", "promoted"}
 
 
@@ -78,6 +86,8 @@ def check_existing(row: dict, out_root: Path, train_views: list[str]) -> None:
         str(row["scene_mode"]),
         "--require-asset-side-policy",
         str(row["asset_side_policy"]),
+        "--require-camera-profile",
+        str(row["camera_profile"]),
         "--min-images",
         str(row["count"]),
         "--train-views",
@@ -101,6 +111,10 @@ def check_existing(row: dict, out_root: Path, train_views: list[str]) -> None:
         recipe.get("asset_side_policy", "any") == row["asset_side_policy"],
         f"{row['recipe_id']}: rendered asset_side_policy mismatch",
     )
+    require(
+        recipe.get("camera_profile", "generic_phone_jitter") == row["camera_profile"],
+        f"{row['recipe_id']}: rendered camera_profile mismatch",
+    )
     require(summary.get("images") == row["count"], f"{row['recipe_id']}: QA image count mismatch")
     asset_selection = summary.get("asset_selection", {})
     require(isinstance(asset_selection, dict), f"{row['recipe_id']}: QA summary must include asset_selection")
@@ -121,6 +135,16 @@ def check_existing(row: dict, out_root: Path, train_views: list[str]) -> None:
         require(isinstance(side_counts, dict), f"{row['recipe_id']}: side_counts must be an object")
         require(int(side_counts.get("front", 0)) > 0, f"{row['recipe_id']}: front_back_mix rendered no fronts")
         require(int(side_counts.get("back", 0)) > 0, f"{row['recipe_id']}: front_back_mix rendered no backs")
+    camera_profiles = summary.get("camera_profiles", {})
+    require(isinstance(camera_profiles, dict), f"{row['recipe_id']}: QA summary must include camera_profiles")
+    requested_counts = camera_profiles.get("requested_counts", {})
+    require(isinstance(requested_counts, dict), f"{row['recipe_id']}: camera_profiles.requested_counts must be an object")
+    require(
+        requested_counts == {row["camera_profile"]: row["count"]},
+        f"{row['recipe_id']}: unexpected camera profile request counts {requested_counts}",
+    )
+    selected_counts = camera_profiles.get("selected_counts", {})
+    require(isinstance(selected_counts, dict) and selected_counts, f"{row['recipe_id']}: selected camera profiles must be non-empty")
     for suffix in ("manifest.json", "qa/summary.json", "data.yaml", "recipe.json"):
         require((out_root / suffix).exists(), f"{row['recipe_id']}: missing rendered output {out_root / suffix}")
 
@@ -151,6 +175,7 @@ def main() -> int:
             "recipe_id",
             "scene_mode",
             "asset_side_policy",
+            "camera_profile",
             "out_root",
             "start_variant",
             "count",
@@ -181,6 +206,16 @@ def main() -> int:
         require(
             asset_side_policy == catalog_asset_side_policy,
             f"{recipe_id}: suite asset_side_policy {asset_side_policy!r} does not match catalog {catalog_asset_side_policy!r}",
+        )
+        camera_profile = str(row["camera_profile"])
+        require(
+            camera_profile in VALID_CAMERA_PROFILES,
+            f"{recipe_id}: camera_profile must be one of {sorted(VALID_CAMERA_PROFILES)}",
+        )
+        catalog_camera_profile = str(catalog_row.get("camera_profile", "generic_phone_jitter"))
+        require(
+            camera_profile == catalog_camera_profile,
+            f"{recipe_id}: suite camera_profile {camera_profile!r} does not match catalog {catalog_camera_profile!r}",
         )
 
         try:

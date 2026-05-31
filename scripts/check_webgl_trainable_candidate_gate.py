@@ -14,6 +14,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 VALID_TRAIN_VIEWS = {"detect", "fragment", "obb"}
 VALID_ASSET_SIDE_POLICIES = {"any", "front_only", "back_only", "front_back_mix"}
+VALID_CAMERA_PROFILES = {
+    "generic_phone_jitter",
+    "phone_auto",
+    "iphone_8_like",
+    "iphone_12_wide_like",
+    "budget_android_wide_like",
+    "browser_upload_resized",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -23,6 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-recipe", default="")
     parser.add_argument("--require-scene-mode", default="")
     parser.add_argument("--require-asset-side-policy", default="")
+    parser.add_argument("--require-camera-profile", default="")
     parser.add_argument("--train-views", default="detect", help="Comma-separated views intended for training: detect,fragment,obb.")
     parser.add_argument(
         "--allow-artifact-status",
@@ -118,6 +127,25 @@ def main() -> int:
             require(isinstance(side_counts, dict), "asset_selection.side_counts must be an object")
             require(int(side_counts.get("front", 0)) > 0, "front_back_mix rendered no fronts")
             require(int(side_counts.get("back", 0)) > 0, "front_back_mix rendered no backs")
+    if args.require_camera_profile:
+        require(
+            args.require_camera_profile in VALID_CAMERA_PROFILES,
+            f"--require-camera-profile must be one of {sorted(VALID_CAMERA_PROFILES)}",
+        )
+        require(
+            recipe.get("camera_profile", "generic_phone_jitter") == args.require_camera_profile,
+            f"expected recipe camera_profile={args.require_camera_profile!r}, got {recipe.get('camera_profile', 'generic_phone_jitter')!r}",
+        )
+        camera_profiles = summary.get("camera_profiles", {})
+        require(isinstance(camera_profiles, dict), "qa summary must include camera_profiles")
+        requested_counts = camera_profiles.get("requested_counts", {})
+        require(isinstance(requested_counts, dict), "camera_profiles.requested_counts must be an object")
+        require(
+            requested_counts == {args.require_camera_profile: images},
+            f"unexpected camera profile request counts: {requested_counts}",
+        )
+        selected_counts = camera_profiles.get("selected_counts", {})
+        require(isinstance(selected_counts, dict) and selected_counts, "camera_profiles.selected_counts must be non-empty")
     require(summary.get("layer_audit_totals", {}).get("violations") == 0, "layer-order violations must be zero")
 
     visual_quality_counts = visual_quality.get("counts", {})

@@ -64,26 +64,26 @@ def parse_train_views(value: object) -> set[str]:
 def run_gate(row: dict, root: Path, gate_kind: str) -> None:
     recipe_id = str(row["recipe_id"])
     scene_mode = str(row["scene_mode"])
-    asset_side_policy = str(row.get("asset_side_policy", "any"))
+    asset_side_policy = str(row.get("asset_side_policy", ""))
+    camera_profile = str(row.get("camera_profile", ""))
     if gate_kind == "none":
         return
     if gate_kind == "smoke":
-        subprocess.run(
-            [
-                sys.executable,
-                "scripts/check_webgl_smoke_gate.py",
-                "--root",
-                str(root),
-                "--require-recipe",
-                recipe_id,
-                "--require-scene-mode",
-                scene_mode,
-                "--require-asset-side-policy",
-                asset_side_policy,
-            ],
-            cwd=ROOT,
-            check=True,
-        )
+        command = [
+            sys.executable,
+            "scripts/check_webgl_smoke_gate.py",
+            "--root",
+            str(root),
+            "--require-recipe",
+            recipe_id,
+            "--require-scene-mode",
+            scene_mode,
+        ]
+        if asset_side_policy:
+            command.extend(["--require-asset-side-policy", asset_side_policy])
+        if camera_profile:
+            command.extend(["--require-camera-profile", camera_profile])
+        subprocess.run(command, cwd=ROOT, check=True)
         return
     if gate_kind == "trainable-candidate":
         train_views = parse_train_views(row.get("train_views", ["detect"]))
@@ -98,11 +98,13 @@ def run_gate(row: dict, root: Path, gate_kind: str) -> None:
             recipe_id,
             "--require-scene-mode",
             scene_mode,
-            "--require-asset-side-policy",
-            asset_side_policy,
             "--train-views",
             ",".join(sorted(train_views)),
         ]
+        if asset_side_policy:
+            command.extend(["--require-asset-side-policy", asset_side_policy])
+        if camera_profile:
+            command.extend(["--require-camera-profile", camera_profile])
         if bool(row.get("allow_zero_visible")):
             command.append("--allow-zero-visible")
         subprocess.run(command, cwd=ROOT, check=True)
@@ -162,7 +164,8 @@ def main() -> int:
                 "root": rel(root),
                 "data_yaml": rel(root / "data.yaml"),
                 "gate_kind": args.gate_kind,
-                "asset_side_policy": str(row.get("asset_side_policy", "any")),
+                "asset_side_policy": str(row.get("asset_side_policy", "")),
+                "camera_profile": str(row.get("camera_profile", "")),
                 "train_views": sorted(parse_train_views(row.get("train_views", ["detect"]))),
             }
         )

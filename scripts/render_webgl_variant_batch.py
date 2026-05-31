@@ -58,6 +58,19 @@ def parse_args() -> argparse.Namespace:
         default="any",
         help="Constrain banknote scan side sampling for front/back confusion recipes.",
     )
+    parser.add_argument(
+        "--camera-profile",
+        choices=[
+            "generic_phone_jitter",
+            "phone_auto",
+            "iphone_8_like",
+            "iphone_12_wide_like",
+            "budget_android_wide_like",
+            "browser_upload_resized",
+        ],
+        default="generic_phone_jitter",
+        help="Select WebGL camera/FOV/framing profile.",
+    )
     parser.add_argument("--recipe-name", default="", help="Human-readable recipe name to write into recipe.json.")
     parser.add_argument(
         "--artifact-status",
@@ -115,6 +128,8 @@ def render_variant(variant: int, out_dir: Path, scene_mode: str, background_dir:
         scene_mode,
         "--asset-side-policy",
         args.asset_side_policy,
+        "--camera-profile",
+        args.camera_profile,
         "--out-dir",
         str(out_dir),
     ]
@@ -529,6 +544,8 @@ def write_yolo_dataset(
     asset_side_policy_counts: Counter[str] = Counter()
     asset_side_counts: Counter[str] = Counter()
     front_back_mix_counts: Counter[str] = Counter()
+    camera_profile_request_counts: Counter[str] = Counter()
+    camera_profile_counts: Counter[str] = Counter()
     visible_pixels_per_instance: list[float] = []
     visible_instances_per_image: list[float] = []
     fragments_per_image: list[float] = []
@@ -601,6 +618,10 @@ def write_yolo_dataset(
                 surface_counts[str(surface.get("name", "unknown"))] += 1
                 background = surface.get("background")
                 background_counts["file" if background else "procedural"] += 1
+            camera = scene_config.get("camera", {})
+            if isinstance(camera, dict):
+                camera_profile_request_counts[str(camera.get("profileRequested", "unknown"))] += 1
+                camera_profile_counts[str(camera.get("profile", "unknown"))] += 1
         asset_selection = source_metadata.get("assetSelection", {})
         if isinstance(asset_selection, dict):
             side_policy = str(asset_selection.get("sidePolicy", "unknown"))
@@ -739,6 +760,7 @@ def write_yolo_dataset(
                 "image": str(image_path.relative_to(out_root)),
                 "scene_mode": source_scene_mode,
                 "asset_selection": asset_selection if isinstance(asset_selection, dict) else {},
+                "camera": scene_config.get("camera", {}) if isinstance(scene_config, dict) else {},
                 "visible_instances": len(visible_boxes),
                 "visible_pixels": int(sum(visible_pixels)),
                 "fragments": len(fragment_rows),
@@ -860,6 +882,10 @@ def write_yolo_dataset(
                 "side_counts": dict(sorted(asset_side_counts.items())),
                 "front_back_mix_counts": dict(sorted(front_back_mix_counts.items())),
             },
+            "camera_profiles": {
+                "requested_counts": dict(sorted(camera_profile_request_counts.items())),
+                "selected_counts": dict(sorted(camera_profile_counts.items())),
+            },
             "class_counts": dict(sorted(class_counts.items())),
             "visible_instances": {
                 "total": int(sum(visible_instances_per_image)),
@@ -909,6 +935,7 @@ def write_yolo_dataset(
                 "obb": "trainable only when every visible instance in the image has an honest OBB",
                 "counting": "physical parent counts live in visible_boxes/source metadata and require fusion for fragment outputs",
                 "asset_side_policy": "front/back policies constrain scan-side sampling before render; front_back_mix should show both sides in multi-note images",
+                "camera_profiles": "profile requests choose auditable phone-like FOV/framing ranges before RGB/ID extraction; no geometric postprocess is applied after labels",
             },
             "images_detail": image_summary_rows,
         },
@@ -989,6 +1016,7 @@ def write_recipe_metadata(
         },
         "scene_mode": args.scene_mode,
         "asset_side_policy": args.asset_side_policy,
+        "camera_profile": args.camera_profile,
         "background_dir": rel(args.background_dir) if args.background_dir else "",
         "fragment_review_policy": args.fragment_review_policy,
         "label_transform_policy": {

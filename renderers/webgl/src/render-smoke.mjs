@@ -23,6 +23,7 @@ const VARIANT = Number.parseInt(argValue("--variant", "0"), 10);
 const SCENE_MODE = argValue("--scene-mode", "auto");
 const BACKGROUND_DIR = argValue("--background-dir", "");
 const ASSET_SIDE_POLICY = argValue("--asset-side-policy", "any");
+const CAMERA_PROFILE = argValue("--camera-profile", "generic_phone_jitter");
 const WIDTH = Number.parseInt(argValue("--width", "1440"), 10);
 const HEIGHT = Number.parseInt(argValue("--height", "1080"), 10);
 const VISUAL_SCALE = Number.parseFloat(argValue("--visual-scale", "2"));
@@ -93,6 +94,10 @@ if (!["any", "front_only", "back_only", "front_back_mix"].includes(ASSET_SIDE_PO
   throw new Error("--asset-side-policy must be one of: any, front_only, back_only, front_back_mix");
 }
 
+if (!["generic_phone_jitter", "phone_auto", "iphone_8_like", "iphone_12_wide_like", "budget_android_wide_like", "browser_upload_resized"].includes(CAMERA_PROFILE)) {
+  throw new Error("--camera-profile must be one of: generic_phone_jitter, phone_auto, iphone_8_like, iphone_12_wide_like, budget_android_wide_like, browser_upload_resized");
+}
+
 const effectiveSceneMode = SCENE_MODE === "auto" ? (VARIANT >= 100 ? "fan" : "stack") : SCENE_MODE;
 
 function mulberry32(seed) {
@@ -136,9 +141,83 @@ function listImageFiles(directory) {
     .sort();
 }
 
+const CAMERA_PROFILES = {
+  generic_phone_jitter: {
+    source: "legacy_webgl_default",
+    weight: 1.0,
+    targetResolution: [1440, 1080],
+    fov: [42, 56],
+    positionX: [-0.10, 0.10],
+    positionY: [-0.48, -0.24],
+    positionZ: [2.05, 2.42],
+    lookAtX: [-0.05, 0.05],
+    lookAtY: [-0.03, 0.05],
+  },
+  iphone_8_like: {
+    source: "configs/3d_pipeline/proof_p1_transfer.json",
+    weight: 0.25,
+    targetResolution: [960, 720],
+    fov: [48, 64],
+    positionX: [-0.12, 0.12],
+    positionY: [-0.58, -0.28],
+    positionZ: [2.10, 2.55],
+    lookAtX: [-0.06, 0.06],
+    lookAtY: [-0.04, 0.06],
+  },
+  iphone_12_wide_like: {
+    source: "configs/3d_pipeline/proof_p1_transfer.json",
+    weight: 0.35,
+    targetResolution: [960, 720],
+    fov: [58, 74],
+    positionX: [-0.14, 0.14],
+    positionY: [-0.55, -0.22],
+    positionZ: [1.85, 2.32],
+    lookAtX: [-0.07, 0.07],
+    lookAtY: [-0.05, 0.07],
+  },
+  budget_android_wide_like: {
+    source: "configs/3d_pipeline/proof_p1_transfer.json",
+    weight: 0.25,
+    targetResolution: [960, 720],
+    fov: [62, 80],
+    positionX: [-0.15, 0.15],
+    positionY: [-0.58, -0.20],
+    positionZ: [1.75, 2.25],
+    lookAtX: [-0.08, 0.08],
+    lookAtY: [-0.05, 0.08],
+  },
+  browser_upload_resized: {
+    source: "configs/3d_pipeline/proof_p1_transfer.json",
+    weight: 0.15,
+    targetResolution: [640, 640],
+    fov: [50, 70],
+    positionX: [-0.10, 0.10],
+    positionY: [-0.44, -0.18],
+    positionZ: [1.95, 2.35],
+    lookAtX: [-0.05, 0.05],
+    lookAtY: [-0.03, 0.05],
+  },
+};
+
+function chooseCameraProfile(rng, requestedProfile) {
+  if (requestedProfile !== "phone_auto") {
+    return { name: requestedProfile, ...CAMERA_PROFILES[requestedProfile] };
+  }
+  const candidates = ["iphone_8_like", "iphone_12_wide_like", "budget_android_wide_like", "browser_upload_resized"];
+  const totalWeight = candidates.reduce((total, name) => total + CAMERA_PROFILES[name].weight, 0);
+  let threshold = rng() * totalWeight;
+  for (const name of candidates) {
+    threshold -= CAMERA_PROFILES[name].weight;
+    if (threshold <= 0) return { name, ...CAMERA_PROFILES[name] };
+  }
+  const fallback = candidates[candidates.length - 1];
+  return { name: fallback, ...CAMERA_PROFILES[fallback] };
+}
+
 function sceneConfig(variant, mode, backgroundPath) {
   const modeOffset = mode === "fan" ? 1009 : mode === "clean" ? 2003 : mode === "qa3" ? 3001 : mode === "negative" ? 4001 : mode === "thin_edge" ? 5003 : mode === "hand_occlusion" ? 6007 : 0;
   const rng = mulberry32(26058003 + variant * 191 + modeOffset);
+  const cameraProfile = chooseCameraProfile(rng, CAMERA_PROFILE);
   const surfaces = [
     { name: "warm_wood", base: "#9b784a", light: "#fff2d6", dark: "#231810", scene: "#9b927d", repeat: [2.5, 2.0] },
     { name: "gray_counter", base: "#827f77", light: "#dedbd2", dark: "#3a3834", scene: "#86837b", repeat: [1.8, 1.8] },
@@ -160,17 +239,22 @@ function sceneConfig(variant, mode, backgroundPath) {
       } : null,
     },
     camera: {
-      fov: randomBetween(rng, 42, 56),
+      profileRequested: CAMERA_PROFILE,
+      profile: cameraProfile.name,
+      profileSource: cameraProfile.source,
+      targetResolution: cameraProfile.targetResolution,
+      fov: randomBetween(rng, ...cameraProfile.fov),
       position: [
-        randomBetween(rng, -0.10, 0.10),
-        randomBetween(rng, -0.48, -0.24),
-        randomBetween(rng, 2.05, 2.42),
+        randomBetween(rng, ...cameraProfile.positionX),
+        randomBetween(rng, ...cameraProfile.positionY),
+        randomBetween(rng, ...cameraProfile.positionZ),
       ],
       lookAt: [
-        randomBetween(rng, -0.05, 0.05),
-        randomBetween(rng, -0.03, 0.05),
+        randomBetween(rng, ...cameraProfile.lookAtX),
+        randomBetween(rng, ...cameraProfile.lookAtY),
         0,
       ],
+      lensDistortion: "not_applied_until_rgb_id_and_labels_share_the_same_exact_transform",
     },
     lighting: {
       hemiIntensity: randomBetween(rng, 1.15, 1.95),
