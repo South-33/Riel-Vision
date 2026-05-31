@@ -44,6 +44,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--width", type=int, default=1440)
     parser.add_argument("--height", type=int, default=1080)
     parser.add_argument("--visual-scale", default="2", help="Visual WebGL supersampling scale.")
+    parser.add_argument("--browser-executable", type=Path, default=None, help="Optional Chromium/Edge executable override.")
     parser.add_argument("--asset-side-policy", default="", help="Override catalog asset-side sampling policy.")
     parser.add_argument("--camera-profile", default="", help="Override catalog WebGL camera/FOV/framing profile.")
     parser.add_argument("--artifact-status", choices=["smoke", "diagnostic", "trainable-candidate"], default="")
@@ -184,6 +185,8 @@ def main() -> int:
     ]
     if args.background_dir:
         cmd.extend(["--background-dir", str(args.background_dir)])
+    if args.browser_executable:
+        cmd.extend(["--browser-executable", str(args.browser_executable)])
     if args.skip_render:
         cmd.append("--skip-render")
     if args.skip_yolo_check:

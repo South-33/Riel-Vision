@@ -24,6 +24,7 @@ const SCENE_MODE = argValue("--scene-mode", "auto");
 const BACKGROUND_DIR = argValue("--background-dir", "");
 const ASSET_SIDE_POLICY = argValue("--asset-side-policy", "any");
 const CAMERA_PROFILE = argValue("--camera-profile", "generic_phone_jitter");
+const BROWSER_EXECUTABLE = argValue("--browser-executable", process.env.CASHSNAP_WEBGL_BROWSER || EDGE);
 const WIDTH = Number.parseInt(argValue("--width", "1440"), 10);
 const HEIGHT = Number.parseInt(argValue("--height", "1080"), 10);
 const VISUAL_SCALE = Number.parseFloat(argValue("--visual-scale", "2"));
@@ -1275,13 +1276,13 @@ function writeDataUrlPng(dataUrl, outPath) {
 }
 
 async function main() {
-  if (!fs.existsSync(EDGE)) {
-    throw new Error(`Microsoft Edge executable not found at ${EDGE}`);
+  if (!fs.existsSync(BROWSER_EXECUTABLE)) {
+    throw new Error(`Browser executable not found at ${BROWSER_EXECUTABLE}`);
   }
   fs.mkdirSync(OUT_DIR, { recursive: true });
   const textureAssets = assets.map((asset) => ({ ...asset, textureUrl: pathToFileURL(asset.path).href }));
   const browser = await puppeteer.launch({
-    executablePath: EDGE,
+    executablePath: BROWSER_EXECUTABLE,
     headless: "new",
     args: [
       "--allow-file-access-from-files",
@@ -1325,6 +1326,7 @@ async function main() {
       path.join(OUT_DIR, "metadata.json"),
       JSON.stringify({
         renderer: "three-webgl-edge",
+        browserExecutable: BROWSER_EXECUTABLE,
         variant: VARIANT,
         sceneMode: effectiveSceneMode,
         width: WIDTH,

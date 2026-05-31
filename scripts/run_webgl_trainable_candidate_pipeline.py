@@ -29,6 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--width", type=int, default=1440)
     parser.add_argument("--height", type=int, default=1080)
     parser.add_argument("--visual-scale", default="2")
+    parser.add_argument("--browser-executable", type=Path, default=None, help="Optional Chromium/Edge executable override.")
     parser.add_argument("--headroom-max-percent", default="90")
     parser.add_argument("--headroom-resume-percent", default="82")
     parser.add_argument("--headroom-max-ram-percent", default="90")
@@ -83,6 +84,8 @@ def main() -> int:
     ]
     if args.skip_render:
         suite_cmd.append("--skip-render")
+    if args.browser_executable:
+        suite_cmd.extend(["--browser-executable", str(args.browser_executable)])
     if args.dry_run:
         suite_cmd.append("--dry-run")
     run(suite_cmd, args.dry_run)
