@@ -40,6 +40,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-yolo-check", action="store_true")
     parser.add_argument("--skip-label-view-check", action="store_true")
     parser.add_argument("--skip-smoke-gate", action="store_true")
+    parser.add_argument("--skip-trainable-gate", action="store_true")
+    parser.add_argument("--train-views", default="detect", help="Comma-separated train views for trainable-candidate gates.")
+    parser.add_argument("--allow-zero-visible-trainable", action="store_true", help="Allow zero visible banknotes in a trainable-candidate gate.")
     return parser.parse_args()
 
 
@@ -129,6 +132,23 @@ def main() -> int:
         ]
         if scene_mode != "auto":
             gate_cmd.extend(["--require-scene-mode", scene_mode])
+        print(" ".join(gate_cmd), flush=True)
+        subprocess.run(gate_cmd, cwd=ROOT, check=True)
+    if artifact_status == "trainable-candidate" and not args.skip_trainable_gate:
+        gate_cmd = [
+            sys.executable,
+            "scripts/check_webgl_trainable_candidate_gate.py",
+            "--root",
+            str(out_root),
+            "--require-recipe",
+            args.recipe_id,
+            "--train-views",
+            args.train_views,
+        ]
+        if scene_mode != "auto":
+            gate_cmd.extend(["--require-scene-mode", scene_mode])
+        if args.allow_zero_visible_trainable:
+            gate_cmd.append("--allow-zero-visible")
         print(" ".join(gate_cmd), flush=True)
         subprocess.run(gate_cmd, cwd=ROOT, check=True)
     return 0
