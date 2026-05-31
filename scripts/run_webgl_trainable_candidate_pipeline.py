@@ -143,7 +143,15 @@ def main() -> int:
         run(review_check, args.dry_run)
 
     if not args.skip_p1_readiness:
-        run([sys.executable, "scripts/check_webgl_p1_readiness.py"], args.dry_run)
+        run(
+            [
+                sys.executable,
+                "scripts/check_webgl_p1_readiness.py",
+                "--smoke-mix",
+                mix_out,
+            ],
+            args.dry_run,
+        )
 
     if args.train_smoke:
         run(
