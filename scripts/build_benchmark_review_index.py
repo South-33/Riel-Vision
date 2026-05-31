@@ -75,6 +75,7 @@ def row_html(source: dict[str, str], task: dict[str, str], draft_dir: Path, out_
     draft_path = repo_path(draft_label) if draft_label.exists() else None
     draft_count = count_yolo_rows(draft_label)
     status = source.get("label_status") or task.get("label_status", "")
+    role = source.get("benchmark_role") or task.get("benchmark_role", "")
     preview = preview_path(image_id, image_path)
     review_ready = draft_count > 0
     is_focus = image_id == focus_image_id
@@ -105,7 +106,7 @@ def row_html(source: dict[str, str], task: dict[str, str], draft_dir: Path, out_
           <div class="badge">{html.escape(badge)}</div>
           <h2>{html.escape(image_id)}</h2>
           <p><strong>Status:</strong> {html.escape(status)} / <strong>Draft boxes:</strong> {draft_count}</p>
-          <p><strong>Priority:</strong> {html.escape(task.get("priority", ""))} / <strong>Benchmark:</strong> {html.escape(source.get("benchmark_status", ""))}</p>
+          <p><strong>Priority:</strong> {html.escape(task.get("priority", ""))} / <strong>Benchmark:</strong> {html.escape(source.get("benchmark_status", ""))} / <strong>Role:</strong> {html.escape(role)}</p>
           <p><strong>Review rule:</strong> {html.escape(task.get("annotation_rule", ""))}</p>
           <p>{html.escape(task.get("notes", source.get("notes", "")))}</p>
           <div class="actions">

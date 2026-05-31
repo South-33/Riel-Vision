@@ -17,6 +17,7 @@ DEFAULT_SOURCES = ROOT / "manifests" / "real_fan_benchmark_sources.csv"
 DEFAULT_QUALITY = ROOT / "manifests" / "real_fan_benchmark_label_quality.csv"
 DEFAULT_BROWSER_CASES = ROOT / "manifests" / "browser_smoke_cases.csv"
 DEFAULT_DRAFT_LABEL_DIR = ROOT / "data" / "real_fan_benchmark" / "drafts"
+P1_STRESS_ROLES = {"fan_stress", "dense_overlap_stress", "hand_occlusion_stress"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -52,6 +53,14 @@ def read_csv(path: Path) -> list[dict[str, str]]:
 
 def truthy(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "y", "score", "keep"}
+
+
+def benchmark_role(row: dict[str, str]) -> str:
+    return row.get("benchmark_role", "").strip()
+
+
+def is_p1_stress(row: dict[str, str]) -> bool:
+    return benchmark_role(row) in P1_STRESS_ROLES
 
 
 def repo_path(path: Path) -> str:
@@ -116,16 +125,23 @@ def main() -> int:
         for row in source_rows
         if row.get("benchmark_status", "").strip() == "labeled" or row.get("label_status", "").strip() == "labeled"
     ]
+    labeled_stress_images = [row for row in labeled_images if is_p1_stress(row)]
     draft_scoreable_rows = [
         row
         for row in quality_rows
         if row.get("quality", "").strip() in {"clear", "partial_clear"} and truthy(row.get("count_for_score", ""))
     ]
     review_ready_draft_ids = review_ready_drafts(source_rows, quality_rows, args.draft_label_dir)
+    source_by_id = {row.get("image_id", ""): row for row in source_rows}
+    review_ready_stress_draft_ids = [
+        image_id for image_id in review_ready_draft_ids if is_p1_stress(source_by_id.get(image_id, {}))
+    ]
     browser_cases = read_csv(args.browser_cases)
     blockers: list[str] = []
     if not labeled_images:
         blockers.append("no promoted real benchmark labels; only draft diagnostics are available")
+    elif not labeled_stress_images:
+        blockers.append("no promoted real fan/overlap stress labels; visible-denomination labels alone are not a full P1 proof")
     if not draft_scoreable_rows:
         blockers.append("no scoreable draft real labels")
     if not browser_cases:
@@ -137,9 +153,13 @@ def main() -> int:
         "real_benchmark_check": "passed",
         "browser_manifest_check": "passed",
         "promoted_labeled_images": len(labeled_images),
+        "promoted_stress_labeled_images": len(labeled_stress_images),
+        "p1_stress_roles": sorted(P1_STRESS_ROLES),
         "draft_scoreable_boxes": len(draft_scoreable_rows),
         "review_ready_draft_images": len(review_ready_draft_ids),
         "review_ready_draft_image_ids": review_ready_draft_ids,
+        "review_ready_stress_draft_images": len(review_ready_stress_draft_ids),
+        "review_ready_stress_draft_image_ids": review_ready_stress_draft_ids,
         "browser_cases": len(browser_cases),
         "ready_for_full_p1_transfer": not blockers,
         "blockers": blockers,

@@ -114,7 +114,10 @@ def main() -> None:
             draft_boxes += count
             draft_status = f", draft_boxes={count}"
             errors.extend(label_errors)
-        print(f"{image_id}: {width}x{height}, source={row.get('benchmark_status', '')}, labels={status or task_status}{draft_status}")
+        print(
+            f"{image_id}: {width}x{height}, source={row.get('benchmark_status', '')}, "
+            f"role={row.get('benchmark_role', '')}, labels={status or task_status}{draft_status}"
+        )
 
     for label_path in sorted(label_dir.glob("*.txt")):
         if label_path.stem not in source_ids:
