@@ -15,42 +15,42 @@
     {
       "id": "cashsnap_v1_no_note_patches_geom_strict_v1",
       "path": "data/backgrounds/cashsnap_v1_no_note_patches_geom_strict_v1",
-      "review_status": "pending_review",
+      "review_status": "rejected",
       "allowed_artifact_statuses": [],
-      "review_basis": "",
-      "blocker": "needs contact-sheet review proving no note fragments or bad context leaked into the bank"
+      "review_basis": "Codex visual audit of contact_sheet.jpg found visible banknote fragments/text plus unrelated outdoor/vehicle/skin contexts.",
+      "blocker": "do not use as a clean WebGL background source"
     },
     {
       "id": "cashsnap_v1_no_note_patches_strict_v1",
       "path": "data/backgrounds/cashsnap_v1_no_note_patches_strict_v1",
-      "review_status": "pending_review",
+      "review_status": "rejected",
       "allowed_artifact_statuses": [],
-      "review_basis": "",
-      "blocker": "needs contact-sheet review proving no note fragments or bad context leaked into the bank"
+      "review_basis": "Codex visual audit of contact_sheet.jpg found mixed outdoor/vertical-surface patches, black speckled mask artifacts, and a likely note-edge crop.",
+      "blocker": "do not use as a clean WebGL background source"
     },
     {
       "id": "smoke_cashsnap_no_note_patches_v1",
       "path": "data/backgrounds/smoke_cashsnap_no_note_patches_v1",
-      "review_status": "pending_review",
+      "review_status": "rejected",
       "allowed_artifact_statuses": [],
-      "review_basis": "",
-      "blocker": "historical smoke extraction requires contact-sheet review before reuse"
+      "review_basis": "Codex visual audit of contact_sheet.jpg found many banknotes, coins, and people in the patch bank.",
+      "blocker": "do not use as a clean WebGL background source"
     },
     {
       "id": "smoke_cashsnap_no_note_patches_v2",
       "path": "data/backgrounds/smoke_cashsnap_no_note_patches_v2",
-      "review_status": "pending_review",
+      "review_status": "rejected",
       "allowed_artifact_statuses": [],
-      "review_basis": "",
-      "blocker": "historical smoke extraction requires contact-sheet review before reuse"
+      "review_basis": "Codex visual audit of contact_sheet.jpg found banknote fragments/text, outdoor patches, and cluttered non-table contexts.",
+      "blocker": "do not use as a clean WebGL background source"
     },
     {
       "id": "smoke_cashsnap_no_note_patches_v3",
       "path": "data/backgrounds/smoke_cashsnap_no_note_patches_v3",
-      "review_status": "pending_review",
+      "review_status": "rejected",
       "allowed_artifact_statuses": [],
-      "review_basis": "",
-      "blocker": "historical smoke extraction requires contact-sheet review before reuse"
+      "review_basis": "Codex visual audit of contact_sheet.jpg found outdoor/rail/arm/vertical-surface contexts unsuitable as clean table textures.",
+      "blocker": "do not use as a clean WebGL background source"
     },
     {
       "id": "smoke_cashsnap_no_note_patches_v4",
