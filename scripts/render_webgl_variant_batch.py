@@ -807,6 +807,10 @@ def write_yolo_dataset(
             "review_min_fragment_pixels": FRAGMENT_REVIEW_MIN_PIXELS,
             "review_min_parent_fraction": FRAGMENT_REVIEW_MIN_PARENT_FRACTION,
             "fragment_review_policy": fragment_review_policy,
+            "label_transform_policy": {
+                "geometric_postprocess": "disallowed_until_rgb_id_and_labels_share_the_same_exact_transform",
+                "current_postprocess": "non_geometric_rgb_only",
+            },
             "policy": {
                 "label_meaning": "visible connected evidence components, not physical bill counts",
                 "ignored_fragments": "components below min_fragment_pixels are recorded as ignored metadata instead of forced training labels",
@@ -865,6 +869,10 @@ def write_yolo_dataset(
                     "max_dark_fraction": VISUAL_MAX_DARK_FRACTION,
                     "max_light_fraction": VISUAL_MAX_LIGHT_FRACTION,
                 },
+            },
+            "label_transform_policy": {
+                "geometric_postprocess": "disallowed_until_rgb_id_and_labels_share_the_same_exact_transform",
+                "current_postprocess": "non_geometric_rgb_only",
             },
             "policy": {
                 "detect_labels": "visible-only AABB labels for detect-compatible probes",
@@ -952,6 +960,10 @@ def write_recipe_metadata(
         "scene_mode": args.scene_mode,
         "background_dir": rel(args.background_dir) if args.background_dir else "",
         "fragment_review_policy": args.fragment_review_policy,
+        "label_transform_policy": {
+            "geometric_postprocess": "disallowed_until_rgb_id_and_labels_share_the_same_exact_transform",
+            "current_postprocess": "non_geometric_rgb_only",
+        },
         "headroom": {
             "max_percent": args.headroom_max_percent,
             "resume_percent": args.headroom_resume_percent,

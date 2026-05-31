@@ -46,7 +46,7 @@ Definition of done for the synthetic pipeline:
 - [x] Below-threshold visible fragments are recorded as ignored metadata instead of forced training labels.
 - [x] Kept fragment labels carry `trainable` vs `review_required` evidence metadata so small/low-fraction fragments are visible to promotion gates.
 - [x] Ambiguous human-unidentifiable fragments have a full ignore/unknown policy beyond the current pixel threshold.
-- [ ] Label transforms remain exact after any crop, resize, distortion, or other geometric postprocess.
+- [x] Label transforms remain exact after any crop, resize, distortion, or other geometric postprocess.
 - [x] Batch QA writes a machine-readable summary for class balance, visible area, fragment counts, fragments per parent, OBB rejection reasons, layer-audit totals, and deterministic file hashes.
 - [x] Batch QA writes detect and fragment preview overlays under `qa/previews/` and validates their existence.
 - [x] Batch QA writes visual+ID mask overlays under `qa/previews/` and validates their existence.
@@ -69,7 +69,7 @@ Definition of done for the synthetic pipeline:
 - [ ] Operations are one-command reproducible: render, QA/package, train under headroom, evaluate clean/real/browser guards, and clean scratch outputs.
 - [ ] Promotion rules require real-scoreboard improvement, clean-validation guardrails, browser/deploy guardrails, and enough metadata to diagnose regressions.
 
-Current completion status: renderer and label contract are proven at P0, target/recipe coverage is now explicit, and WebGL packages carry QA, recipe, ignored-fragment metadata, fragment evidence-review metadata, fragment ambiguity ignore policy, deterministic visual-quality gates, human visual-review packs, smoke/trainable-candidate gates, clean-scene smoke, hard-negative zero-box smoke, thin-edge sliver smoke, and hand-occlusion fragment smoke. The production training-data factory is still not complete. The next bottleneck is promoting smoke-ready recipes through real-gated P1 training experiments, then improving geometric postprocess label transforms and promotion rules.
+Current completion status: renderer and label contract are proven at P0, target/recipe coverage is now explicit, and WebGL packages carry QA, recipe, ignored-fragment metadata, fragment evidence-review metadata, fragment ambiguity ignore policy, geometric postprocess label guards, deterministic visual-quality gates, human visual-review packs, smoke/trainable-candidate gates, clean-scene smoke, hard-negative zero-box smoke, thin-edge sliver smoke, and hand-occlusion fragment smoke. The production training-data factory is still not complete. The next bottleneck is promoting smoke-ready recipes through real-gated P1 training experiments, then improving promotion rules and full operations.
 
 ## Work Loop
 
@@ -254,6 +254,7 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-05-31 21:39 | harness | keep | Added `cashsnap_webgl_trainable_candidates_v1` plus suite checker/runner; structural check declares 6 candidate recipes / 272 images with detect on all rows, fragment on clean+stack, and OBB only on clean. `run_webgl_trainable_candidate_suite.py --dry-run`, default smoke mix rebuild, and a one-image trainable-gated mix probe passed; actual candidate artifacts are not rendered yet. |
 | 2026-05-31 21:45 | renderer | keep | Added WebGL human visual-review rules plus `make_webgl_visual_review_pack.py` and `check_webgl_visual_review.py`; a smoke-suite probe wrote 12 review rows with RGB/detect/fragment/ID previews, and both pending-review validation plus synthetic all-accepted strict validation passed. |
 | 2026-05-31 21:51 | renderer | keep | Added `--fragment-review-policy`; diagnostic packages keep review-required fragment labels, while trainable fragment views can move ambiguous components to ignored metadata with `requires_human_review`. Hand-occlusion trainable fragment probe passed with 28 trainable fragments, 10 ignored fragments, and 0 review-required labels. |
+| 2026-05-31 21:54 | renderer | keep | Added a label-transform guard to `check_webgl_label_views.py`: geometric postprocess keys such as crop, resize, radial distortion, perspective, homography, warp, or scale now fail unless an exact shared RGB/ID/label transform path is implemented. Current WebGL packages declare non-geometric RGB-only postprocess. |
 
 ## Current Active Assets
 

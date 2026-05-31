@@ -12,6 +12,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VALID_ARTIFACT_STATUSES = {"smoke", "diagnostic", "trainable-candidate"}
+GEOMETRIC_POSTPROCESS_TOKENS = {
+    "crop",
+    "distort",
+    "homography",
+    "lens",
+    "perspective",
+    "radial",
+    "resize",
+    "rotate",
+    "scale",
+    "skew",
+    "tangential",
+    "translate",
+    "warp",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -62,6 +77,26 @@ def read_label_rows(path: Path, expected_columns: int) -> list[list[float]]:
     return rows
 
 
+def assert_no_geometric_postprocess(metadata: object, metadata_path: Path) -> None:
+    if not isinstance(metadata, dict):
+        raise SystemExit(f"{metadata_path}: source metadata must be an object")
+    scene_config = metadata.get("sceneConfig", {})
+    if not isinstance(scene_config, dict):
+        return
+    postprocess = scene_config.get("postprocess", {})
+    if not isinstance(postprocess, dict):
+        return
+    geometric_keys = sorted(
+        key
+        for key in postprocess
+        if any(token in str(key).lower() for token in GEOMETRIC_POSTPROCESS_TOKENS)
+    )
+    if geometric_keys:
+        raise SystemExit(
+            f"{metadata_path}: geometric postprocess keys {geometric_keys} require an exact shared RGB/ID/label transform path"
+        )
+
+
 def main() -> int:
     args = parse_args()
     dataset_root = resolve_path(args.root)
@@ -84,6 +119,8 @@ def main() -> int:
             raise SystemExit("manifest row must be an object")
         manifest_by_variant[int(row["variant"])] = row
         boxes_doc = read_json(dataset_root / row["visible_boxes"])
+        source_metadata_path = dataset_root / row["source_metadata"]
+        assert_no_geometric_postprocess(read_json(source_metadata_path), source_metadata_path)
         visible_boxes = boxes_doc.get("boxes", [])
         visible_instance_count += len(visible_boxes)
         class_counts.update(str(box.get("className", "unknown")) for box in visible_boxes)
