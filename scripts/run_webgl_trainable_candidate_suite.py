@@ -22,7 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true", help="Print commands without running them.")
     parser.add_argument("--width", type=int, default=1440)
     parser.add_argument("--height", type=int, default=1080)
-    parser.add_argument("--visual-scale", default="2")
+    parser.add_argument("--visual-scale", default=None, help="Override every recipe visual_scale. Defaults to each suite row, then 2.")
     parser.add_argument("--browser-executable", type=Path, default=None, help="Optional Chromium/Edge executable override.")
     parser.add_argument("--headroom-max-percent", default="90")
     parser.add_argument("--headroom-resume-percent", default="82")
@@ -52,6 +52,7 @@ def train_views_arg(row: dict) -> str:
 
 
 def build_command(row: dict, args: argparse.Namespace) -> list[str]:
+    visual_scale = args.visual_scale if args.visual_scale is not None else row.get("visual_scale", "2")
     cmd = [
         sys.executable,
         "scripts/run_webgl_recipe.py",
@@ -70,7 +71,7 @@ def build_command(row: dict, args: argparse.Namespace) -> list[str]:
         "--height",
         str(args.height),
         "--visual-scale",
-        str(args.visual_scale),
+        str(visual_scale),
         "--asset-side-policy",
         str(row.get("asset_side_policy", "any")),
         "--camera-profile",

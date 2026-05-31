@@ -450,7 +450,7 @@ function variantAssets(variant) {
 }
 
 function variantOccluders(variant) {
-  if (effectiveSceneMode === "negative") return [];
+  if (effectiveSceneMode === "negative") return negativeOccluders(variant);
   if (effectiveSceneMode === "qa3") return [];
   if (effectiveSceneMode === "clean") return [];
   if (effectiveSceneMode === "fan") return fanOccluders(variant);
@@ -713,6 +713,54 @@ function handOcclusionOccluders(variant) {
     radius: finger.radius + randomBetween(rng, -0.006, 0.006),
     length: finger.length + randomBetween(rng, -0.040, 0.055),
   }));
+}
+
+function negativeOccluders(variant) {
+  const rng = mulberry32(26057511 + variant * 149);
+  const propCount = 2 + (variant % 3);
+  const colors = [0xf2ead8, 0xd7e3ec, 0x24384d, 0xc8bca9, 0xe6d1a3, 0x5f6f61];
+  const props = [];
+  for (let index = 0; index < propCount; index += 1) {
+    const useFinger = index === propCount - 1 && variant % 4 === 0;
+    if (useFinger) {
+      props.push({
+        kind: "finger_capsule",
+        layer: 30 + index,
+        color: [0xc58663, 0xb87958, 0x9f6b4e][randomInt(rng, 3)],
+        position: [
+          randomBetween(rng, -0.55, 0.55),
+          randomBetween(rng, -0.36, 0.36),
+          0.08 + index * 0.012,
+        ],
+        rotation: [
+          randomBetween(rng, -0.05, 0.20),
+          randomBetween(rng, -0.12, 0.12),
+          randomBetween(rng, -1.45, 1.45),
+        ],
+        radius: randomBetween(rng, 0.035, 0.055),
+        length: randomBetween(rng, 0.35, 0.72),
+      });
+      continue;
+    }
+    props.push({
+      kind: "cover_card",
+      layer: 20 + index,
+      color: colors[randomInt(rng, colors.length)],
+      position: [
+        randomBetween(rng, -0.62, 0.62),
+        randomBetween(rng, -0.42, 0.42),
+        0.05 + index * 0.01,
+      ],
+      rotation: [
+        randomBetween(rng, -0.10, 0.10),
+        randomBetween(rng, -0.10, 0.10),
+        randomBetween(rng, -1.55, 1.55),
+      ],
+      width: randomBetween(rng, 0.28, 0.92),
+      height: randomBetween(rng, 0.08, 0.32),
+    });
+  }
+  return props;
 }
 
 function fanAssets(variant) {

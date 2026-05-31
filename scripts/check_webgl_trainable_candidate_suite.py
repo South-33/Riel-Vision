@@ -68,6 +68,16 @@ def parse_train_views(value: object, recipe_id: str) -> list[str]:
     return sorted(set(views))
 
 
+def parse_visual_scale(value: object, recipe_id: str) -> str:
+    text = str(value).strip()
+    try:
+        number = float(text)
+    except ValueError as exc:
+        raise SystemExit(f"{recipe_id}: visual_scale must be a number") from exc
+    require(1.0 <= number <= 4.0, f"{recipe_id}: visual_scale must be between 1 and 4")
+    return text
+
+
 def require_declared_path(row: dict, out_root: Path, field: str, suffix: str) -> None:
     declared = str(row.get(field, "")).replace("\\", "/")
     expected = repo_rel(out_root / suffix)
@@ -115,6 +125,18 @@ def check_existing(row: dict, out_root: Path, train_views: list[str]) -> None:
         recipe.get("camera_profile", "generic_phone_jitter") == row["camera_profile"],
         f"{row['recipe_id']}: rendered camera_profile mismatch",
     )
+    render = recipe.get("render", {})
+    if isinstance(render, dict) and "visual_scale" in render:
+        require(
+            str(render.get("visual_scale")) == str(row["visual_scale"]),
+            f"{row['recipe_id']}: rendered visual_scale mismatch",
+        )
+    else:
+        command = recipe.get("command", [])
+        require(
+            str(row["visual_scale"]) == "2" and isinstance(command, list) and "--visual-scale" not in command,
+            f"{row['recipe_id']}: rendered recipe is missing visual_scale metadata",
+        )
     require(summary.get("images") == row["count"], f"{row['recipe_id']}: QA image count mismatch")
     asset_selection = summary.get("asset_selection", {})
     require(isinstance(asset_selection, dict), f"{row['recipe_id']}: QA summary must include asset_selection")
@@ -176,6 +198,7 @@ def main() -> int:
             "scene_mode",
             "asset_side_policy",
             "camera_profile",
+            "visual_scale",
             "out_root",
             "start_variant",
             "count",
@@ -217,6 +240,7 @@ def main() -> int:
             camera_profile == catalog_camera_profile,
             f"{recipe_id}: suite camera_profile {camera_profile!r} does not match catalog {catalog_camera_profile!r}",
         )
+        row["visual_scale"] = parse_visual_scale(row["visual_scale"], recipe_id)
 
         try:
             start_variant = int(row["start_variant"])
