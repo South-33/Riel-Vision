@@ -42,6 +42,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-smoke-gate", action="store_true")
     parser.add_argument("--skip-trainable-gate", action="store_true")
     parser.add_argument("--train-views", default="detect", help="Comma-separated train views for trainable-candidate gates.")
+    parser.add_argument(
+        "--fragment-review-policy",
+        choices=["auto", "diagnostic", "ignore"],
+        default="auto",
+        help="auto ignores review-required fragments only when fragment is a selected trainable-candidate view.",
+    )
     parser.add_argument("--allow-zero-visible-trainable", action="store_true", help="Allow zero visible banknotes in a trainable-candidate gate.")
     return parser.parse_args()
 
@@ -78,12 +84,24 @@ def choose_scene_mode(recipe: dict, override: str) -> str:
     raise SystemExit(f"{recipe['id']}: no runnable scene_modes; current modes={recipe.get('scene_modes', [])}")
 
 
+def parse_train_views(value: str) -> set[str]:
+    return {item.strip() for item in re.split(r"[,;\s]+", value) if item.strip()}
+
+
 def main() -> int:
     args = parse_args()
     catalog = read_json(resolve(args.catalog))
     recipe = find_recipe(catalog, args.recipe_id)
     scene_mode = choose_scene_mode(recipe, args.scene_mode)
     artifact_status = args.artifact_status or STATUS_TO_BATCH_STATUS.get(str(recipe.get("artifact_status")), "diagnostic")
+    fragment_review_policy = args.fragment_review_policy
+    if fragment_review_policy == "auto":
+        train_views = parse_train_views(args.train_views)
+        fragment_review_policy = (
+            "ignore"
+            if artifact_status == "trainable-candidate" and "fragment" in train_views
+            else "diagnostic"
+        )
     out_root = args.out_root or Path("data") / "synthetic" / f"{slug(args.recipe_id)}_v{args.start_variant}_{args.start_variant + args.count - 1}"
 
     cmd = [
@@ -101,6 +119,8 @@ def main() -> int:
         args.recipe_id,
         "--artifact-status",
         artifact_status,
+        "--fragment-review-policy",
+        fragment_review_policy,
         "--intended-use",
         str(recipe.get("intended_use", "")),
         "--notes",

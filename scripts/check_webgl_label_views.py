@@ -129,8 +129,16 @@ def main() -> int:
             parent_index = fragment.get("parentVisibleIndex")
             if not isinstance(parent_index, int) or parent_index < 0 or parent_index >= len(visible_boxes):
                 raise SystemExit(f"{row['fragment_ignored_metadata']}: invalid parentVisibleIndex {parent_index}")
-            if not str(fragment.get("ignore_reason", "")).strip():
+            ignore_reason = str(fragment.get("ignore_reason", "")).strip()
+            if not ignore_reason:
                 raise SystemExit(f"{row['fragment_ignored_metadata']}: ignored fragment missing ignore_reason")
+            if ignore_reason not in {"below_min_fragment_pixels", "requires_human_review"}:
+                raise SystemExit(f"{row['fragment_ignored_metadata']}: invalid ignore_reason {ignore_reason!r}")
+            evidence_warnings = fragment.get("evidence_warnings", [])
+            if not isinstance(evidence_warnings, list):
+                raise SystemExit(f"{row['fragment_ignored_metadata']}: evidence_warnings must be a list")
+            if ignore_reason == "requires_human_review" and not evidence_warnings:
+                raise SystemExit(f"{row['fragment_ignored_metadata']}: review-ignored fragment missing evidence_warnings")
             if fragment.get("evidence_status") != "ignored":
                 raise SystemExit(f"{row['fragment_ignored_metadata']}: ignored fragment evidence_status must be ignored")
         ignored_fragment_count += len(ignored_fragment_metadata)

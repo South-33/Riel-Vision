@@ -61,6 +61,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--intended-use", default="", help="Short intended-use note to write into recipe.json.")
     parser.add_argument("--notes", default="", help="Optional short recipe notes to write into recipe.json.")
+    parser.add_argument(
+        "--fragment-review-policy",
+        choices=["diagnostic", "ignore"],
+        default="diagnostic",
+        help="diagnostic keeps review-required fragment labels; ignore moves them to ignored metadata for trainable fragment views.",
+    )
     parser.add_argument("--headroom-max-percent", default="90", help="CPU/GPU percent cap passed to run_with_headroom.py.")
     parser.add_argument("--headroom-resume-percent", default="82", help="Resume threshold passed to run_with_headroom.py.")
     parser.add_argument("--headroom-max-ram-percent", default="90", help="RAM percent cap passed to run_with_headroom.py.")
@@ -323,7 +329,11 @@ def build_obb_label(id_path: Path, boxes_path: Path) -> tuple[list[str], list[di
     return rows, metadata_rows
 
 
-def build_fragment_labels(id_path: Path, boxes_path: Path) -> tuple[list[str], list[dict[str, object]], list[dict[str, object]]]:
+def build_fragment_labels(
+    id_path: Path,
+    boxes_path: Path,
+    fragment_review_policy: str,
+) -> tuple[list[str], list[dict[str, object]], list[dict[str, object]]]:
     id_image = np.array(Image.open(id_path).convert("RGB"))
     height, width = id_image.shape[:2]
     boxes_doc = json.loads(boxes_path.read_text(encoding="utf-8"))
@@ -371,6 +381,19 @@ def build_fragment_labels(id_path: Path, boxes_path: Path) -> tuple[list[str], l
                 evidence_warnings.append("below_review_fragment_pixels")
             if component_metadata["component_fraction_of_parent"] < FRAGMENT_REVIEW_MIN_PARENT_FRACTION:
                 evidence_warnings.append("low_parent_visible_fraction")
+            if evidence_warnings and fragment_review_policy == "ignore":
+                ignored_rows.append(
+                    {
+                        **component_metadata,
+                        "evidence_status": "ignored",
+                        "evidence_warnings": evidence_warnings,
+                        "ignore_reason": "requires_human_review",
+                        "min_fragment_pixels": FRAGMENT_MIN_PIXELS,
+                        "review_min_fragment_pixels": FRAGMENT_REVIEW_MIN_PIXELS,
+                        "review_min_parent_fraction": FRAGMENT_REVIEW_MIN_PARENT_FRACTION,
+                    }
+                )
+                continue
             cx = (x + component_width / 2) / width
             cy = (y + component_height / 2) / height
             normalized_width = component_width / width
@@ -442,7 +465,12 @@ def prepare_empty_dir(directory: Path, out_root: Path) -> None:
     directory.mkdir(parents=True, exist_ok=True)
 
 
-def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path, fallback_scene_mode: str) -> tuple[Path, Path, Path]:
+def write_yolo_dataset(
+    variant_dirs: list[tuple[int, Path]],
+    out_root: Path,
+    fallback_scene_mode: str,
+    fragment_review_policy: str,
+) -> tuple[Path, Path, Path]:
     images_dir = out_root / "images" / "train"
     labels_dir = out_root / "labels" / "train"
     ids_dir = out_root / "ids" / "train"
@@ -562,7 +590,11 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path, fal
                 surface_counts[str(surface.get("name", "unknown"))] += 1
                 background = surface.get("background")
                 background_counts["file" if background else "procedural"] += 1
-        fragment_rows, fragment_metadata, ignored_fragment_metadata = build_fragment_labels(id_path, boxes_path)
+        fragment_rows, fragment_metadata, ignored_fragment_metadata = build_fragment_labels(
+            id_path,
+            boxes_path,
+            fragment_review_policy,
+        )
         shutil.copyfile(out_dir / "visual.png", fragment_image_path)
         write_lines(fragment_label_path, fragment_rows)
         write_json(fragment_metadata_path, fragment_metadata)
@@ -646,13 +678,18 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path, fal
             )
         manifest.append(manifest_row)
         if ignored_fragment_metadata:
+            ignored_reasons = sorted({str(row["ignore_reason"]) for row in ignored_fragment_metadata})
             quarantine_rows.append(
                 {
                     "variant": variant,
                     "image": str(image_path.relative_to(out_root)),
                     "view": "fragment",
-                    "action": "ignored_below_threshold_components",
-                    "reasons": sorted({str(row["ignore_reason"]) for row in ignored_fragment_metadata}),
+                    "action": (
+                        "ignored_ambiguous_fragment_components"
+                        if ignored_reasons == ["requires_human_review"]
+                        else "ignored_fragment_components"
+                    ),
+                    "reasons": ignored_reasons,
                     "ignored_fragments": len(ignored_fragment_metadata),
                 }
             )
@@ -720,6 +757,8 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path, fal
                 "visual_quality_rejected": "visual image failed deterministic brightness/blankness gates and must not be promoted without review",
                 "excluded_from_trainable_obb": "image remains valid for detect/fragment views, but is excluded from the trainable OBB split",
                 "ignored_below_threshold_components": "tiny connected components are recorded for review and not forced into fragment training labels",
+                "ignored_fragment_components": "below-threshold or ambiguous connected components are recorded as ignored metadata instead of forced fragment labels",
+                "ignored_ambiguous_fragment_components": "ambiguous review-required components are excluded from fragment labels and kept as ignored metadata",
                 "fragment_evidence_review_required": "fragment is labeled for diagnostics but should not enter trainable-candidate mixes until accepted by policy or review",
             },
         },
@@ -767,10 +806,12 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path, fal
             "min_fragment_pixels": FRAGMENT_MIN_PIXELS,
             "review_min_fragment_pixels": FRAGMENT_REVIEW_MIN_PIXELS,
             "review_min_parent_fraction": FRAGMENT_REVIEW_MIN_PARENT_FRACTION,
+            "fragment_review_policy": fragment_review_policy,
             "policy": {
                 "label_meaning": "visible connected evidence components, not physical bill counts",
                 "ignored_fragments": "components below min_fragment_pixels are recorded as ignored metadata instead of forced training labels",
                 "review_required": "small/low-fraction components keep labels for diagnostics but require review before trainable-candidate promotion",
+                "fragment_review_policy": "diagnostic keeps review-required labels; ignore excludes review-required labels and records them as ignored metadata",
                 "counting": "use parent metadata or downstream fusion to merge components from one physical bill",
             },
         },
@@ -804,6 +845,7 @@ def write_yolo_dataset(variant_dirs: list[tuple[int, Path]], out_root: Path, fal
                 "min_fragment_pixels": FRAGMENT_MIN_PIXELS,
                 "review_min_fragment_pixels": FRAGMENT_REVIEW_MIN_PIXELS,
                 "review_min_parent_fraction": FRAGMENT_REVIEW_MIN_PARENT_FRACTION,
+                "fragment_review_policy": fragment_review_policy,
             },
             "obb": {
                 "image_status_counts": dict(sorted(obb_image_status_counts.items())),
@@ -909,6 +951,7 @@ def write_recipe_metadata(
         },
         "scene_mode": args.scene_mode,
         "background_dir": rel(args.background_dir) if args.background_dir else "",
+        "fragment_review_policy": args.fragment_review_policy,
         "headroom": {
             "max_percent": args.headroom_max_percent,
             "resume_percent": args.headroom_resume_percent,
@@ -967,7 +1010,12 @@ def main() -> int:
 
     contact_sheet = out_root / "contact_sheet.png"
     contact_index = write_contact_sheet(variant_dirs, contact_sheet)
-    data_yaml, data_obb_yaml, data_fragments_yaml = write_yolo_dataset(variant_dirs, out_root, args.scene_mode)
+    data_yaml, data_obb_yaml, data_fragments_yaml = write_yolo_dataset(
+        variant_dirs,
+        out_root,
+        args.scene_mode,
+        args.fragment_review_policy,
+    )
     write_json(
         out_root / "qa" / "contact_index.json",
         {
