@@ -90,7 +90,7 @@ Default repo posture: work on `master`/mainline, keep generated YOLO/training ou
 - Current operating rule: laptop usability matters. Heavy jobs should prefer 90% max CPU/RAM/GPU/VRAM caps, resume around 82%, and never set caps above 95%.
 - If this hardware is unexpectedly slow, suspect RAM pressure first, then laptop GPU power/thermal limits, then data-loader worker count.
 - `scripts/run_with_headroom.py` now refuses caps above 95%, lowers child priority, and waits for initial headroom before launching a heavy child. The free-RAM floor is a preflight gate and runtime warning; after launch, hard pauses/exits follow the explicit RAM/VRAM max caps so pause-sensitive browser jobs do not trip wall-clock timeouts.
-- `scripts/bench_train_with_headroom.py` dry-run currently selects `batch=2`, `workers=0` on this laptop and passes `--min-free-ram-gb 4.0` to the live wrapper.
+- `scripts/bench_train_with_headroom.py` dry-run currently selects `batch=4`, `workers=1`, `device=0` on this laptop and passes `--min-free-ram-gb 4.0` to the live wrapper.
 - Balance speed and headroom. Prefer GPU for training/inference when it is the faster engine and has room, but do not force GPU for CPU-native prep/rendering if the headroom wrapper keeps the laptop responsive.
 
 ## Command Posture
