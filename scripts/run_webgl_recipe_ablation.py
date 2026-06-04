@@ -51,6 +51,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-cpu-percent", type=float, default=90.0)
     parser.add_argument("--resume-cpu-percent", type=float, default=82.0)
     parser.add_argument("--max-gpu-mem-percent", type=float, default=90.0)
+    parser.add_argument(
+        "--max-per-class-drop",
+        type=float,
+        default=0.05,
+        help="Per-class mAP50-95 drop tolerance passed to compare_yolo_metrics.py.",
+    )
     parser.add_argument("--summary-stem", default=None)
     parser.add_argument("--run-label", default="", help="Optional suffix for train/test run names and default summary stem.")
     parser.add_argument("--dry-run", action="store_true")
@@ -257,6 +263,8 @@ def compare_metrics(baseline: Path, candidate: Path, json_out: Path, args: argpa
         repo_rel(candidate),
         "--max-drop",
         "0.0",
+        "--max-per-class-drop",
+        str(args.max_per_class_drop),
         "--json-out",
         repo_rel(json_out),
         "--no-fail",
@@ -277,6 +285,8 @@ def collect_summary_row(
     results = metrics.get("results", {})
     compare_clean = read_json(compare_clean_path) if compare_clean_path and compare_clean_path.exists() else {}
     compare_real = read_json(compare_real_path) if compare_real_path and compare_real_path.exists() else {}
+    clean_worst = worst_per_class(compare_clean)
+    real_worst = worst_per_class(compare_real)
     return {
         "kind": kind,
         "recipe_id": recipe_id or "",
@@ -291,6 +301,12 @@ def collect_summary_row(
         "delta_vs_real_only": compare_real.get("delta"),
         "pass_vs_clean": compare_clean.get("passed"),
         "pass_vs_real_only": compare_real.get("passed"),
+        "worst_per_class_vs_clean": clean_worst.get("class_name"),
+        "worst_per_class_delta_vs_clean": clean_worst.get("delta"),
+        "per_class_failures_vs_clean": len(compare_clean.get("per_class_failures", []) or []),
+        "worst_per_class_vs_real_only": real_worst.get("class_name"),
+        "worst_per_class_delta_vs_real_only": real_worst.get("delta"),
+        "per_class_failures_vs_real_only": len(compare_real.get("per_class_failures", []) or []),
     }
 
 
@@ -307,6 +323,20 @@ def per_class_delta_by_name(compare_path: Path | None) -> dict[str, Any]:
             continue
         deltas[str(row["class_name"])] = row.get("delta")
     return deltas
+
+
+def worst_per_class(compare: dict[str, Any]) -> dict[str, Any]:
+    rows = compare.get("per_class_map50_95", [])
+    if not isinstance(rows, list):
+        return {}
+    comparable = [
+        row
+        for row in rows
+        if isinstance(row, dict) and row.get("delta") is not None
+    ]
+    if not comparable:
+        return {}
+    return min(comparable, key=lambda row: float(row["delta"]))
 
 
 def collect_per_class_rows(
@@ -445,6 +475,7 @@ def main() -> int:
                 "optimizer": args.optimizer,
                 "lr0": args.lr0,
                 "lrf": args.lrf,
+                "max_per_class_drop": args.max_per_class_drop,
                 "warmup_epochs": args.warmup_epochs,
                 "warmup_bias_lr": args.warmup_bias_lr,
                 "warmup_momentum": args.warmup_momentum,
