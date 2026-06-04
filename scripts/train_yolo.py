@@ -52,6 +52,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-momentum", type=float, default=None, help="Warmup momentum override.")
     parser.add_argument("--fraction", type=float, default=1.0, help="Fraction of training data to use.")
     parser.add_argument("--max-train-batches", type=int, default=None, help="Stop after this many train batches.")
+    parser.add_argument("--no-amp", action="store_true", help="Disable Ultralytics AMP checks/training.")
     parser.add_argument("--no-val", action="store_true", help="Skip validation during training.")
     parser.add_argument("--no-plots", action="store_true", help="Skip Ultralytics training plots.")
     parser.add_argument("--exist-ok", action="store_true", help="Allow reusing an existing run directory.")
@@ -77,6 +78,7 @@ def main() -> None:
         "pretrained": True,
         "plots": not args.no_plots,
         "val": not args.no_val,
+        "amp": not args.no_amp,
         "workers": args.workers,
         "fraction": args.fraction,
         "exist_ok": args.exist_ok,

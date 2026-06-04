@@ -1,0 +1,27 @@
+# Tiny list-backed smoke config for the clean-real plus accepted-WebGL candidate mix.
+# Use this for training-path probes; use cashsnap_v1_plus_webgl_trainable_candidates.yaml for real experiments.
+path: ..
+train: configs/smoke_lists/cashsnap_v1_plus_webgl_trainable_candidates_smoke_train.txt
+val: configs/smoke_lists/cashsnap_v1_plus_webgl_trainable_candidates_smoke_val.txt
+test: configs/smoke_lists/cashsnap_v1_plus_webgl_trainable_candidates_smoke_test.txt
+names:
+  0: USD_1
+  1: USD_5
+  2: USD_10
+  3: USD_20
+  4: USD_50
+  5: USD_100
+  6: KHR_500
+  7: KHR_1000
+  8: KHR_2000
+  9: KHR_5000
+  10: KHR_10000
+  11: KHR_20000
+  12: KHR_50000
+cashsnap_sources:
+  full_candidate_config: configs/cashsnap_v1_plus_webgl_trainable_candidates.yaml
+  clean_real: data/cashsnap_v1
+  synthetic_mix: configs/cashsnap_webgl_trainable_candidates_mix.yaml
+cashsnap_policy:
+  intended_use: cheap training-path smoke only
+  validation_policy: small clean-real validation list; real fan benchmark remains held out

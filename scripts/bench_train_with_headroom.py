@@ -46,7 +46,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr0", type=float, default=None)
     parser.add_argument("--lrf", type=float, default=None)
     parser.add_argument("--warmup-epochs", type=float, default=None)
+    parser.add_argument("--fraction", type=float, default=None)
     parser.add_argument("--max-train-batches", type=int, default=None)
+    parser.add_argument("--no-amp", action="store_true", help="Pass --no-amp to train_yolo.py.")
+    parser.add_argument("--no-val", action="store_true", help="Pass --no-val to train_yolo.py.")
     parser.add_argument("--quiet", action="store_true", help="Pass --quiet to train_yolo.py.")
     parser.add_argument("--plots", action="store_true", help="Allow Ultralytics plot generation.")
     parser.add_argument("--exist-ok", action="store_true", help="Allow reusing an existing run directory.")
@@ -190,7 +193,12 @@ def build_command(
     append_optional(train_command, "--lr0", args.lr0)
     append_optional(train_command, "--lrf", args.lrf)
     append_optional(train_command, "--warmup-epochs", args.warmup_epochs)
+    append_optional(train_command, "--fraction", args.fraction)
     append_optional(train_command, "--max-train-batches", args.max_train_batches)
+    if args.no_amp:
+        train_command.append("--no-amp")
+    if args.no_val:
+        train_command.append("--no-val")
     if args.quiet:
         train_command.append("--quiet")
     if not args.plots:

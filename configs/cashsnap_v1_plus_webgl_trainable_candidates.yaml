@@ -1,0 +1,35 @@
+# CashSnap clean real data plus accepted WebGL trainable-candidate synthetic data.
+# Candidate-training config only: keep data/real_fan_benchmark out of train/val.
+path: ..
+train:
+  - data/cashsnap_v1/images/train
+  - data/synthetic/cashsnap_webgl_clean_base_candidate_v1/images/train
+  - data/synthetic/cashsnap_webgl_overlap_stack_candidate_v1/images/train
+  - data/synthetic/cashsnap_webgl_fan_fullschema_candidate_v1/images/train
+  - data/synthetic/cashsnap_webgl_hand_occlusion_candidate_v1/images/train
+  - data/synthetic/cashsnap_webgl_thin_edge_partial_candidate_v1/images/train
+  - data/synthetic/cashsnap_webgl_hard_negative_candidate_v1/images/train
+  - data/synthetic/cashsnap_webgl_back_side_confusion_candidate_v1/images/train
+val: data/cashsnap_v1/images/val
+test: data/cashsnap_v1/images/test
+names:
+  0: USD_1
+  1: USD_5
+  2: USD_10
+  3: USD_20
+  4: USD_50
+  5: USD_100
+  6: KHR_500
+  7: KHR_1000
+  8: KHR_2000
+  9: KHR_5000
+  10: KHR_10000
+  11: KHR_20000
+  12: KHR_50000
+cashsnap_sources:
+  clean_real: data/cashsnap_v1
+  synthetic_mix: configs/cashsnap_webgl_trainable_candidates_mix.yaml
+cashsnap_policy:
+  intended_use: candidate training comparison against clean-only baseline
+  trainable_synthetic_gate: configs/synthetic_recipes/cashsnap_webgl_trainable_candidates_v1.json
+  validation_policy: clean real validation only; real fan benchmark remains held-out stress evaluation
