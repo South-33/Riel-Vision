@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--browser-executable", type=Path, default=None, help="Optional Chromium/Edge executable override.")
     parser.add_argument("--asset-side-policy", default="", help="Override catalog asset-side sampling policy.")
     parser.add_argument("--camera-profile", default="", help="Override catalog WebGL camera/FOV/framing profile.")
-    parser.add_argument("--class-sequence", default="", help="Override catalog class sequence for generic clean/stack/fan sampling.")
+    parser.add_argument("--class-sequence", default="", help="Override catalog class sequence for supported scene modes.")
     parser.add_argument("--artifact-status", choices=["smoke", "diagnostic", "trainable-candidate"], default="")
     parser.add_argument("--background-dir", type=Path, default=None)
     parser.add_argument("--headroom-max-percent", default="90")
@@ -52,6 +52,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-render", action="store_true")
     parser.add_argument("--skip-yolo-check", action="store_true")
     parser.add_argument("--skip-label-view-check", action="store_true")
+    parser.add_argument("--run-diagnostic-gates", action="store_true", help="Run catalog-declared diagnostic gates after rendering.")
     parser.add_argument("--skip-smoke-gate", action="store_true")
     parser.add_argument("--skip-trainable-gate", action="store_true")
     parser.add_argument("--train-views", default="detect", help="Comma-separated train views for trainable-candidate gates.")
@@ -199,6 +200,19 @@ def main() -> int:
 
     print(" ".join(cmd), flush=True)
     subprocess.run(cmd, cwd=ROOT, check=True)
+    if args.run_diagnostic_gates:
+        gate_cmd = [
+            sys.executable,
+            "scripts/check_webgl_recipe_diagnostic_gates.py",
+            "--root",
+            str(out_root),
+            "--recipe-id",
+            args.recipe_id,
+            "--catalog",
+            str(resolve(args.catalog)),
+        ]
+        print(" ".join(gate_cmd), flush=True)
+        subprocess.run(gate_cmd, cwd=ROOT, check=True)
     if artifact_status == "smoke" and not args.skip_smoke_gate:
         gate_cmd = [
             sys.executable,
