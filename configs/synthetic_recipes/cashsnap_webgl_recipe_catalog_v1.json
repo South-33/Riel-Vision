@@ -82,7 +82,7 @@
       ],
       "intended_use": "Stress repeated same-denomination bills inside one handheld fan so count/fusion logic does not merge physical notes.",
       "promotion_gate": "same-class repeat count metrics improve while parent fusion preserves physical instances and clean/browser guardrails hold",
-      "current_blocker": "Small count-stress smoke passed on 4 fan images; still needs broader sequence distribution audit and real repeated-denomination fan validation before trainable-candidate use."
+      "current_blocker": "Sequence distribution and count-stress audit passed on 12 fan images; still needs real repeated-denomination fan validation before trainable-candidate use."
     },
     {
       "id": "webgl_hand_occlusion_fragments_v1",
