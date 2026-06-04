@@ -19,6 +19,7 @@ DEFAULT_SUITE = ROOT / "configs" / "synthetic_recipes" / "cashsnap_webgl_trainab
 DEFAULT_SUMMARY = ROOT / "runs" / "cashsnap" / "webgl_ablation_nowarmup_i416_summary.json"
 DEFAULT_OUT = ROOT / "configs" / "cashsnap_v1_plus_webgl_accepted_nowarmup_probe.yaml"
 DEFAULT_TRAIN_LIST = ROOT / "configs" / "generated_lists" / "cashsnap_v1_plus_webgl_accepted_nowarmup_probe_train.txt"
+PRESERVED_OUTPUT_KEYS = ("cashsnap_webgl_blend_gate",)
 
 
 def parse_args() -> argparse.Namespace:
@@ -141,6 +142,22 @@ def select_recipes(
     return selected, rejected
 
 
+def preserved_output_metadata(path: Path, selected: list[str]) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    config = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(config, dict):
+        return {}
+    acceptance = config.get("cashsnap_webgl_acceptance", {})
+    if not isinstance(acceptance, dict) or acceptance.get("selected_recipe_ids") != selected:
+        return {}
+    return {
+        key: config[key]
+        for key in PRESERVED_OUTPUT_KEYS
+        if key in config
+    }
+
+
 def build_command(args: argparse.Namespace, prefixes: list[str]) -> list[str]:
     command = [
         sys.executable,
@@ -161,7 +178,13 @@ def build_command(args: argparse.Namespace, prefixes: list[str]) -> list[str]:
     return command
 
 
-def annotate_output(args: argparse.Namespace, selected: list[str], rejected: dict[str, str], prefixes: list[str]) -> None:
+def annotate_output(
+    args: argparse.Namespace,
+    selected: list[str],
+    rejected: dict[str, str],
+    prefixes: list[str],
+    preserved_metadata: dict[str, Any],
+) -> None:
     config = yaml.safe_load(args.out.read_text(encoding="utf-8"))
     if not isinstance(config, dict):
         raise ValueError(f"expected YAML mapping: {args.out}")
@@ -173,6 +196,8 @@ def annotate_output(args: argparse.Namespace, selected: list[str], rejected: dic
         "selected_prefixes": [f"{prefix}/" for prefix in prefixes],
         "rejected_recipe_ids": rejected,
     }
+    for key, value in preserved_metadata.items():
+        config.setdefault(key, value)
     args.out.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
 
 
@@ -196,6 +221,7 @@ def main() -> int:
     if missing:
         raise SystemExit(f"selected recipe(s) missing from suite: {missing}")
     prefixes = [roots[recipe_id] for recipe_id in selected]
+    preserved_metadata = preserved_output_metadata(args.out, selected)
 
     print("selected_recipes=" + ",".join(selected), flush=True)
     if rejected:
@@ -207,7 +233,7 @@ def main() -> int:
         return 0
 
     subprocess.run(command, cwd=ROOT, check=True)
-    annotate_output(args, selected, rejected, prefixes)
+    annotate_output(args, selected, rejected, prefixes, preserved_metadata)
     print(f"wrote {repo_rel(args.out)}")
     print(f"wrote {repo_rel(args.train_list)}")
     return 0

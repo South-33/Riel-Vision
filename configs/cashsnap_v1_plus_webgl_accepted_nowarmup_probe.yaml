@@ -28,8 +28,28 @@ cashsnap_sources:
 cashsnap_subset_policy:
   per_class_real_target: 24
   background_target: 24
+  include_all_target_images: false
+  always_max_per_class: null
+  oversample_min_per_class: null
+  oversample_added_images: 0
+  oversample_trigger_class_images:
+    USD_1: 0
+    USD_5: 0
+    USD_10: 0
+    USD_20: 0
+    USD_50: 0
+    USD_100: 0
+    KHR_500: 0
+    KHR_1000: 0
+    KHR_2000: 0
+    KHR_5000: 0
+    KHR_10000: 0
+    KHR_20000: 0
+    KHR_50000: 0
   always_included_images: 128
+  always_skipped_by_class_cap: 0
   target_excluded_images: 176
+  selected_unique_images: 445
   selected_images: 445
   selected_backgrounds: 56
   selected_target_backgrounds: 24
@@ -61,6 +81,20 @@ cashsnap_subset_policy:
     KHR_10000: 24
     KHR_20000: 14
     KHR_50000: 15
+  selected_always_class_images:
+    USD_1: 17
+    USD_5: 18
+    USD_10: 15
+    USD_20: 16
+    USD_50: 16
+    USD_100: 16
+    KHR_500: 35
+    KHR_1000: 16
+    KHR_2000: 15
+    KHR_5000: 38
+    KHR_10000: 46
+    KHR_20000: 48
+    KHR_50000: 16
 cashsnap_webgl_acceptance:
   summary: runs/cashsnap/webgl_ablation_nowarmup_i416_summary.json
   per_class_summary: runs/cashsnap/webgl_ablation_nowarmup_i416_per_class.json
@@ -76,9 +110,9 @@ cashsnap_webgl_acceptance:
   - data/synthetic/cashsnap_webgl_hard_negative_candidate_v1/
   - data/synthetic/cashsnap_webgl_back_side_confusion_candidate_v1/
   rejected_recipe_ids:
-    webgl_overlap_stack_v1: failed real-only mAP50-95 gate
-    webgl_fan_fullschema_v1: failed real-only mAP50-95 gate
-    webgl_hand_occlusion_fragments_v1: failed real-only mAP50-95 gate
+    webgl_overlap_stack_v1: failed real-only global mAP50-95 gate
+    webgl_fan_fullschema_v1: failed real-only global mAP50-95 gate
+    webgl_hand_occlusion_fragments_v1: failed real-only global mAP50-95 gate
 cashsnap_webgl_blend_gate:
   status: provisional_scale_seed
   train_run: runs/cashsnap/webgl_ablation_accepted_blend_from_clean_e1_i416_adamw_lr5e5_nowarmup_noamp_strictaccepted_probe
@@ -95,4 +129,6 @@ cashsnap_webgl_blend_gate:
     KHR_2000: -0.05243307474033565
     KHR_50000: -0.039062809455103764
     KHR_500: -0.012402103159460998
-  scale_note: Global clean-test transfer is positive, but KHR_2000 is just beyond the per-class drop tolerance; scale as a provisional seed only with a KHR_2000/KHR_50000 guard or staged dose test.
+  scale_note: Global clean-test transfer is positive, but KHR_2000 is just beyond
+    the per-class drop tolerance; scale as a provisional seed only with a KHR_2000/KHR_50000
+    guard or staged dose test.
