@@ -156,6 +156,13 @@ function classIndexFor(variant, index) {
   return (variant * 7 + index * 5) % CLASS_NAMES.length;
 }
 
+function classNameForSequenceOrFallback(variant, index, fallbackClasses) {
+  if (CLASS_SEQUENCE.length > 0) {
+    return CLASS_SEQUENCE[(variant + index) % CLASS_SEQUENCE.length];
+  }
+  return fallbackClasses[(variant + index) % fallbackClasses.length];
+}
+
 function hexToNumber(hex) {
   return Number.parseInt(hex.replace("#", ""), 16);
 }
@@ -743,7 +750,7 @@ function thinEdgeLayout(variant) {
     },
   ];
   return placements.map((placement, index) => {
-    const className = classes[(variant + index) % classes.length];
+    const className = classNameForSequenceOrFallback(variant, index, classes);
     const classIndex = CLASS_NAMES.indexOf(className);
     const jitter = rotate2(
       [randomBetween(rng, -0.025, 0.025), randomBetween(rng, -0.025, 0.025)],
@@ -820,7 +827,7 @@ function handOcclusionAssets(variant) {
   ];
   const noteCount = 4 + (variant % 2);
   return Array.from({ length: noteCount }, (_, index) => {
-    const className = classes[(variant + index) % classes.length];
+    const className = classNameForSequenceOrFallback(variant, index, classes);
     const classIndex = CLASS_NAMES.indexOf(className);
     const base = baseAssets[index % baseAssets.length];
     const placement = placements[index];
