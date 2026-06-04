@@ -102,7 +102,7 @@
       "class_sequence": ["KHR_2000", "KHR_50000", "KHR_20000", "KHR_10000", "KHR_5000"],
       "intended_use": "Target weak/rare KHR class support without oversampling artifacts.",
       "promotion_gate": "rare-class recall improves while common-class false positives stay bounded",
-      "current_blocker": "Tiny class-sequence smoke proof passed; still needs class-distribution audit and real rare-class validation before trainable-candidate use."
+      "current_blocker": "Class-sequence distribution audit passed on 16 fan images; still needs real rare-class validation before trainable-candidate use."
     },
     {
       "id": "webgl_hard_negative_replay_v1",
