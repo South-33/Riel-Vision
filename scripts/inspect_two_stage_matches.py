@@ -8,12 +8,11 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from cashsnap_classes import CLASS_TO_ID, ID_TO_CLASS
 from evaluate_real_draft_labels import box_iou, read_yolo_detect_labels
-from evaluate_two_stage_csv import CLASS_TO_ID
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ID_TO_CLASS = {value: key for key, value in CLASS_TO_ID.items()}
 
 
 def parse_args() -> argparse.Namespace:

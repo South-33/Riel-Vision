@@ -9,8 +9,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from cashsnap_classes import CLASS_TO_ID
 from evaluate_real_draft_labels import greedy_match, read_yolo_detect_labels
-from evaluate_two_stage_csv import CLASS_TO_ID
 from fuse_two_stage_csv import (
     infer_supported_classes,
     nms,
