@@ -60,7 +60,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--control-source",
-        choices=("background", "first", "class"),
+        choices=("background", "first", "class", "class_mix"),
         default="background",
         help="Base rows to duplicate for matched row-count controls.",
     )
@@ -274,6 +274,10 @@ def label_classes(image: Path) -> list[int]:
     return classes
 
 
+def label_class_counts(image: Path) -> Counter[int]:
+    return Counter(label_classes(image))
+
+
 def image_class_summary(dataset_root: Path, rows: list[str], names: dict[int, str]) -> dict[str, Any]:
     class_counts: Counter[int] = Counter()
     background_count = 0
@@ -314,6 +318,7 @@ def row_count_control_rows(
     count: int,
     source: str,
     class_id: int | None = None,
+    target_rows: list[str] | None = None,
 ) -> list[str]:
     if count < 1:
         raise SystemExit("row-count control count must be positive")
@@ -337,6 +342,36 @@ def row_count_control_rows(
         ]
         if not pool:
             raise SystemExit(f"base train list has no rows for class id {class_id}")
+    elif source == "class_mix":
+        if not target_rows:
+            raise SystemExit("--control-source class_mix requires selected dose rows")
+        base_counts = [
+            (row, label_class_counts(image_path_from_repo_line(dataset_root, row)))
+            for row in base_rows
+        ]
+        pool = [item for item in base_counts if item[1]]
+        if not pool:
+            raise SystemExit("base train list has no labeled rows for class_mix row-count controls")
+        control_rows: list[str] = []
+        for target_row in target_rows:
+            target_counts = label_class_counts(image_path_from_repo_line(dataset_root, target_row))
+            if not target_counts:
+                control_rows.append(row_count_control_rows(dataset_root, base_rows, 1, "background")[0])
+                continue
+            target_classes = set(target_counts)
+
+            def score(item: tuple[str, Counter[int]]) -> tuple[int, int, int, str]:
+                row, counts = item
+                missing = sum(max(0, target_counts[class_id] - counts.get(class_id, 0)) for class_id in target_classes)
+                extra = sum(count for class_id, count in counts.items() if class_id not in target_classes)
+                surplus = sum(max(0, counts.get(class_id, 0) - target_counts[class_id]) for class_id in target_classes)
+                overlap = sum(min(target_counts[class_id], counts.get(class_id, 0)) for class_id in target_classes)
+                return (missing, extra + surplus, -overlap, row)
+
+            control_rows.append(min(pool, key=score)[0])
+        if len(control_rows) != count:
+            raise SystemExit(f"class_mix produced {len(control_rows)} controls for requested count {count}")
+        return control_rows
     else:
         raise SystemExit(f"unsupported row-count control source: {source}")
     if not pool:
@@ -531,12 +566,15 @@ def main() -> int:
                 dose,
                 args.control_source,
                 class_id=control_class_id,
+                target_rows=dose_image_rows,
             )
             control_summary = image_class_summary(dataset_root, control_rows, class_names)
             control_stem = f"{control_stem_prefix}_dose{dose}"
             control_source_label = args.control_source
             if control_class_id is not None:
                 control_source_label = f"{args.control_source}:{class_names[control_class_id]}"
+            elif args.control_source == "class_mix":
+                control_source_label = "class_mix:synthetic_dose_rows"
             control_note = (
                 "Duplicates base rows to match train-list row count without adding synthetic note exposure."
             )
@@ -544,6 +582,11 @@ def main() -> int:
                 control_note = (
                     "Duplicates base rows to match train-list row count and labeled class exposure "
                     "without adding new synthetic images."
+                )
+            elif args.control_source == "class_mix":
+                control_note = (
+                    "Duplicates base rows selected to match each synthetic dose row's class mix; "
+                    "rows may be real or synthetic depending on the base train list."
                 )
             print(
                 f"row_control dose={dose} source={control_source_label} "
