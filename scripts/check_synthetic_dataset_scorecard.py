@@ -436,6 +436,73 @@ def mined_real_utility_axis(comparisons: list[dict[str, Any]]) -> dict[str, Any]
     )
 
 
+def split_coverage_freshness_failures(split_coverage: dict[str, Any]) -> list[str]:
+    failures: list[str] = []
+    data = str(split_coverage.get("data", "")).strip()
+    expected_data_sha = str(split_coverage.get("data_config_sha256", "")).strip()
+    if not data:
+        failures.append("split coverage report is missing data config path")
+    elif not expected_data_sha:
+        failures.append("split coverage report is missing data_config_sha256; regenerate it with the current check_yolo_dataset.py")
+    else:
+        data_path = resolve(Path(data))
+        if not data_path.exists():
+            failures.append(f"split coverage data config is missing: {data}")
+        else:
+            actual_data_sha = file_sha256(data_path)
+            if actual_data_sha != expected_data_sha:
+                failures.append(f"split coverage data config fingerprint is stale: {data}")
+
+    split_sources = split_coverage.get("split_sources", {})
+    if not isinstance(split_sources, dict) or not split_sources:
+        failures.append("split coverage report is missing split source fingerprints; regenerate it with the current check_yolo_dataset.py")
+        return failures
+    for split_name, rows in sorted(split_sources.items()):
+        if not isinstance(rows, list) or not rows:
+            failures.append(f"split coverage {split_name} split has no source fingerprints")
+            continue
+        for source in rows:
+            if not isinstance(source, dict):
+                failures.append(f"split coverage {split_name} source fingerprint row is malformed")
+                continue
+            path_text = str(source.get("path", "")).strip()
+            if not path_text:
+                failures.append(f"split coverage {split_name} source fingerprint row is missing path")
+                continue
+            path = resolve(Path(path_text))
+            if not path.exists():
+                failures.append(f"split coverage {split_name} source is missing: {path_text}")
+                continue
+            kind = str(source.get("kind", "")).strip()
+            if kind == "list":
+                expected = str(source.get("sha256", "")).strip()
+                if not expected:
+                    failures.append(f"split coverage {split_name} list is missing sha256: {path_text}")
+                    continue
+                actual = file_sha256(path)
+                if actual != expected:
+                    failures.append(f"split coverage {split_name} list fingerprint is stale: {path_text}")
+            elif kind == "directory":
+                expected = str(source.get("listing_sha256", "")).strip()
+                if not expected:
+                    failures.append(f"split coverage {split_name} directory is missing listing_sha256: {path_text}")
+                    continue
+                image_rows = sorted(
+                    repo_path(item)
+                    for item in path.glob("*")
+                    if item.is_file() and item.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
+                )
+                digest = hashlib.sha256()
+                for row in image_rows:
+                    digest.update(row.encode("utf-8"))
+                    digest.update(b"\n")
+                if digest.hexdigest() != expected:
+                    failures.append(f"split coverage {split_name} directory listing fingerprint is stale: {path_text}")
+            else:
+                failures.append(f"split coverage {split_name} source has unknown kind {kind!r}: {path_text}")
+    return failures
+
+
 def real_train_class_coverage_axis(split_coverage: dict[str, Any], min_unique_images: int) -> dict[str, Any]:
     if not split_coverage:
         return axis(
@@ -465,7 +532,8 @@ def real_train_class_coverage_axis(split_coverage: dict[str, Any], min_unique_im
         if unique_images < min_unique_images:
             failing[str(class_name)] = unique_images
 
-    status = "pass" if not failing else "blocked"
+    freshness_failures = split_coverage_freshness_failures(split_coverage)
+    status = "pass" if not failing and not freshness_failures else "blocked"
     summary = (
         f"Clean-real train split has at least {min_unique_images} unique image(s) for every class."
         if status == "pass"
@@ -478,12 +546,14 @@ def real_train_class_coverage_axis(split_coverage: dict[str, Any], min_unique_im
         summary,
         evidence={
             "data": split_coverage.get("data", ""),
+            "data_config_sha256": split_coverage.get("data_config_sha256", ""),
+            "split_sources": split_coverage.get("split_sources", {}),
             "train_images": train.get("images"),
             "train_background_images": train.get("background_images"),
             "min_unique_images": min_unique_images,
             "class_unique_images": class_counts,
         },
-        blockers=blockers,
+        blockers=[*blockers, *freshness_failures],
         next_action=(
             "Add or promote genuinely unique rare-class real examples before treating synthetic rare support as scale-ready."
         ),

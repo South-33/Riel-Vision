@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -42,6 +44,14 @@ def repo_rel(path: Path) -> str:
         return path.resolve().relative_to(ROOT).as_posix()
     except ValueError:
         return path.resolve().as_posix()
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def empty_summary() -> dict:
@@ -171,6 +181,32 @@ def count_split(dataset_root: Path, split_paths: str | list[str], class_count: i
     return total
 
 
+def split_source_records(dataset_root: Path, split_paths: str | list[str]) -> list[dict]:
+    paths = split_paths if isinstance(split_paths, list) else [split_paths]
+    records: list[dict] = []
+    for split_path in paths:
+        resolved = split_root(dataset_root, split_path)
+        record: dict = {"path": repo_rel(resolved)}
+        if resolved.suffix.lower() == ".txt":
+            record["kind"] = "list"
+            record["sha256"] = file_sha256(resolved)
+        else:
+            image_rows = sorted(
+                repo_rel(path)
+                for path in resolved.glob("*")
+                if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
+            )
+            digest = hashlib.sha256()
+            for row in image_rows:
+                digest.update(row.encode("utf-8"))
+                digest.update(b"\n")
+            record["kind"] = "directory"
+            record["image_count"] = len(image_rows)
+            record["listing_sha256"] = digest.hexdigest()
+        records.append(record)
+    return records
+
+
 def class_summary(names: dict, summary: dict) -> dict[str, dict[str, int]]:
     return {
         str(class_name): {
@@ -281,9 +317,15 @@ def main() -> None:
     if args.json_out:
         payload = {
             "data": repo_rel(config_path),
+            "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "data_config_sha256": file_sha256(config_path),
             "dataset_root": repo_rel(dataset_root),
             "passed": passed,
             "checks": checks,
+            "split_sources": {
+                split_key: split_source_records(dataset_root, config[split_key])
+                for split_key in split_summaries
+            },
             "splits": {
                 split_key: json_ready_summary(names, summary)
                 for split_key, summary in split_summaries.items()
