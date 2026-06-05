@@ -21,6 +21,17 @@ FIELDNAMES = [
     "notes",
 ]
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+DERIVED_ARTIFACT_TOKENS = {
+    "annotated",
+    "bpmn",
+    "contact_sheet",
+    "diagram",
+    "overlay",
+    "prediction",
+    "preview",
+    "screenshot",
+    "synthetic",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -47,6 +58,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--prefix", default="", help="Optional image_id prefix, e.g. capture_20260527.")
     parser.add_argument("--recursive", action="store_true", help="Scan images-dir recursively.")
     parser.add_argument("--allow-unknown-scene-type", action="store_true", help="Allow scene_type values absent from the requirements CSV.")
+    parser.add_argument(
+        "--allow-derived-artifacts",
+        action="store_true",
+        help="Allow filenames/paths that look like screenshots, overlays, contact sheets, or synthetic/reference artifacts.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print rows without modifying the inventory.")
     return parser.parse_args()
 
@@ -71,6 +87,11 @@ def slug(value: str) -> str:
 def iter_images(images_dir: Path, recursive: bool) -> list[Path]:
     pattern = "**/*" if recursive else "*"
     return sorted(path for path in images_dir.glob(pattern) if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS)
+
+
+def derived_artifact_tokens(path: Path) -> list[str]:
+    haystack = path.as_posix().lower()
+    return sorted(token for token in DERIVED_ARTIFACT_TOKENS if token in haystack)
 
 
 def read_existing(path: Path) -> list[dict[str, str]]:
@@ -141,6 +162,21 @@ def validate_scene_types(args: argparse.Namespace, images_dir: Path, images: lis
         )
 
 
+def validate_raw_capture_images(args: argparse.Namespace, images: list[Path]) -> None:
+    if args.allow_derived_artifacts:
+        return
+    rejected = [(image, derived_artifact_tokens(image)) for image in images]
+    rejected = [(image, tokens) for image, tokens in rejected if tokens]
+    if not rejected:
+        return
+    examples = "; ".join(f"{repo_path(image)} ({','.join(tokens)})" for image, tokens in rejected[:10])
+    suffix = f"; ... {len(rejected) - 10} more" if len(rejected) > 10 else ""
+    raise SystemExit(
+        "Refusing to register likely derived/non-raw capture artifact(s): "
+        f"{examples}{suffix}. Use --allow-derived-artifacts only for deliberate diagnostic inventory rows."
+    )
+
+
 def make_rows(args: argparse.Namespace, images_dir: Path, images: list[Path], existing: list[dict[str, str]]) -> list[dict[str, str]]:
     used_ids = {row.get("image_id", "") for row in existing}
     existing_paths = {row.get("local_path", "") for row in existing}
@@ -186,6 +222,7 @@ def main() -> None:
         raise SystemExit(f"images-dir not found: {args.images_dir}")
     images = iter_images(images_dir, args.recursive)
     validate_scene_types(args, images_dir, images)
+    validate_raw_capture_images(args, images)
     inventory = resolve(args.inventory)
     existing = read_existing(inventory)
     rows = make_rows(args, images_dir, images, existing)

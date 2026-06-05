@@ -14,6 +14,17 @@ DEFAULT_REQUIREMENTS = ROOT / "manifests" / "real_partial_capture_requirements.c
 DEFAULT_INBOX = ROOT / "data" / "inbox" / "real_partial_photos"
 DEFAULT_READINESS = ROOT / "runs" / "cashsnap" / "synthetic_pipeline_readiness_latest.json"
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+DERIVED_ARTIFACT_TOKENS = {
+    "annotated",
+    "bpmn",
+    "contact_sheet",
+    "diagram",
+    "overlay",
+    "prediction",
+    "preview",
+    "screenshot",
+    "synthetic",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -56,6 +67,11 @@ def read_optional_json(path: Path) -> dict[str, object]:
 
 def split_values(value: str) -> set[str]:
     return {part.strip() for part in value.replace(";", ",").split(",") if part.strip()}
+
+
+def derived_artifact_tokens(path_text: str) -> list[str]:
+    haystack = path_text.replace("\\", "/").lower()
+    return sorted(token for token in DERIVED_ARTIFACT_TOKENS if token in haystack)
 
 
 def row_matches(row: dict[str, str], column: str, value: str) -> bool:
@@ -109,6 +125,9 @@ def image_ok(row: dict[str, str]) -> tuple[bool, str]:
     local_path = row.get("local_path", "").strip()
     if not local_path:
         return False, "missing local_path"
+    tokens = derived_artifact_tokens(local_path)
+    if tokens:
+        return False, f"likely derived/non-raw capture artifact ({','.join(tokens)})"
     path = resolve(Path(local_path))
     if not path.exists():
         return False, f"missing file {local_path}"
