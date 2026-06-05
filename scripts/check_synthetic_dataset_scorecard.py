@@ -393,6 +393,11 @@ def build_scorecard(
     real_total = int(readiness.get("required_real_role_conditions", 0) or 0)
     usable_captures = int(readiness.get("usable_capture_images", 0) or 0)
     blocked_conditions = [str(item) for item in readiness.get("blocked_required_conditions", [])]
+    missing_trainable_conditions = [
+        condition_id
+        for condition_id, condition in sorted(conditions_by_id(readiness).items())
+        if bool(condition.get("required_for_v1")) and not condition.get("active_suite_recipe_ids")
+    ]
 
     axes: list[dict[str, Any]] = []
     axes.append(
@@ -400,8 +405,12 @@ def build_scorecard(
             "target_condition_coverage",
             "pass" if required and trainable == required else "blocked",
             f"{trainable}/{required} required conditions have active trainable-candidate synthetic coverage.",
-            evidence={"required_conditions": required, "required_with_trainable_candidate": trainable},
-            blockers=[] if trainable == required else ["not every required condition has trainable-candidate coverage"],
+            evidence={
+                "required_conditions": required,
+                "required_with_trainable_candidate": trainable,
+                "missing_trainable_conditions": missing_trainable_conditions,
+            },
+            blockers=[] if trainable == required else missing_trainable_conditions or ["not every required condition has trainable-candidate coverage"],
             next_action="" if trainable == required else "Add or promote missing synthetic recipe coverage.",
         )
     )
