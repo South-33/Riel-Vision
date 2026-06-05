@@ -29,6 +29,8 @@ const VALUES = {
   KHR_20000: 20000,
   KHR_50000: 50000,
 };
+const COUNTING_MODE = "post_nms_detector_proposals_with_fragment_class_override";
+const COUNT_SOURCE = "final_nms_detections";
 const COLORS = [
   "#e43d30",
   "#2478c2",
@@ -448,11 +450,18 @@ async function runModel() {
   const proposals = parseOutput(output, meta);
   const classified = await classifyFragments(proposals);
   state.detections = nms(classified);
+  const fragmentClassified = classified.filter((detection) => detection.fragmentName).length;
   state.debug = {
+    countingMode: COUNTING_MODE,
+    countSource: COUNT_SOURCE,
     detectorOutputDims: output.dims,
+    detectorProposals: proposals.length,
+    classifiedProposals: classified.length,
+    fragmentClassifiedProposals: fragmentClassified,
+    finalDetections: state.detections.length,
     proposals: proposals.length,
     classified: classified.length,
-    fragmentClassified: classified.filter((detection) => detection.fragmentName).length,
+    fragmentClassified,
     final: state.detections.length,
   };
   renderDetections();

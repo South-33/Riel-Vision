@@ -34,6 +34,8 @@ const VALUES = {
   KHR_20000: 20000,
   KHR_50000: 50000,
 };
+const COUNTING_MODE = "post_nms_detector_proposals_with_fragment_class_override";
+const COUNT_SOURCE = "final_nms_detections";
 
 function parseArgs(argv) {
   const args = {
@@ -384,15 +386,71 @@ function summarize(value, args) {
     counts[detection.name] = (counts[detection.name] || 0) + 1;
   }
   const values = currencyValues(value.detections || []);
+  const totalCount = Number(value.totalCount || 0);
+  const detections = value.detections || [];
+  const debug = value.debug || {};
+  const predClassTotal = Object.values(counts).reduce((total, count) => total + count, 0);
   return {
     status: value.status,
-    totalCount: Number(value.totalCount || 0),
+    totalCount,
     ...values,
     predClasses: Object.fromEntries(Object.entries(counts).sort(([left], [right]) => left.localeCompare(right))),
-    debug: value.debug || {},
+    countContract: {
+      mode: debug.countingMode || "",
+      expectedMode: COUNTING_MODE,
+      countSource: debug.countSource || "",
+      expectedCountSource: COUNT_SOURCE,
+      totalCount,
+      finalDetections: detections.length,
+      predClassTotal,
+      detectorProposals: Number(debug.detectorProposals ?? debug.proposals ?? 0),
+      classifiedProposals: Number(debug.classifiedProposals ?? debug.classified ?? 0),
+      fragmentClassifiedProposals: Number(debug.fragmentClassifiedProposals ?? debug.fragmentClassified ?? 0),
+      uiTotalMatchesFinal: totalCount === detections.length,
+      predClassTotalMatchesFinal: predClassTotal === detections.length,
+      debugFinalMatchesFinal: Number(debug.finalDetections ?? debug.final ?? -1) === detections.length,
+      finalNotMoreThanClassified: detections.length <= Number(debug.classifiedProposals ?? debug.classified ?? -1),
+      fragmentClassifiedNotMoreThanClassified:
+        Number(debug.fragmentClassifiedProposals ?? debug.fragmentClassified ?? -1) <=
+        Number(debug.classifiedProposals ?? debug.classified ?? -1),
+    },
+    debug,
     evaluation: evaluateDetections(value, args),
-    detections: value.detections || [],
+    detections,
   };
+}
+
+function enforceCountContract(summary) {
+  const contract = summary.countContract || {};
+  const failures = [];
+  if (contract.mode !== COUNTING_MODE) {
+    failures.push(`mode ${contract.mode || "<missing>"} != ${COUNTING_MODE}`);
+  }
+  if (contract.countSource !== COUNT_SOURCE) {
+    failures.push(`count source ${contract.countSource || "<missing>"} != ${COUNT_SOURCE}`);
+  }
+  if (!contract.uiTotalMatchesFinal) {
+    failures.push(`UI total ${contract.totalCount} != final detections ${contract.finalDetections}`);
+  }
+  if (!contract.predClassTotalMatchesFinal) {
+    failures.push(`class total ${contract.predClassTotal} != final detections ${contract.finalDetections}`);
+  }
+  if (!contract.debugFinalMatchesFinal) {
+    failures.push(`debug final != final detections ${contract.finalDetections}`);
+  }
+  if (!contract.finalNotMoreThanClassified) {
+    failures.push(
+      `final detections ${contract.finalDetections} > classified proposals ${contract.classifiedProposals}`,
+    );
+  }
+  if (!contract.fragmentClassifiedNotMoreThanClassified) {
+    failures.push(
+      `fragment-classified proposals ${contract.fragmentClassifiedProposals} > classified proposals ${contract.classifiedProposals}`,
+    );
+  }
+  if (failures.length) {
+    throw new Error(`Browser smoke count contract failed: ${failures.join("; ")}`);
+  }
 }
 
 function enforceEvaluation(summary, args) {
@@ -435,6 +493,7 @@ async function readBrowserState(send, timeoutMs) {
     status: document.getElementById('modelStatus')?.textContent?.trim(),
     runButton: document.getElementById('runButton')?.textContent?.trim(),
     totalCount: document.getElementById('totalCount')?.textContent?.trim(),
+    autoRunDone: typeof state !== 'undefined' ? state.autoRunDone : false,
     imageWidth: typeof state !== 'undefined' && state.image ? state.image.width : 0,
     imageHeight: typeof state !== 'undefined' && state.image ? state.image.height : 0,
     detections: typeof state !== 'undefined' ? state.detections : null,
@@ -448,7 +507,7 @@ async function readBrowserState(send, timeoutMs) {
       throw new Error(result.result.exceptionDetails.text || "CDP evaluation failed");
     }
     value = JSON.parse(result.result.result.value);
-    if (value.totalCount !== "0" && value.runButton === "Run") return value;
+    if (value.runButton === "Run" && (value.autoRunDone || value.totalCount !== "0")) return value;
     if (value.status === "Model load failed") return value;
     await sleep(1000);
   }
@@ -563,6 +622,7 @@ async function main() {
     const summary = summarize(value, args);
     writeSummaryJson(args.outJson, summary);
     console.log(JSON.stringify(summary, null, 2));
+    enforceCountContract(summary);
     enforceEvaluation(summary, args);
   } finally {
     killTree(edge);
