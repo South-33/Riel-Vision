@@ -162,15 +162,26 @@ def read_comparison_jsons(paths: list[Path]) -> list[dict[str, Any]]:
     return comparisons
 
 
-def read_json_array(path: Path, *, required: bool = True) -> list[Any]:
+def read_browser_stress_report(path: Path, *, required: bool = True) -> dict[str, Any]:
     resolved = resolve(path)
     if not resolved.exists():
         if required:
             raise SystemExit(f"missing JSON file: {repo_path(resolved)}")
-        return []
+        return {"cases": [], "_source": repo_path(resolved)}
     data = json.loads(resolved.read_text(encoding="utf-8"))
-    if not isinstance(data, list):
-        raise SystemExit(f"{repo_path(resolved)}: expected JSON array")
+    if isinstance(data, list):
+        return {
+            "schema": "legacy_browser_synthetic_stress_array",
+            "legacy_array": True,
+            "cases": data,
+            "_source": repo_path(resolved),
+        }
+    if not isinstance(data, dict):
+        raise SystemExit(f"{repo_path(resolved)}: expected JSON object or legacy JSON array")
+    cases = data.get("cases", [])
+    if not isinstance(cases, list):
+        raise SystemExit(f"{repo_path(resolved)}: expected 'cases' JSON array")
+    data["_source"] = repo_path(resolved)
     return data
 
 
@@ -196,7 +207,10 @@ def yolo_label_count_values(path: Path) -> dict[str, int]:
         parts = line.split()
         if len(parts) != 5:
             raise SystemExit(f"{repo_path(resolved)}:{line_number}: expected YOLO detect label with 5 fields")
-        class_id = int(float(parts[0]))
+        raw_class = float(parts[0])
+        if not raw_class.is_integer():
+            raise SystemExit(f"{repo_path(resolved)}:{line_number}: class id {parts[0]} is not an integer")
+        class_id = int(raw_class)
         if not 0 <= class_id < len(CLASS_NAMES):
             raise SystemExit(f"{repo_path(resolved)}:{line_number}: class id {class_id} outside class map")
         class_name = CLASS_NAMES[class_id]
@@ -868,7 +882,49 @@ def mined_real_utility_axis(comparisons: list[dict[str, Any]]) -> dict[str, Any]
     )
 
 
-def browser_synthetic_stress_axis(rows: list[Any], manifest_rows: list[dict[str, str]]) -> dict[str, Any]:
+def browser_report_freshness_failures(report: dict[str, Any], manifest_path: Path) -> list[str]:
+    failures: list[str] = []
+    if report.get("legacy_array"):
+        return ["browser synthetic stress report is a legacy JSON array; regenerate it with run_browser_smoke_cases.py"]
+    if not str(report.get("generated_at_utc", "")).strip():
+        failures.append("browser synthetic stress report is missing generated_at_utc; regenerate it with run_browser_smoke_cases.py")
+    input_fingerprints = report.get("input_fingerprints", {})
+    if not isinstance(input_fingerprints, dict) or not input_fingerprints:
+        failures.append("browser synthetic stress report is missing input_fingerprints; regenerate it with run_browser_smoke_cases.py")
+        return failures
+
+    expected_manifest = repo_path(resolve(manifest_path))
+    manifest_row = input_fingerprints.get("case_manifest", {})
+    if isinstance(manifest_row, dict):
+        report_manifest = str(manifest_row.get("path", "")).strip()
+        if report_manifest and report_manifest != expected_manifest:
+            failures.append(
+                f"browser synthetic stress manifest path drifted: report has {report_manifest}, scorecard has {expected_manifest}"
+            )
+    required_keys = [
+        "case_manifest",
+        "smoke_runner",
+        "smoke_cdp",
+        "browser_app",
+        "browser_index",
+        "browser_stack_config",
+        "detector_model",
+        "fragment_classifier_model",
+    ]
+    for key in required_keys:
+        failures.extend(verify_fingerprint_row(input_fingerprints.get(key, {}), label=f"browser stress input {key}"))
+    failures.extend(str(item) for item in report.get("failures", []) if str(item).strip())
+    return failures
+
+
+def browser_synthetic_stress_axis(
+    report: dict[str, Any],
+    manifest_rows: list[dict[str, str]],
+    manifest_path: Path,
+) -> dict[str, Any]:
+    rows = report.get("cases", [])
+    if not isinstance(rows, list):
+        rows = []
     if not rows:
         return axis(
             "browser_synthetic_stress",
@@ -885,7 +941,7 @@ def browser_synthetic_stress_axis(rows: list[Any], manifest_rows: list[dict[str,
         "fragmentClassifiedNotMoreThanClassified",
     ]
     evidence_rows: list[dict[str, Any]] = []
-    blockers: list[str] = []
+    blockers: list[str] = browser_report_freshness_failures(report, manifest_path)
     pass_count = 0
     manifest_by_case = {str(row.get("case_id", "")): row for row in manifest_rows}
     run_case_ids = {str(item.get("caseId", "")) for item in rows if isinstance(item, dict)}
@@ -977,7 +1033,14 @@ def browser_synthetic_stress_axis(rows: list[Any], manifest_rows: list[dict[str,
         "browser_synthetic_stress",
         status,
         f"{pass_count}/{len(rows)} browser synthetic stress case(s) pass strict count/value/class deploy guard.",
-        evidence={"cases": evidence_rows},
+        evidence={
+            "generated_at_utc": report.get("generated_at_utc", ""),
+            "schema": report.get("schema", ""),
+            "source": report.get("_source", ""),
+            "case_manifest": report.get("case_manifest", ""),
+            "input_fingerprints": report.get("input_fingerprints", {}),
+            "cases": evidence_rows,
+        },
         blockers=blockers,
         next_action=(
             "Use browser stress failures as deploy/curriculum probes; count-contract pass alone is not enough while count, value, or class recall fails."
@@ -1171,8 +1234,9 @@ def build_scorecard(
     min_real_train_class_images: int,
     mined_real_utility_comparisons: list[dict[str, Any]],
     governance_report: dict[str, Any],
-    browser_synthetic_stress: list[Any],
+    browser_synthetic_stress: dict[str, Any],
     browser_synthetic_manifest: list[dict[str, str]],
+    browser_synthetic_manifest_path: Path,
 ) -> dict[str, Any]:
     required = int(readiness.get("required_conditions", 0) or 0)
     trainable = int(readiness.get("required_with_trainable_candidate", 0) or 0)
@@ -1342,7 +1406,9 @@ def build_scorecard(
         )
     )
     axes.append(mined_real_utility_axis(mined_real_utility_comparisons))
-    axes.append(browser_synthetic_stress_axis(browser_synthetic_stress, browser_synthetic_manifest))
+    axes.append(
+        browser_synthetic_stress_axis(browser_synthetic_stress, browser_synthetic_manifest, browser_synthetic_manifest_path)
+    )
 
     axes.append(
         axis(
@@ -1389,7 +1455,7 @@ def main() -> int:
     comparison_paths = [] if args.no_default_mined_real_utility else list(DEFAULT_MINED_REAL_UTILITY_COMPARISONS)
     comparison_paths.extend(args.mined_real_utility_comparison)
     mined_real_utility_comparisons = read_comparison_jsons(comparison_paths)
-    browser_synthetic_stress = read_json_array(args.browser_synthetic_stress, required=False)
+    browser_synthetic_stress = read_browser_stress_report(args.browser_synthetic_stress, required=False)
     browser_synthetic_manifest = read_csv_rows(args.browser_synthetic_manifest, required=False)
     scorecard = build_scorecard(
         readiness,
@@ -1403,6 +1469,7 @@ def main() -> int:
         governance_report,
         browser_synthetic_stress,
         browser_synthetic_manifest,
+        args.browser_synthetic_manifest,
     )
     out = resolve(args.json_out)
     out.parent.mkdir(parents=True, exist_ok=True)

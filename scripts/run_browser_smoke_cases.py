@@ -2,14 +2,20 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
+import re
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CASES = ROOT / "manifests" / "browser_smoke_cases.csv"
 DEFAULT_OUT_DIR = ROOT / ".agent" / "browser_smoke_cases"
+DEFAULT_BROWSER_APP = ROOT / "demo" / "browser" / "app.js"
+DEFAULT_BROWSER_INDEX = ROOT / "demo" / "browser" / "index.html"
+DEFAULT_SMOKE_CDP = ROOT / "scripts" / "smoke_browser_demo_cdp.cjs"
 NUMERIC_FIELDS = ["min_same_class", "min_any_class", "max_count_error", "max_khr_error", "max_usd_error"]
 
 
@@ -40,6 +46,61 @@ def repo_path(path: Path) -> str:
         return path.resolve().relative_to(ROOT).as_posix()
     except ValueError:
         return str(path)
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def fingerprint_file(path: Path) -> dict[str, object]:
+    resolved = resolve(path)
+    row: dict[str, object] = {"path": repo_path(resolved), "exists": resolved.exists()}
+    if resolved.is_file():
+        row["sha256"] = file_sha256(resolved)
+    return row
+
+
+def browser_stack_config_path() -> Path:
+    app_text = DEFAULT_BROWSER_APP.read_text(encoding="utf-8")
+    match = re.search(r'STACK_CONFIG_URL\s*=\s*"([^"]+)"', app_text)
+    if not match:
+        raise ValueError(f"{repo_path(DEFAULT_BROWSER_APP)}: missing STACK_CONFIG_URL")
+    raw = match.group(1)
+    if raw.startswith("/"):
+        return ROOT / raw.lstrip("/")
+    return resolve(Path(raw))
+
+
+def read_browser_stack_config(path: Path) -> dict:
+    resolved = resolve(path)
+    if not resolved.exists():
+        return {}
+    data = json.loads(resolved.read_text(encoding="utf-8"))
+    return data if isinstance(data, dict) else {}
+
+
+def browser_input_fingerprints(cases_path: Path) -> dict[str, dict[str, object]]:
+    stack_path = browser_stack_config_path()
+    stack_config = read_browser_stack_config(stack_path)
+    fingerprints: dict[str, dict[str, object]] = {
+        "case_manifest": fingerprint_file(cases_path),
+        "smoke_runner": fingerprint_file(Path(__file__)),
+        "smoke_cdp": fingerprint_file(DEFAULT_SMOKE_CDP),
+        "browser_app": fingerprint_file(DEFAULT_BROWSER_APP),
+        "browser_index": fingerprint_file(DEFAULT_BROWSER_INDEX),
+        "browser_stack_config": fingerprint_file(stack_path),
+    }
+    detector_path = str((stack_config.get("detector") or {}).get("path", "")).strip()
+    if detector_path:
+        fingerprints["detector_model"] = fingerprint_file(Path(detector_path))
+    fragment_path = str((stack_config.get("fragment_classifier") or {}).get("path", "")).strip()
+    if fragment_path:
+        fingerprints["fragment_classifier_model"] = fingerprint_file(Path(fragment_path))
+    return fingerprints
 
 
 def read_cases(path: Path) -> list[dict[str, str]]:
@@ -86,6 +147,26 @@ def parse_summary(stdout: str) -> dict:
     if start < 0 or end < start:
         raise ValueError("smoke output did not contain a JSON summary")
     return json.loads(stdout[start : end + 1])
+
+
+def browser_stress_report(args: argparse.Namespace, summaries: list[dict], failures: list[str]) -> dict[str, object]:
+    return {
+        "schema": "cashsnap_browser_synthetic_stress_report_v1",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "case_count": len(summaries),
+        "case_manifest": repo_path(resolve(args.cases)),
+        "input_fingerprints": browser_input_fingerprints(args.cases),
+        "settings": {
+            "timeout_ms": int(args.timeout_ms),
+            "edge": args.edge,
+            "proposal_conf": args.proposal_conf,
+            "detector_override": args.detector_override,
+            "nms_iou": args.nms_iou,
+            "crop_padding": args.crop_padding,
+        },
+        "failures": failures,
+        "cases": summaries,
+    }
 
 
 def command_for_case(case: dict[str, str], args: argparse.Namespace, index: int) -> list[str]:
@@ -183,7 +264,7 @@ def main() -> None:
     if summary_json is not None:
         summary_path = resolve(summary_json)
         summary_path.parent.mkdir(parents=True, exist_ok=True)
-        summary_path.write_text(json.dumps(summaries, indent=2) + "\n", encoding="utf-8")
+        summary_path.write_text(json.dumps(browser_stress_report(args, summaries, failures), indent=2) + "\n", encoding="utf-8")
         print(f"wrote {repo_path(summary_path)}")
     if failures:
         raise SystemExit("; ".join(failures))
