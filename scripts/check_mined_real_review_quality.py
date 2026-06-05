@@ -13,7 +13,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCES = ROOT / "runs" / "cashsnap" / "mined_real_benchmark_review_sources_latest.csv"
-DEFAULT_QUALITY = ROOT / "runs" / "cashsnap" / "mined_real_benchmark_review_quality_template_latest.csv"
+DEFAULT_QUALITY = ROOT / "manifests" / "mined_real_benchmark_review_quality.csv"
 DEFAULT_DRAFT_LABEL_DIR = ROOT / "data" / "real_fan_benchmark" / "mined_cashsnap_v1" / "drafts"
 DEFAULT_SCOREABLE_LABEL_DIR = ROOT / "data" / "real_fan_benchmark" / "mined_cashsnap_v1" / "scoreable"
 DEFAULT_JSON_OUT = ROOT / "runs" / "cashsnap" / "mined_real_benchmark_review_quality_summary_latest.json"
