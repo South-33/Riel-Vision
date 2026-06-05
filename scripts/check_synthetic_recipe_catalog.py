@@ -40,6 +40,21 @@ VALID_RECIPE_STATUSES = {
 }
 NOTE_CONDITION_POLICIES = {"mixed", "pristine_only", "heavy_wear", "wet_stress"}
 LENS_DISTORTION_POLICIES = {"off", "phone_mild"}
+DOMAIN_GAP_STAT_KEYS = {
+    "image": {
+        "width",
+        "height",
+        "aspect",
+        "luma_mean",
+        "luma_std",
+        "luma_p05",
+        "luma_p95",
+        "saturation_mean",
+        "saturation_std",
+        "sharpness_grad_var",
+    },
+    "box": {"box_width", "box_height", "box_area", "box_aspect"},
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -68,11 +83,32 @@ def require_nonnegative_int(value: object, message: str) -> None:
     require(type(value) is int and value >= 0, message)
 
 
+def require_nonnegative_number(value: object, message: str) -> None:
+    require(isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0, message)
+
+
+def validate_domain_gap_metric_limits(recipe_id: str, gate: dict, key: str, valid_metrics: set[str]) -> None:
+    limits = gate.get(key)
+    if limits is None:
+        return
+    require(isinstance(limits, dict), f"{recipe_id}: domain_gap.{key} must be an object")
+    unknown = sorted(str(metric) for metric in limits if str(metric) not in valid_metrics)
+    require(not unknown, f"{recipe_id}: domain_gap.{key} unknown metric(s): {unknown}")
+    for metric, value in limits.items():
+        require_nonnegative_number(value, f"{recipe_id}: domain_gap.{key}.{metric} must be a non-negative number")
+
+
 def validate_diagnostic_gates(recipe_id: str, gates: object) -> None:
     if gates in (None, ""):
         return
     require(isinstance(gates, dict), f"{recipe_id}: diagnostic_gates must be an object")
-    allowed_gate_names = {"class_distribution", "count_stress", "note_condition_diversity", "hard_negative_diversity"}
+    allowed_gate_names = {
+        "class_distribution",
+        "count_stress",
+        "note_condition_diversity",
+        "hard_negative_diversity",
+        "domain_gap",
+    }
     unknown_gate_names = sorted(str(key) for key in gates if str(key) not in allowed_gate_names)
     require(not unknown_gate_names, f"{recipe_id}: unknown diagnostic_gates {unknown_gate_names}")
 
@@ -162,6 +198,32 @@ def validate_diagnostic_gates(recipe_id: str, gates: object) -> None:
                 type(hard_negative_diversity["require_zero_assets"]) is bool,
                 f"{recipe_id}: hard_negative_diversity.require_zero_assets must be boolean",
             )
+
+    domain_gap = gates.get("domain_gap")
+    if domain_gap is not None:
+        require(isinstance(domain_gap, dict), f"{recipe_id}: domain_gap gate must be an object")
+        real_train_list = str(domain_gap.get("real_train_list", "")).strip()
+        require(real_train_list, f"{recipe_id}: domain_gap.real_train_list must be a non-empty path")
+        for field in ("preset", "synthetic_train_dir", "train_list_out", "config_out", "json_out"):
+            if field in domain_gap:
+                require(str(domain_gap[field]).strip(), f"{recipe_id}: domain_gap.{field} must be non-empty")
+        validate_domain_gap_metric_limits(recipe_id, domain_gap, "max_abs_image_delta", DOMAIN_GAP_STAT_KEYS["image"])
+        validate_domain_gap_metric_limits(recipe_id, domain_gap, "max_abs_box_delta", DOMAIN_GAP_STAT_KEYS["box"])
+        validate_domain_gap_metric_limits(recipe_id, domain_gap, "max_abs_class_box_delta", DOMAIN_GAP_STAT_KEYS["box"])
+        for field in ("max_synthetic_image_ratio", "max_synthetic_box_ratio", "max_synthetic_class_box_ratio"):
+            if field in domain_gap:
+                value = domain_gap[field]
+                require(
+                    isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0,
+                    f"{recipe_id}: domain_gap.{field} must be a positive number",
+                )
+        if "class_box_delta_classes" in domain_gap:
+            classes = domain_gap["class_box_delta_classes"]
+            require(isinstance(classes, list), f"{recipe_id}: domain_gap.class_box_delta_classes must be a list")
+            unknown_classes = sorted(str(class_name) for class_name in classes if str(class_name) not in CLASS_NAMES)
+            require(not unknown_classes, f"{recipe_id}: domain_gap.class_box_delta_classes unknown classes {unknown_classes}")
+        if "fail_on_gap" in domain_gap:
+            require(type(domain_gap["fail_on_gap"]) is bool, f"{recipe_id}: domain_gap.fail_on_gap must be boolean")
 
 
 def main() -> int:

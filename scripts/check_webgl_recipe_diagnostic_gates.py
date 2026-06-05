@@ -14,6 +14,22 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CATALOG = ROOT / "configs" / "synthetic_recipes" / "cashsnap_webgl_recipe_catalog_v1.json"
 NOTE_CONDITION_POLICIES = {"mixed", "pristine_only", "heavy_wear", "wet_stress"}
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+CLASS_NAMES = [
+    "USD_1",
+    "USD_5",
+    "USD_10",
+    "USD_20",
+    "USD_50",
+    "USD_100",
+    "KHR_500",
+    "KHR_1000",
+    "KHR_2000",
+    "KHR_5000",
+    "KHR_10000",
+    "KHR_20000",
+    "KHR_50000",
+]
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,6 +51,13 @@ def read_json(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise SystemExit(f"{path}: expected JSON object")
     return data
+
+
+def repo_rel(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.resolve().as_posix()
 
 
 def find_recipe(catalog: dict[str, Any], recipe_id: str) -> dict[str, Any]:
@@ -142,6 +165,98 @@ def run_hard_negative_diversity_gate(root: Path, gate: dict[str, Any]) -> None:
     run(cmd)
 
 
+def add_metric_limit_options(cmd: list[str], gate: dict[str, Any], key: str, option: str) -> None:
+    raw_limits = gate.get(key, {})
+    if raw_limits in (None, ""):
+        return
+    if not isinstance(raw_limits, dict):
+        raise SystemExit(f"domain_gap.{key} must be an object")
+    for metric, value in sorted(raw_limits.items()):
+        cmd.extend([option, f"{metric}={float(value)}"])
+
+
+def write_domain_gap_data_yaml(config_out: Path, train_list: Path, root: Path, gate: dict[str, Any]) -> None:
+    synthetic_train_dir = root / str(gate.get("synthetic_train_dir", "images/train"))
+    if not synthetic_train_dir.exists():
+        raise SystemExit(f"domain_gap synthetic train dir missing: {repo_rel(synthetic_train_dir)}")
+    synthetic_images = [
+        path
+        for path in sorted(synthetic_train_dir.glob("*"))
+        if path.is_file() and path.suffix.lower() in IMAGE_EXTS
+    ]
+    if not synthetic_images:
+        raise SystemExit(f"domain_gap synthetic train dir has no images: {repo_rel(synthetic_train_dir)}")
+
+    real_train_list = resolve(Path(str(gate.get("real_train_list", ""))))
+    if not real_train_list.exists():
+        raise SystemExit(f"domain_gap real_train_list missing: {repo_rel(real_train_list)}")
+    real_rows = [line.strip() for line in real_train_list.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not real_rows:
+        raise SystemExit(f"domain_gap real_train_list has no rows: {repo_rel(real_train_list)}")
+
+    train_rows = real_rows + [repo_rel(path) for path in synthetic_images]
+    train_list.parent.mkdir(parents=True, exist_ok=True)
+    train_list.write_text("\n".join(train_rows) + "\n", encoding="utf-8")
+
+    names_yaml = "\n".join(f"  {index}: {class_name}" for index, class_name in enumerate(CLASS_NAMES))
+    config_out.parent.mkdir(parents=True, exist_ok=True)
+    config_out.write_text(
+        "\n".join(
+            [
+                f"path: {ROOT.as_posix()}",
+                f"train: {repo_rel(train_list)}",
+                "val: data/cashsnap_v1/images/val",
+                "test: data/cashsnap_v1/images/test",
+                "names:",
+                names_yaml,
+                "cashsnap_diagnostic:",
+                "  purpose: WebGL recipe diagnostic domain-gap gate; not trainable/promoted",
+                f"  synthetic_root: {repo_rel(root)}",
+                f"  real_train_list: {repo_rel(real_train_list)}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
+def run_domain_gap_gate(root: Path, gate: dict[str, Any], recipe_id: str) -> None:
+    stem = recipe_id.replace("/", "_")
+    train_list = resolve(Path(str(gate.get("train_list_out", f"runs/cashsnap/domain_gap_{stem}_diagnostic_train.txt"))))
+    config_out = resolve(Path(str(gate.get("config_out", f"runs/cashsnap/domain_gap_{stem}_diagnostic_data.yaml"))))
+    json_out = resolve(Path(str(gate.get("json_out", f"runs/cashsnap/domain_gap_{stem}_diagnostic_train.json"))))
+    write_domain_gap_data_yaml(config_out, train_list, root, gate)
+
+    cmd = [
+        sys.executable,
+        "scripts/audit_yolo_domain_gap.py",
+        "--data",
+        repo_rel(config_out),
+        "--split",
+        "train",
+        "--json-out",
+        repo_rel(json_out),
+    ]
+    preset = str(gate.get("preset", "")).strip()
+    if preset:
+        cmd.extend(["--gate-preset", preset])
+    add_metric_limit_options(cmd, gate, "max_abs_image_delta", "--max-abs-image-delta")
+    add_metric_limit_options(cmd, gate, "max_abs_box_delta", "--max-abs-box-delta")
+    add_metric_limit_options(cmd, gate, "max_abs_class_box_delta", "--max-abs-class-box-delta")
+    for class_name in gate.get("class_box_delta_classes", []):
+        cmd.extend(["--class-box-delta-class", str(class_name)])
+    for key, option in (
+        ("max_synthetic_image_ratio", "--max-synthetic-image-ratio"),
+        ("max_synthetic_box_ratio", "--max-synthetic-box-ratio"),
+        ("max_synthetic_class_box_ratio", "--max-synthetic-class-box-ratio"),
+    ):
+        if key in gate:
+            cmd.extend([option, str(float(gate[key]))])
+    if gate.get("fail_on_gap", True):
+        cmd.append("--fail-on-gap")
+    run(cmd)
+
+
 def main() -> int:
     args = parse_args()
     root = resolve(args.root)
@@ -177,6 +292,12 @@ def main() -> int:
         if not isinstance(hard_negative_diversity, dict):
             raise SystemExit(f"{args.recipe_id}: hard_negative_diversity gate must be an object")
         run_hard_negative_diversity_gate(root, hard_negative_diversity)
+
+    domain_gap = gates.get("domain_gap")
+    if domain_gap is not None:
+        if not isinstance(domain_gap, dict):
+            raise SystemExit(f"{args.recipe_id}: domain_gap gate must be an object")
+        run_domain_gap_gate(root, domain_gap, args.recipe_id)
 
     print(f"ok: {args.recipe_id} diagnostic gates passed")
     return 0

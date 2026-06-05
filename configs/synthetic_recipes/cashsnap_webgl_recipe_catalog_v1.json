@@ -38,6 +38,52 @@
       "current_blocker": "Strict real-only ablation still failed after KHR rotation repair: test mAP50-95 0.821181 vs 0.835861 real-only (delta -0.014680), worst KHR_2000 and KHR_50000."
     },
     {
+      "id": "webgl_real_scale_stack_geometry_v1",
+      "target_condition_ids": ["clean_single_or_separated_notes", "loose_counter_stack_overlap", "dense_shop_overlap"],
+      "artifact_status": "diagnostic",
+      "scene_modes": ["stack"],
+      "asset_side_policy": "any",
+      "camera_profile": "phone_closeup_clean_like",
+      "render_pool_count": 12,
+      "diagnostic_gates": {
+        "class_distribution": {
+          "expected_classes": [
+            "USD_1",
+            "USD_5",
+            "USD_10",
+            "USD_20",
+            "USD_50",
+            "USD_100",
+            "KHR_500",
+            "KHR_1000",
+            "KHR_2000",
+            "KHR_5000",
+            "KHR_10000",
+            "KHR_20000",
+            "KHR_50000"
+          ],
+          "min_images": 12,
+          "min_per_class": 3,
+          "max_class_ratio": 1.7
+        },
+        "domain_gap": {
+          "real_train_list": "configs/generated_lists/webgl_ablation/cashsnap_v1_balanced_real_only_probe_train.txt",
+          "json_out": "runs/cashsnap/domain_gap_webgl_real_scale_stack_geometry_v1_train.json",
+          "max_abs_box_delta": {
+            "box_area": 0.25,
+            "box_width": 0.35,
+            "box_height": 0.35,
+            "box_aspect": 0.20
+          },
+          "max_synthetic_image_ratio": 0.10,
+          "max_synthetic_box_ratio": 0.30
+        }
+      },
+      "intended_use": "Diagnostic multi-note stack framing that matches real visible-note scale before any accepted-blend retraining.",
+      "promotion_gate": "aggregate real-vs-synthetic visible-note geometry passes, then per-class aspect and real stress utility must pass before trainable-candidate use",
+      "current_blocker": "Small probe fixes aggregate scale but still shows per-class aspect drift; diagnostic only until class-shape diversity and real transfer are proven."
+    },
+    {
       "id": "webgl_overlap_stack_v1",
       "target_condition_ids": ["loose_counter_stack_overlap", "dense_shop_overlap"],
       "artifact_status": "smoke_ready",
