@@ -53,6 +53,7 @@ Done and trusted:
 - `check_webgl_count_stress.py` gates per-image count stress from `counts/targets.jsonl`, including same-class repeat images, max same-class count, split-parent counts, and fragment-overcount pressure.
 - Diagnostic recipe gates can live in `cashsnap_webgl_recipe_catalog_v1.json` and run via `check_webgl_recipe_diagnostic_gates.py`; rare-class and same-class-repeat recipes now declare their accepted audit thresholds.
 - `check_webgl_appearance_diversity.py` is wired into the trainable-candidate gate so accepted packages must keep meaningful camera-profile, surface, luma, and non-geometric RGB postprocess spread instead of collapsing into one synthetic look.
+- `check_synthetic_pipeline_readiness.py` is the mission-level scale audit: it joins target-matrix conditions, recipe catalog rows, the active trainable-candidate suite, rendered package metadata, real benchmark roles, and real capture inventory so synthetic scale decisions fail on explicit condition/validation gaps instead of vibes.
 - `configs/cashsnap_v1_plus_webgl_accepted_nowarmup_probe.yaml` is the current bounded accepted-blend ablation: global clean-test transfer passes matched real-only by `+0.000994` mAP50-95, but its `KHR_2000` per-class drop blocks blind scale.
 - `scripts/build_yolo_balanced_subset.py --always-max-per-class` can cap labeled always-included synthetic dose per class; this is useful tooling, but the capped full-real accepted seed is also rejected and should not be promoted.
 - `configs/cashsnap_v1_full_real_only_seed.yaml` proves the all-target real curriculum is itself unsafe: 1 epoch from the clean checkpoint tests at `0.783482` mAP50-95 vs `0.883801` clean checkpoint, nearly identical to the capped accepted-synthetic failure.
@@ -101,6 +102,7 @@ Do not let this file become a command catalog. Keep only the few commands that e
 Current useful checks:
 
 - P1 readiness: `rl python scripts\check_webgl_p1_readiness.py --smoke-mix configs\cashsnap_webgl_trainable_candidates_mix.yaml`
+- Mission-level synthetic scale readiness: `rl python scripts\check_synthetic_pipeline_readiness.py --check-existing --json-out runs\cashsnap\synthetic_pipeline_readiness_latest.json`
 - Trainable-candidate dry run: `rl python scripts\run_webgl_trainable_candidate_pipeline.py --dry-run --train-smoke`
 - Targeted class-dose gate: `rl python scripts\check_webgl_class_distribution.py --root <webgl_root> --expected-classes '<CSV>' --min-images <n> --min-per-class <n> --max-class-spread <n>`
 - Count-stress gate: `rl python scripts\check_webgl_count_stress.py --root <webgl_root> --min-repeat-images <n> --min-max-same-class <n>`
@@ -154,6 +156,7 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-06-05 | synthetic | keep | `webgl_fan_fullschema_v1` has strong fan/fragment pressure but no same-denomination repeats (`max_same_class_per_image=1` across 64 images). Added `webgl_same_class_repeat_fan_v1` plus `check_webgl_count_stress.py`; its 12-image diagnostic audit passed with 66 physical targets, 95 kept fragments, all 12 images containing same-class repeats, max same-class count 3, tight targeted class balance (`KHR_5000`: 15, others: 17), and parent-fused all-fragment counts matching physical targets. Keep diagnostic until real repeat-fan validation. |
 | 2026-06-05 | synthetic | keep | `--class-sequence` now applies to hand-occlusion and thin-edge modes, not just clean/stack/fan. Tiny smokes passed: hand-occlusion forced `KHR_50000` only (1 image / 4 physical targets / 9 kept fragments), and thin-edge forced `KHR_50000` + `KHR_2000` (1 image / 3 physical targets). Use this for targeted weak-denom occlusion/sliver diagnostics; still gate real transfer separately. |
 | 2026-06-05 | synthetic | keep | Trainable-candidate packages now run `check_webgl_appearance_diversity.py`, which gates camera-profile, surface, luma, blur, grain, vignette, saturation, and brightness spread from package metadata. Existing 7-root trainable-candidate suite passes through `check_webgl_trainable_candidate_suite.py --check-existing` with 304 images, so this catches collapsed synthetic appearance without invalidating current accepted roots. |
+| 2026-06-05 | synthetic | keep | `check_synthetic_pipeline_readiness.py --check-existing` gives the step-back scale audit: all 9 required target conditions have active trainable-candidate suite coverage, but the system is not ready for synthetic scale because only clean baseline is unblocked; real role labels are ready for 1/5 role-gated conditions, usable capture inventory is 0, and remaining blockers are explicit per condition. |
 
 ## Trainable Candidate Artifacts
 
