@@ -9,6 +9,7 @@ through the dataset-quality axes from the local research PDF.
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 from collections import Counter
@@ -33,11 +34,42 @@ DEFAULT_MINED_REAL_UTILITY_COMPARISONS = [
     ROOT / "runs" / "cashsnap" / "mined_real_holdout_scoreboard_accepted_vs_p24_seed1_i416_present_classes.json",
 ]
 DEFAULT_BROWSER_SYNTHETIC_STRESS = ROOT / "runs" / "cashsnap" / "browser_synthetic_stress_cases_v1.json"
+DEFAULT_BROWSER_SYNTHETIC_MANIFEST = ROOT / "manifests" / "browser_synthetic_stress_cases.csv"
 DEFAULT_JSON_OUT = ROOT / "runs" / "cashsnap" / "synthetic_dataset_scorecard_latest.json"
 
 STATUS_ORDER = {"pass": 0, "review": 1, "missing": 2, "blocked": 3}
 RUBRIC_SOURCE = "docs/research/What Makes a Dataset Perfect for Synthetic Data Pipelines.pdf"
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+CLASS_NAMES = [
+    "USD_1",
+    "USD_5",
+    "USD_10",
+    "USD_20",
+    "USD_50",
+    "USD_100",
+    "KHR_500",
+    "KHR_1000",
+    "KHR_2000",
+    "KHR_5000",
+    "KHR_10000",
+    "KHR_20000",
+    "KHR_50000",
+]
+CLASS_VALUES = {
+    "USD_1": ("usd", 1),
+    "USD_5": ("usd", 5),
+    "USD_10": ("usd", 10),
+    "USD_20": ("usd", 20),
+    "USD_50": ("usd", 50),
+    "USD_100": ("usd", 100),
+    "KHR_500": ("khr", 500),
+    "KHR_1000": ("khr", 1000),
+    "KHR_2000": ("khr", 2000),
+    "KHR_5000": ("khr", 5000),
+    "KHR_10000": ("khr", 10000),
+    "KHR_20000": ("khr", 20000),
+    "KHR_50000": ("khr", 50000),
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -67,6 +99,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Do not load the default accepted-WebGL-vs-p24 mined held-out comparisons.",
     )
+    parser.add_argument("--browser-synthetic-manifest", type=Path, default=DEFAULT_BROWSER_SYNTHETIC_MANIFEST)
     parser.add_argument("--browser-synthetic-stress", type=Path, default=DEFAULT_BROWSER_SYNTHETIC_STRESS)
     parser.add_argument("--json-out", type=Path, default=DEFAULT_JSON_OUT)
     parser.add_argument("--strict", action="store_true", help="Exit non-zero when any axis is blocked or missing.")
@@ -139,6 +172,41 @@ def read_json_array(path: Path, *, required: bool = True) -> list[Any]:
     if not isinstance(data, list):
         raise SystemExit(f"{repo_path(resolved)}: expected JSON array")
     return data
+
+
+def read_csv_rows(path: Path, *, required: bool = True) -> list[dict[str, str]]:
+    resolved = resolve(path)
+    if not resolved.exists():
+        if required:
+            raise SystemExit(f"missing CSV file: {repo_path(resolved)}")
+        return []
+    with resolved.open("r", newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def yolo_label_count_values(path: Path) -> dict[str, int]:
+    resolved = resolve(path)
+    count = 0
+    khr_value = 0
+    usd_value = 0
+    for line_number, raw_line in enumerate(resolved.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) != 5:
+            raise SystemExit(f"{repo_path(resolved)}:{line_number}: expected YOLO detect label with 5 fields")
+        class_id = int(float(parts[0]))
+        if not 0 <= class_id < len(CLASS_NAMES):
+            raise SystemExit(f"{repo_path(resolved)}:{line_number}: class id {class_id} outside class map")
+        class_name = CLASS_NAMES[class_id]
+        currency, value = CLASS_VALUES[class_name]
+        count += 1
+        if currency == "khr":
+            khr_value += value
+        else:
+            usd_value += value
+    return {"count": count, "khr_value": khr_value, "usd_value": usd_value}
 
 
 def verify_fingerprint_row(row: dict[str, Any], *, label: str, required: bool = True) -> list[str]:
@@ -800,7 +868,7 @@ def mined_real_utility_axis(comparisons: list[dict[str, Any]]) -> dict[str, Any]
     )
 
 
-def browser_synthetic_stress_axis(rows: list[Any]) -> dict[str, Any]:
+def browser_synthetic_stress_axis(rows: list[Any], manifest_rows: list[dict[str, str]]) -> dict[str, Any]:
     if not rows:
         return axis(
             "browser_synthetic_stress",
@@ -819,11 +887,19 @@ def browser_synthetic_stress_axis(rows: list[Any]) -> dict[str, Any]:
     evidence_rows: list[dict[str, Any]] = []
     blockers: list[str] = []
     pass_count = 0
+    manifest_by_case = {str(row.get("case_id", "")): row for row in manifest_rows}
+    run_case_ids = {str(item.get("caseId", "")) for item in rows if isinstance(item, dict)}
+    if manifest_by_case:
+        missing_runs = sorted(set(manifest_by_case) - run_case_ids)
+        extra_runs = sorted(run_case_ids - set(manifest_by_case))
+        blockers.extend(f"missing browser stress run for manifest case {case_id}" for case_id in missing_runs)
+        blockers.extend(f"browser stress run has extra case not in manifest: {case_id}" for case_id in extra_runs)
     for index, item in enumerate(rows, start=1):
         if not isinstance(item, dict):
             blockers.append(f"browser stress row {index} is malformed")
             continue
         case_id = str(item.get("caseId") or f"row_{index}")
+        manifest_row = manifest_by_case.get(case_id, {})
         contract = item.get("countContract", {})
         if not isinstance(contract, dict):
             contract = {}
@@ -842,14 +918,35 @@ def browser_synthetic_stress_axis(rows: list[Any]) -> dict[str, Any]:
         khr_error = int(evaluation.get("khrValueError", 0) or 0)
         usd_error = int(evaluation.get("usdValueError", 0) or 0)
         recall_same = float(evaluation.get("recallSameClass", 0.0) or 0.0)
+        labels = str(evaluation.get("labels", "")).strip()
+        manifest_labels = str(manifest_row.get("labels", "")).strip()
+        gt_failures: list[str] = []
+        if manifest_labels and labels and Path(labels).as_posix() != Path(manifest_labels).as_posix():
+            gt_failures.append("labels_mismatch")
+        if not labels:
+            gt_failures.append("missing_labels")
+        else:
+            label_path = resolve(Path(labels))
+            if not label_path.exists():
+                gt_failures.append("labels_missing")
+            else:
+                truth = yolo_label_count_values(label_path)
+                if truth["count"] != gt_count:
+                    gt_failures.append(f"gt_count {gt_count}!={truth['count']}")
+                if int(evaluation.get("gtKhrValue", 0) or 0) != truth["khr_value"]:
+                    gt_failures.append(f"gt_khr {evaluation.get('gtKhrValue')}!={truth['khr_value']}")
+                if int(evaluation.get("gtUsdValue", 0) or 0) != truth["usd_value"]:
+                    gt_failures.append(f"gt_usd {evaluation.get('gtUsdValue')}!={truth['usd_value']}")
         class_pass = recall_same >= 0.999 if gt_count > 0 else True
-        passed = not contract_failures and count_error == 0 and khr_error == 0 and usd_error == 0 and class_pass
+        passed = not contract_failures and not gt_failures and count_error == 0 and khr_error == 0 and usd_error == 0 and class_pass
         if passed:
             pass_count += 1
         else:
             failure_bits: list[str] = []
             if contract_failures:
                 failure_bits.append(f"contract {','.join(contract_failures)}")
+            if gt_failures:
+                failure_bits.append(f"ground_truth {','.join(gt_failures)}")
             if count_error:
                 failure_bits.append(f"count_error {count_error:+d}")
             if khr_error:
@@ -870,6 +967,8 @@ def browser_synthetic_stress_axis(rows: list[Any]) -> dict[str, Any]:
                 "usd_value_error": usd_error,
                 "recall_same_class": recall_same,
                 "contract_failures": contract_failures,
+                "ground_truth_failures": gt_failures,
+                "labels": labels,
             }
         )
 
@@ -1073,6 +1172,7 @@ def build_scorecard(
     mined_real_utility_comparisons: list[dict[str, Any]],
     governance_report: dict[str, Any],
     browser_synthetic_stress: list[Any],
+    browser_synthetic_manifest: list[dict[str, str]],
 ) -> dict[str, Any]:
     required = int(readiness.get("required_conditions", 0) or 0)
     trainable = int(readiness.get("required_with_trainable_candidate", 0) or 0)
@@ -1242,7 +1342,7 @@ def build_scorecard(
         )
     )
     axes.append(mined_real_utility_axis(mined_real_utility_comparisons))
-    axes.append(browser_synthetic_stress_axis(browser_synthetic_stress))
+    axes.append(browser_synthetic_stress_axis(browser_synthetic_stress, browser_synthetic_manifest))
 
     axes.append(
         axis(
@@ -1290,6 +1390,7 @@ def main() -> int:
     comparison_paths.extend(args.mined_real_utility_comparison)
     mined_real_utility_comparisons = read_comparison_jsons(comparison_paths)
     browser_synthetic_stress = read_json_array(args.browser_synthetic_stress, required=False)
+    browser_synthetic_manifest = read_csv_rows(args.browser_synthetic_manifest, required=False)
     scorecard = build_scorecard(
         readiness,
         domain_gap,
@@ -1301,6 +1402,7 @@ def main() -> int:
         mined_real_utility_comparisons,
         governance_report,
         browser_synthetic_stress,
+        browser_synthetic_manifest,
     )
     out = resolve(args.json_out)
     out.parent.mkdir(parents=True, exist_ok=True)
