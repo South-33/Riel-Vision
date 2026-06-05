@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 from collections import Counter, defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -158,6 +160,14 @@ def read_yaml(path: Path) -> dict[str, Any]:
     return document
 
 
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def data_root(config_path: Path, config: dict[str, Any]) -> Path:
     root_value = Path(str(config.get("path", "."))).expanduser()
     return root_value if root_value.is_absolute() else (config_path.parent / root_value).resolve()
@@ -192,6 +202,32 @@ def iter_split_images(dataset_root: Path, split_value: str | list[str]) -> list[
                 sorted(path for path in resolved.glob("*") if path.is_file() and path.suffix.lower() in IMAGE_EXTS)
             )
     return images
+
+
+def split_source_records(dataset_root: Path, split_value: str | list[str]) -> list[dict[str, Any]]:
+    split_paths = split_value if isinstance(split_value, list) else [split_value]
+    records: list[dict[str, Any]] = []
+    for split_path in split_paths:
+        resolved = split_root(dataset_root, str(split_path))
+        record: dict[str, Any] = {"path": repo_rel(resolved)}
+        if resolved.suffix.lower() == ".txt":
+            record["kind"] = "list"
+            record["sha256"] = file_sha256(resolved)
+        else:
+            image_rows = sorted(
+                repo_rel(path)
+                for path in resolved.glob("*")
+                if path.is_file() and path.suffix.lower() in IMAGE_EXTS
+            )
+            digest = hashlib.sha256()
+            for row in image_rows:
+                digest.update(row.encode("utf-8"))
+                digest.update(b"\n")
+            record["kind"] = "directory"
+            record["image_count"] = len(image_rows)
+            record["listing_sha256"] = digest.hexdigest()
+        records.append(record)
+    return records
 
 
 def label_path_for_image(image: Path) -> Path:
@@ -627,7 +663,10 @@ def main() -> int:
 
     payload = {
         "data": repo_rel(data_path),
+        "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "data_config_sha256": file_sha256(data_path),
         "split": args.split,
+        "split_sources": split_source_records(root, config[args.split]),
         "images": len(image_rows),
         "boxes": len(box_rows),
         **summarize(image_rows, box_rows),

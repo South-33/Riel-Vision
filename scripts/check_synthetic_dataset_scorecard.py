@@ -9,6 +9,7 @@ through the dataset-quality axes from the local research PDF.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from collections import Counter
 from pathlib import Path
@@ -85,6 +86,14 @@ def read_json(path: Path, *, required: bool = True) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise SystemExit(f"{repo_path(resolved)}: expected JSON object")
     return data
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def read_comparison_jsons(paths: list[Path]) -> list[dict[str, Any]]:
@@ -241,6 +250,70 @@ def required_candidate_inventory(readiness: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def domain_gap_freshness_failures(domain_gap: dict[str, Any]) -> list[str]:
+    failures: list[str] = []
+    data = str(domain_gap.get("data", "")).strip()
+    expected_data_sha = str(domain_gap.get("data_config_sha256", "")).strip()
+    if not data:
+        failures.append("domain-gap report is missing data config path")
+    elif not expected_data_sha:
+        failures.append("domain-gap report is missing data_config_sha256; regenerate it with the current audit script")
+    else:
+        data_path = resolve(Path(data))
+        if not data_path.exists():
+            failures.append(f"domain-gap data config is missing: {data}")
+        else:
+            actual_data_sha = file_sha256(data_path)
+            if actual_data_sha != expected_data_sha:
+                failures.append(f"domain-gap data config fingerprint is stale: {data}")
+
+    split_sources = domain_gap.get("split_sources", [])
+    if not isinstance(split_sources, list) or not split_sources:
+        failures.append("domain-gap report is missing split source fingerprints; regenerate it with the current audit script")
+        return failures
+
+    for source in split_sources:
+        if not isinstance(source, dict):
+            failures.append("domain-gap split source fingerprint row is malformed")
+            continue
+        path_text = str(source.get("path", "")).strip()
+        if not path_text:
+            failures.append("domain-gap split source fingerprint row is missing path")
+            continue
+        path = resolve(Path(path_text))
+        if not path.exists():
+            failures.append(f"domain-gap split source is missing: {path_text}")
+            continue
+        kind = str(source.get("kind", "")).strip()
+        if kind == "list":
+            expected = str(source.get("sha256", "")).strip()
+            if not expected:
+                failures.append(f"domain-gap split list is missing sha256: {path_text}")
+                continue
+            actual = file_sha256(path)
+            if actual != expected:
+                failures.append(f"domain-gap split list fingerprint is stale: {path_text}")
+        elif kind == "directory":
+            expected = str(source.get("listing_sha256", "")).strip()
+            if not expected:
+                failures.append(f"domain-gap split directory is missing listing_sha256: {path_text}")
+                continue
+            image_rows = sorted(
+                repo_path(item)
+                for item in path.glob("*")
+                if item.is_file() and item.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
+            )
+            digest = hashlib.sha256()
+            for row in image_rows:
+                digest.update(row.encode("utf-8"))
+                digest.update(b"\n")
+            if digest.hexdigest() != expected:
+                failures.append(f"domain-gap split directory listing fingerprint is stale: {path_text}")
+        else:
+            failures.append(f"domain-gap split source has unknown kind {kind!r}: {path_text}")
+    return failures
+
+
 def domain_gap_axis(
     domain_gap: dict[str, Any],
     *,
@@ -266,8 +339,15 @@ def domain_gap_axis(
             next_action=f"Regenerate the report with --gate-preset {expected_preset} --fail-on-gap.",
         )
     failures = [str(item) for item in gate.get("failures", [])]
-    status = "pass" if gate.get("passed") else "blocked"
-    summary = f"{label} gate passed." if status == "pass" else f"{label} gate failed."
+    freshness_failures = domain_gap_freshness_failures(domain_gap)
+    blockers = [*failures, *freshness_failures]
+    status = "pass" if gate.get("passed") and not freshness_failures else "blocked"
+    if status == "pass":
+        summary = f"{label} gate passed."
+    elif freshness_failures and gate.get("passed"):
+        summary = f"{label} report is stale or missing provenance."
+    else:
+        summary = f"{label} gate failed."
     return axis(
         name,
         status,
@@ -275,10 +355,12 @@ def domain_gap_axis(
         evidence={
             "data": domain_gap.get("data", ""),
             "split": domain_gap.get("split", ""),
+            "data_config_sha256": domain_gap.get("data_config_sha256", ""),
+            "split_sources": domain_gap.get("split_sources", []),
             "observed": gate.get("observed", {}),
             "limits": gate.get("limits", {}),
         },
-        blockers=failures,
+        blockers=blockers,
         next_action="" if status == "pass" else blocked_next_action,
     )
 
