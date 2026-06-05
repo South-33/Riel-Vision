@@ -5,6 +5,8 @@ from __future__ import annotations
 
 WEBGL_ASSET_SIDE_POLICIES = {"any", "front_only", "back_only", "front_back_mix"}
 
+WEBGL_STACK_POSE_POLICIES = {"default", "real_aspect_v1"}
+
 WEBGL_CAMERA_PROFILES = {
     "generic_phone_jitter",
     "phone_auto",

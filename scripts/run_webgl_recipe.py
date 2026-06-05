@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from webgl_constants import WEBGL_ASSET_SIDE_POLICIES, WEBGL_CAMERA_PROFILES
+from webgl_constants import WEBGL_ASSET_SIDE_POLICIES, WEBGL_CAMERA_PROFILES, WEBGL_STACK_POSE_POLICIES
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,6 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--browser-executable", type=Path, default=None, help="Optional Chromium/Edge executable override.")
     parser.add_argument("--asset-side-policy", default="", help="Override catalog asset-side sampling policy.")
     parser.add_argument("--camera-profile", default="", help="Override catalog WebGL camera/FOV/framing profile.")
+    parser.add_argument("--stack-pose-policy", default="", help="Override catalog class-conditioned stack pose policy.")
     parser.add_argument("--class-sequence", default="", help="Override catalog class sequence for supported scene modes.")
     parser.add_argument("--note-condition-policy", default="", help="Override catalog per-note dirt/crinkle/wetness policy.")
     parser.add_argument("--lens-distortion-policy", default="", help="Override catalog shared radial lens-warp policy.")
@@ -131,6 +132,13 @@ def choose_camera_profile(recipe: dict, override: str) -> str:
     return profile
 
 
+def choose_stack_pose_policy(recipe: dict, override: str) -> str:
+    policy = override or str(recipe.get("stack_pose_policy", "default"))
+    if policy not in WEBGL_STACK_POSE_POLICIES:
+        raise SystemExit(f"--stack-pose-policy must be one of {sorted(WEBGL_STACK_POSE_POLICIES)}")
+    return policy
+
+
 def normalize_class_sequence(value: object) -> str:
     if isinstance(value, list):
         return ",".join(str(item).strip() for item in value if str(item).strip())
@@ -156,6 +164,7 @@ def main() -> int:
     scene_mode = choose_scene_mode(recipe, args.scene_mode)
     asset_side_policy = choose_asset_side_policy(recipe, args.asset_side_policy)
     camera_profile = choose_camera_profile(recipe, args.camera_profile)
+    stack_pose_policy = choose_stack_pose_policy(recipe, args.stack_pose_policy)
     class_sequence = args.class_sequence.strip() or normalize_class_sequence(recipe.get("class_sequence", ""))
     note_condition_policy = args.note_condition_policy.strip() or str(recipe.get("note_condition_policy", "mixed")).strip() or "mixed"
     if note_condition_policy not in {"mixed", "pristine_only", "heavy_wear", "wet_stress"}:
@@ -233,6 +242,8 @@ def main() -> int:
         asset_side_policy,
         "--camera-profile",
         camera_profile,
+        "--stack-pose-policy",
+        stack_pose_policy,
         "--recipe-name",
         args.recipe_id,
         "--artifact-status",

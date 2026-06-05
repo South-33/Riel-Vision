@@ -25,6 +25,7 @@ const SCENE_MODE = argValue("--scene-mode", "auto");
 const BACKGROUND_DIR = argValue("--background-dir", "");
 const ENVIRONMENT_DIR = argValue("--environment-dir", "");
 const ASSET_SIDE_POLICY = argValue("--asset-side-policy", "any");
+const STACK_POSE_POLICY = argValue("--stack-pose-policy", "default");
 const CAMERA_PROFILE = argValue("--camera-profile", "generic_phone_jitter");
 const CLASS_SEQUENCE_RAW = argValue("--class-sequence", "");
 const NOTE_CONDITION_POLICY = argValue("--note-condition-policy", "mixed");
@@ -111,6 +112,10 @@ if (!["any", "front_only", "back_only", "front_back_mix"].includes(ASSET_SIDE_PO
   throw new Error("--asset-side-policy must be one of: any, front_only, back_only, front_back_mix");
 }
 
+if (!["default", "real_aspect_v1"].includes(STACK_POSE_POLICY)) {
+  throw new Error("--stack-pose-policy must be one of: default, real_aspect_v1");
+}
+
 if (![
   "generic_phone_jitter",
   "phone_auto",
@@ -148,6 +153,11 @@ function mulberry32(seed) {
 
 function randomBetween(rng, min, max) {
   return min + (max - min) * rng();
+}
+
+function randomSignedBetween(rng, minAbs, maxAbs) {
+  const magnitude = randomBetween(rng, minAbs, maxAbs);
+  return rng() < 0.5 ? -magnitude : magnitude;
 }
 
 function randomInt(rng, maxExclusive) {
@@ -598,6 +608,60 @@ const baseAssets = [
   },
 ];
 
+const STACK_REAL_ASPECT_Z_ABS_RANGES = {
+  USD_1: [0.10, 0.30],
+  USD_5: [0.00, 0.12],
+  USD_10: [0.76, 1.00],
+  USD_20: [0.70, 0.94],
+  USD_50: [0.05, 0.22],
+  USD_100: [0.05, 0.22],
+  KHR_500: [0.20, 0.42],
+  KHR_1000: [0.32, 0.56],
+  KHR_2000: [0.12, 0.32],
+  KHR_5000: [0.38, 0.62],
+  KHR_10000: [0.00, 0.10],
+  KHR_20000: [0.02, 0.18],
+  KHR_50000: [0.06, 0.24],
+};
+
+function stackZRotationForClass(className, baseZ, rng) {
+  if (STACK_POSE_POLICY === "default") {
+    return baseZ + randomBetween(rng, -0.34, 0.34);
+  }
+  const range = STACK_REAL_ASPECT_Z_ABS_RANGES[className];
+  if (!range) {
+    throw new Error(`No stack real-aspect z-rotation range for class ${className}`);
+  }
+  return randomSignedBetween(rng, range[0], range[1]);
+}
+
+function stackExposurePriority(className) {
+  if (STACK_POSE_POLICY !== "real_aspect_v1") return 0;
+  if (className === "KHR_20000") return 2;
+  return 0;
+}
+
+function stackLayerRanksForClasses(classNames, layerOrder) {
+  const baseRanks = Array.from({ length: classNames.length }, (_, index) => layerOrder.indexOf(index));
+  if (STACK_POSE_POLICY === "default") return baseRanks;
+  const ordered = classNames
+    .map((className, index) => ({
+      index,
+      priority: stackExposurePriority(className),
+      baseRank: baseRanks[index],
+    }))
+    .sort((left, right) => (
+      left.priority - right.priority
+      || left.baseRank - right.baseRank
+      || left.index - right.index
+    ));
+  const ranks = Array.from({ length: classNames.length }, () => 0);
+  ordered.forEach((item, layer) => {
+    ranks[item.index] = layer;
+  });
+  return ranks;
+}
+
 function listClassAssets(className) {
   const classDir = path.join(ASSET_BANK_DIR, className);
   if (!fs.existsSync(classDir)) return [];
@@ -700,8 +764,10 @@ function variantAssets(variant) {
   if (effectiveSceneMode === "hand_occlusion") return handOcclusionAssets(variant);
   if (effectiveSceneMode === "clean_single") return cleanSingleAssets(variant);
   if (effectiveSceneMode === "clean") return cleanAssets(variant);
-  if (variant === 0 && ASSET_SIDE_POLICY === "any") return baseAssets.map((asset, index) => annotateAsset(asset, index));
-  if (variant === 0) return baseAssets.map((asset, index) => enrichAsset(asset, variant, index));
+  if (variant === 0 && ASSET_SIDE_POLICY === "any" && STACK_POSE_POLICY === "default") {
+    return baseAssets.map((asset, index) => annotateAsset(asset, index));
+  }
+  if (variant === 0 && STACK_POSE_POLICY === "default") return baseAssets.map((asset, index) => enrichAsset(asset, variant, index));
   const rng = mulberry32(26053003 + variant * 101);
   const noteCount = 3 + variant % 4;
   const layerOrder = Array.from({ length: noteCount }, (_, index) => index).sort(() => rng() - 0.5);
@@ -713,28 +779,41 @@ function variantAssets(variant) {
     [0.28, 0.16],
     [-0.44, 0.18],
   ];
+  const classIndexes = Array.from({ length: noteCount }, (_, index) => classIndexFor(variant, index));
+  const classNames = classIndexes.map((classIndex) => CLASS_NAMES[classIndex]);
+  const layerRanks = stackLayerRanksForClasses(classNames, layerOrder);
   return Array.from({ length: noteCount }, (_, index) => {
-    const classIndex = classIndexFor(variant, index);
-    const className = CLASS_NAMES[classIndex];
+    const classIndex = classIndexes[index];
+    const className = classNames[index];
     const base = baseAssets[index % baseAssets.length];
     const anchor = anchors[index % anchors.length];
-    const layer = layerOrder.indexOf(index);
+    const layer = layerRanks[index];
+    const position = [
+      anchor[0] + randomBetween(rng, -0.10, 0.10),
+      anchor[1] + randomBetween(rng, -0.10, 0.10),
+      0.03 + layer * 0.045,
+    ];
+    const rotationX = base.rotation[0] + randomBetween(rng, -0.05, 0.05);
+    const rotationY = base.rotation[1] + randomBetween(rng, -0.05, 0.05);
+    const stackZRotation = stackZRotationForClass(className, base.rotation[2], rng);
     return enrichAsset({
       ...base,
       classIndex,
       className,
       idColor: INSTANCE_ID_COLORS[index],
       physicalWidthMm: PHYSICAL_WIDTH_MM[className],
-      position: [
-        anchor[0] + randomBetween(rng, -0.10, 0.10),
-        anchor[1] + randomBetween(rng, -0.10, 0.10),
-        0.03 + layer * 0.045,
-      ],
+      position,
       rotation: [
-        base.rotation[0] + randomBetween(rng, -0.05, 0.05),
-        base.rotation[1] + randomBetween(rng, -0.05, 0.05),
-        base.rotation[2] + randomBetween(rng, -0.34, 0.34),
+        rotationX,
+        rotationY,
+        stackZRotation,
       ],
+      stackPose: {
+        policy: STACK_POSE_POLICY,
+        exposurePriority: stackExposurePriority(className),
+        zRotation: round3(stackZRotation),
+        zAbsRange: STACK_POSE_POLICY === "real_aspect_v1" ? STACK_REAL_ASPECT_Z_ABS_RANGES[className] : null,
+      },
       curl: 0.065 + randomBetween(rng, -0.020, 0.030),
       ripple: 0.0,
       roughness: randomBetween(rng, 0.70, 0.90),
@@ -2144,6 +2223,7 @@ async function main() {
         sceneConfig: config,
         assetSelection: {
           sidePolicy: ASSET_SIDE_POLICY,
+          stackPosePolicy: STACK_POSE_POLICY,
           classSequence: CLASS_SEQUENCE,
           sideCounts: assetSideCounts,
           frontBackMixSatisfied,

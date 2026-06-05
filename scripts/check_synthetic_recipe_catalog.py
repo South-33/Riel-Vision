@@ -8,7 +8,7 @@ import json
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from webgl_constants import WEBGL_ASSET_SIDE_POLICIES, WEBGL_CAMERA_PROFILES
+from webgl_constants import WEBGL_ASSET_SIDE_POLICIES, WEBGL_CAMERA_PROFILES, WEBGL_STACK_POSE_POLICIES
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -271,6 +271,11 @@ def main() -> int:
         require(asset_side_policy in WEBGL_ASSET_SIDE_POLICIES, f"{recipe_id}: invalid asset_side_policy {asset_side_policy!r}")
         camera_profile = str(row.get("camera_profile", ""))
         require(camera_profile in WEBGL_CAMERA_PROFILES, f"{recipe_id}: invalid camera_profile {camera_profile!r}")
+        stack_pose_policy = str(row.get("stack_pose_policy", "default"))
+        require(
+            stack_pose_policy in WEBGL_STACK_POSE_POLICIES,
+            f"{recipe_id}: invalid stack_pose_policy {stack_pose_policy!r}",
+        )
         note_condition_policy = str(row.get("note_condition_policy", "mixed"))
         require(
             note_condition_policy in NOTE_CONDITION_POLICIES,

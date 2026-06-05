@@ -19,7 +19,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from webgl_constants import WEBGL_ASSET_SIDE_POLICIES, WEBGL_CAMERA_PROFILES
+from webgl_constants import WEBGL_ASSET_SIDE_POLICIES, WEBGL_CAMERA_PROFILES, WEBGL_STACK_POSE_POLICIES
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -89,6 +89,12 @@ def parse_args() -> argparse.Namespace:
         choices=sorted(WEBGL_CAMERA_PROFILES),
         default="generic_phone_jitter",
         help="Select WebGL camera/FOV/framing profile.",
+    )
+    parser.add_argument(
+        "--stack-pose-policy",
+        choices=sorted(WEBGL_STACK_POSE_POLICIES),
+        default="default",
+        help="Optional class-conditioned pose policy for generic stack scenes.",
     )
     parser.add_argument(
         "--class-sequence",
@@ -245,6 +251,8 @@ def render_variant(variant: int, out_dir: Path, scene_mode: str, background_dir:
         args.asset_side_policy,
         "--camera-profile",
         args.camera_profile,
+        "--stack-pose-policy",
+        args.stack_pose_policy,
         "--out-dir",
         str(out_dir),
     ]
@@ -1036,6 +1044,7 @@ def write_yolo_dataset(
     surface_counts: Counter[str] = Counter()
     background_counts: Counter[str] = Counter()
     asset_side_policy_counts: Counter[str] = Counter()
+    stack_pose_policy_counts: Counter[str] = Counter()
     asset_side_counts: Counter[str] = Counter()
     front_back_mix_counts: Counter[str] = Counter()
     camera_profile_request_counts: Counter[str] = Counter()
@@ -1123,6 +1132,7 @@ def write_yolo_dataset(
         if isinstance(asset_selection, dict):
             side_policy = str(asset_selection.get("sidePolicy", "unknown"))
             asset_side_policy_counts[side_policy] += 1
+            stack_pose_policy_counts[str(asset_selection.get("stackPosePolicy", "default"))] += 1
             side_counts = asset_selection.get("sideCounts", {})
             if isinstance(side_counts, dict):
                 for side, count in side_counts.items():
@@ -1394,6 +1404,7 @@ def write_yolo_dataset(
             "backgrounds": dict(sorted(background_counts.items())),
             "asset_selection": {
                 "side_policy_counts": dict(sorted(asset_side_policy_counts.items())),
+                "stack_pose_policy_counts": dict(sorted(stack_pose_policy_counts.items())),
                 "side_counts": dict(sorted(asset_side_counts.items())),
                 "front_back_mix_counts": dict(sorted(front_back_mix_counts.items())),
             },
@@ -1541,6 +1552,7 @@ def write_recipe_metadata(
             "browser_executable": rel(args.browser_executable) if args.browser_executable else "",
             "note_condition_policy": args.note_condition_policy,
             "lens_distortion_policy": args.lens_distortion_policy,
+            "stack_pose_policy": args.stack_pose_policy,
         },
         "asset_side_policy": args.asset_side_policy,
         "camera_profile": args.camera_profile,
