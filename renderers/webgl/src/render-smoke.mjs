@@ -144,6 +144,14 @@ function randomInt(rng, maxExclusive) {
   return Math.floor(rng() * maxExclusive);
 }
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function round3(value) {
+  return Math.round(value * 1000) / 1000;
+}
+
 function rotate2([x, y], angle) {
   const c = Math.cos(angle);
   const s = Math.sin(angle);
@@ -186,6 +194,51 @@ function classNameForSequenceOrFallback(variant, index, fallbackClasses) {
     return CLASS_SEQUENCE[classSequenceIndex(variant, index)];
   }
   return fallbackClasses[(variant + index) % fallbackClasses.length];
+}
+
+function noteConditionFor(asset, variant, index) {
+  const seed = 26056503 + variant * 1009 + index * 9173 + (asset.classIndex ?? 0) * 137;
+  const rng = mulberry32(seed);
+  const cleanScene = Boolean(asset.clean || asset.cleanSingle || effectiveSceneMode === "clean" || effectiveSceneMode === "clean_single");
+  const bucket = rng();
+  let dirtiness = bucket < 0.18
+    ? randomBetween(rng, 0.00, 0.12)
+    : bucket < 0.74
+      ? randomBetween(rng, 0.12, 0.58)
+      : randomBetween(rng, 0.58, 1.00);
+  let crinkle = Math.pow(rng(), 1.25);
+  if (rng() < 0.18) crinkle = randomBetween(rng, 0.0, 0.16);
+  if (cleanScene) {
+    dirtiness *= 0.45;
+    crinkle *= 0.42;
+  }
+  const wetChance = cleanScene ? 0.06 : 0.18;
+  const wetness = rng() < wetChance ? randomBetween(rng, cleanScene ? 0.06 : 0.12, cleanScene ? 0.28 : 0.78) : 0.0;
+  const edgeWear = clamp(dirtiness * randomBetween(rng, 0.40, 1.10) + crinkle * 0.20, 0, 1);
+  const creaseCount = Math.max(0, Math.round(crinkle * randomBetween(rng, 1.0, 5.0)));
+  const stainCount = Math.max(0, Math.round(dirtiness * randomBetween(rng, 1.0, 4.5) + wetness * 3.0));
+  const speckleCount = Math.max(0, Math.round(12 + dirtiness * randomBetween(rng, 80, 210)));
+  const profile = wetness > 0.42
+    ? "damp"
+    : dirtiness < 0.12 && crinkle < 0.14
+      ? "pristine"
+      : dirtiness > 0.70 || crinkle > 0.72
+        ? "heavily_circulated"
+        : "circulated";
+  return {
+    profile,
+    seed,
+    dirtiness: round3(dirtiness),
+    crinkle: round3(crinkle),
+    wetness: round3(wetness),
+    edgeWear: round3(edgeWear),
+    creaseCount,
+    stainCount,
+    speckleCount,
+    creaseAngle: round3(randomBetween(rng, -1.4, 1.4)),
+    creaseOffset: round3(randomBetween(rng, -0.28, 0.28)),
+    wavePhase: round3(randomBetween(rng, 0, Math.PI * 2)),
+  };
 }
 
 function hexToNumber(hex) {
@@ -537,14 +590,16 @@ function enrichAsset(asset, variant, index) {
     path: assetPath,
     side: sideForAssetPath(assetPath),
     assetSidePolicy: ASSET_SIDE_POLICY,
+    condition: noteConditionFor(asset, variant, index),
   };
 }
 
-function annotateAsset(asset) {
+function annotateAsset(asset, index) {
   return {
     ...asset,
     side: sideForAssetPath(asset.path),
     assetSidePolicy: ASSET_SIDE_POLICY,
+    condition: noteConditionFor(asset, 0, index),
   };
 }
 
@@ -577,7 +632,7 @@ function variantAssets(variant) {
   if (effectiveSceneMode === "hand_occlusion") return handOcclusionAssets(variant);
   if (effectiveSceneMode === "clean_single") return cleanSingleAssets(variant);
   if (effectiveSceneMode === "clean") return cleanAssets(variant);
-  if (variant === 0 && ASSET_SIDE_POLICY === "any") return baseAssets.map(annotateAsset);
+  if (variant === 0 && ASSET_SIDE_POLICY === "any") return baseAssets.map((asset, index) => annotateAsset(asset, index));
   if (variant === 0) return baseAssets.map((asset, index) => enrichAsset(asset, variant, index));
   const rng = mulberry32(26053003 + variant * 101);
   const noteCount = 3 + variant % 4;
@@ -1248,12 +1303,28 @@ function makeTableTexture() {
   return texture;
 }
 
-function bendGeometry(geometry, curl, ripple) {
+function bendGeometry(geometry, curl, ripple, condition = {}) {
   const pos = geometry.attributes.position;
+  const crinkle = condition.crinkle ?? 0.0;
+  const wetness = condition.wetness ?? 0.0;
+  const phase = condition.wavePhase ?? 0.0;
+  const creaseAngle = condition.creaseAngle ?? 0.0;
+  const creaseOffset = condition.creaseOffset ?? 0.0;
+  const creaseStrength = Math.min(1.0, crinkle * 0.75 + (condition.creaseCount ?? 0) * 0.08);
+  const creaseCos = Math.cos(creaseAngle);
+  const creaseSin = Math.sin(creaseAngle);
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const y = pos.getY(i);
-    const z = curl * x * x + ripple * Math.sin(x * 10.0) * Math.sin((y + 0.34) * 7.0);
+    const base = curl * x * x + ripple * Math.sin(x * 10.0) * Math.sin((y + 0.34) * 7.0);
+    const wrinkles = crinkle * 0.0065 * (
+      Math.sin(x * 28.0 + phase) * Math.sin(y * 17.0 - phase * 0.7)
+      + 0.5 * Math.sin((x + y) * 36.0 + phase * 1.7)
+    );
+    const creaseDistance = x * creaseCos + y * creaseSin - creaseOffset;
+    const crease = creaseStrength * 0.012 * Math.exp(-(creaseDistance * creaseDistance) / 0.0028);
+    const dampSag = wetness * 0.0025 * Math.sin((x - y) * 12.0 + phase);
+    const z = base + wrinkles + crease + dampSag;
     pos.setZ(i, z);
   }
   pos.needsUpdate = true;
@@ -1275,9 +1346,141 @@ function makeOccluderGeometry(occluder) {
   return makeFingerGeometry(occluder.radius, occluder.length);
 }
 
+function browserMulberry32(seed) {
+  return () => {
+    let value = seed += 0x6D2B79F5;
+    value = Math.imul(value ^ value >>> 15, value | 1);
+    value ^= value + Math.imul(value ^ value >>> 7, value | 61);
+    return ((value ^ value >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function clamp01(value) {
+  return Math.max(0, Math.min(1, value || 0));
+}
+
+function applyMaskedOverlay(baseCanvas, drawOverlay) {
+  const overlay = document.createElement("canvas");
+  overlay.width = baseCanvas.width;
+  overlay.height = baseCanvas.height;
+  const overlayContext = overlay.getContext("2d");
+  drawOverlay(overlayContext, overlay.width, overlay.height);
+  overlayContext.globalCompositeOperation = "destination-in";
+  overlayContext.drawImage(baseCanvas, 0, 0);
+  return overlay;
+}
+
+function drawConditionedLines(context, width, height, rng, condition) {
+  const crinkle = clamp01(condition.crinkle);
+  const count = Math.max(0, condition.creaseCount || 0);
+  for (let i = 0; i < count; i += 1) {
+    const angle = (condition.creaseAngle || 0) + (rng() - 0.5) * 0.9;
+    const offset = (rng() - 0.5) * height * 0.7;
+    context.save();
+    context.translate(width / 2, height / 2 + offset);
+    context.rotate(angle);
+    context.lineCap = "round";
+    context.lineWidth = Math.max(1, height * (0.0025 + crinkle * 0.003));
+    context.strokeStyle = "rgba(83,64,42," + (0.08 + crinkle * 0.14) + ")";
+    context.beginPath();
+    context.moveTo(-width * 0.62, 0);
+    context.lineTo(width * 0.62, 0);
+    context.stroke();
+    context.strokeStyle = "rgba(255,248,226," + (0.05 + crinkle * 0.09) + ")";
+    context.beginPath();
+    context.moveTo(-width * 0.55, context.lineWidth * 1.3);
+    context.lineTo(width * 0.55, context.lineWidth * 1.3);
+    context.stroke();
+    context.restore();
+  }
+}
+
+function makeConditionedNoteTexture(sourceTexture, condition) {
+  if (!condition) return sourceTexture;
+  const dirt = clamp01(condition.dirtiness);
+  const crinkle = clamp01(condition.crinkle);
+  const wet = clamp01(condition.wetness);
+  const edgeWear = clamp01(condition.edgeWear);
+  if (dirt < 0.01 && crinkle < 0.01 && wet < 0.01 && edgeWear < 0.01) return sourceTexture;
+
+  const source = sourceTexture.image;
+  const width = source.naturalWidth || source.width;
+  const height = source.naturalHeight || source.height;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  context.drawImage(source, 0, 0, width, height);
+  const rng = browserMulberry32(condition.seed || 1);
+
+  const wash = applyMaskedOverlay(canvas, (overlay, w, h) => {
+    overlay.fillStyle = "rgba(117,82,38," + (dirt * 0.10) + ")";
+    overlay.fillRect(0, 0, w, h);
+    if (wet > 0) {
+      overlay.fillStyle = "rgba(31,45,48," + (wet * 0.10) + ")";
+      overlay.fillRect(0, 0, w, h);
+    }
+  });
+  context.drawImage(wash, 0, 0);
+
+  const marks = applyMaskedOverlay(canvas, (overlay, w, h) => {
+    const speckles = Math.min(260, Math.max(0, condition.speckleCount || 0));
+    for (let i = 0; i < speckles; i += 1) {
+      const x = rng() * w;
+      const y = rng() * h;
+      const radius = Math.max(0.6, (0.003 + rng() * 0.011) * Math.min(w, h));
+      overlay.fillStyle = "rgba(54,42,27," + (0.025 + dirt * (0.08 + rng() * 0.12)) + ")";
+      overlay.beginPath();
+      overlay.ellipse(x, y, radius * (0.6 + rng()), radius * (0.4 + rng() * 0.8), rng() * Math.PI, 0, Math.PI * 2);
+      overlay.fill();
+    }
+    const stains = Math.min(8, Math.max(0, condition.stainCount || 0));
+    for (let i = 0; i < stains; i += 1) {
+      const x = rng() * w;
+      const y = rng() * h;
+      const radius = (0.04 + rng() * 0.11) * Math.min(w, h);
+      const gradient = overlay.createRadialGradient(x, y, radius * 0.1, x, y, radius);
+      gradient.addColorStop(0, "rgba(67,48,28," + (0.09 + dirt * 0.14) + ")");
+      gradient.addColorStop(1, "rgba(67,48,28,0)");
+      overlay.fillStyle = gradient;
+      overlay.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    }
+    if (wet > 0) {
+      const patches = Math.max(1, Math.ceil(wet * 5));
+      for (let i = 0; i < patches; i += 1) {
+        const x = rng() * w;
+        const y = rng() * h;
+        const radius = (0.07 + rng() * 0.15) * Math.min(w, h);
+        const gradient = overlay.createRadialGradient(x, y, radius * 0.1, x, y, radius);
+        gradient.addColorStop(0, "rgba(22,28,25," + (0.14 + wet * 0.20) + ")");
+        gradient.addColorStop(0.55, "rgba(44,48,39," + (0.06 + wet * 0.10) + ")");
+        gradient.addColorStop(1, "rgba(44,48,39,0)");
+        overlay.fillStyle = gradient;
+        overlay.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+      }
+    }
+    drawConditionedLines(overlay, w, h, rng, condition);
+    if (edgeWear > 0) {
+      overlay.lineWidth = Math.max(1, Math.min(w, h) * (0.004 + edgeWear * 0.010));
+      overlay.strokeStyle = "rgba(246,238,211," + (edgeWear * 0.18) + ")";
+      for (let i = 0; i < 3; i += 1) {
+        const inset = i * overlay.lineWidth * 1.8;
+        overlay.strokeRect(inset, inset, w - inset * 2, h - inset * 2);
+      }
+    }
+  });
+  context.drawImage(marks, 0, 0);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 async function addNotes() {
   for (const asset of [...assets].sort((a, b) => a.layer - b.layer)) {
-    const texture = await loader.loadAsync(asset.textureUrl);
+    const sourceTexture = await loader.loadAsync(asset.textureUrl);
+    const texture = makeConditionedNoteTexture(sourceTexture, asset.condition);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = visualRenderer.capabilities.getMaxAnisotropy();
     texture.minFilter = THREE.LinearMipmapLinearFilter;
@@ -1289,10 +1492,15 @@ async function addNotes() {
     const noteHeight = noteWidth / aspect;
     const ySegments = Math.max(48, Math.round(160 / aspect));
     const geometry = new THREE.PlaneGeometry(noteWidth, noteHeight, 160, ySegments);
-    bendGeometry(geometry, asset.curl ?? 0.075, asset.ripple ?? 0.0);
+    bendGeometry(geometry, asset.curl ?? 0.075, asset.ripple ?? 0.0, asset.condition);
+    const condition = asset.condition || {};
+    const materialRoughness = Math.max(
+      0.38,
+      Math.min(0.96, (asset.roughness ?? 0.82) + (condition.dirtiness || 0) * 0.04 - (condition.wetness || 0) * 0.32)
+    );
     const backingMaterial = new THREE.MeshStandardMaterial({
       color: 0xf2ead7,
-      roughness: 0.92,
+      roughness: Math.max(0.48, 0.92 - (condition.wetness || 0) * 0.18),
       metalness: 0.0,
       side: THREE.DoubleSide,
       depthTest: false,
@@ -1309,7 +1517,7 @@ async function addNotes() {
 
     const material = new THREE.MeshStandardMaterial({
       map: texture,
-      roughness: asset.roughness ?? 0.82,
+      roughness: materialRoughness,
       metalness: 0.0,
       side: THREE.DoubleSide,
       depthTest: false,

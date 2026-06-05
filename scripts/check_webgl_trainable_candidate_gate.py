@@ -164,6 +164,17 @@ def main() -> int:
     if args.require_camera_profile and args.require_camera_profile != "phone_auto":
         appearance_cmd.extend(["--min-camera-profiles", "1"])
     subprocess.run(appearance_cmd, cwd=ROOT, check=True)
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/check_webgl_note_condition_diversity.py",
+            "--root",
+            str(dataset_root),
+            "--allow-missing",
+        ],
+        cwd=ROOT,
+        check=True,
+    )
 
     recipe = read_json(dataset_root / "recipe.json")
     summary = read_json(dataset_root / "qa" / "summary.json")
