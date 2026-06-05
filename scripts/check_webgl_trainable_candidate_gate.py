@@ -33,6 +33,11 @@ def parse_args() -> argparse.Namespace:
         help="Allowed recipe artifact_status. Defaults to trainable-candidate; repeat for tests.",
     )
     parser.add_argument("--allow-zero-visible", action="store_true", help="Allow zero visible banknotes, e.g. reviewed hard negatives.")
+    parser.add_argument(
+        "--skip-count-contract",
+        action="store_true",
+        help="Skip counts/summary.json and counts/targets.jsonl fusion-contract checks for legacy debug artifacts.",
+    )
     return parser.parse_args()
 
 
@@ -44,6 +49,21 @@ def read_json(path: Path) -> object:
     if not path.exists():
         raise SystemExit(f"missing JSON file: {path}")
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def read_jsonl(path: Path) -> list[object]:
+    if not path.exists():
+        raise SystemExit(f"missing JSONL file: {path}")
+    rows: list[object] = []
+    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"{path}:{line_number}: invalid JSON") from exc
+    return rows
 
 
 def require(condition: bool, message: str) -> None:
@@ -68,6 +88,65 @@ def parse_train_views(value: str) -> set[str]:
     if not views:
         raise SystemExit("--train-views must include at least one view")
     return views
+
+
+def require_count_block(document: dict, key: str) -> int:
+    block = document.get(key)
+    require(isinstance(block, dict), f"counts summary must include {key}")
+    by_class = block.get("by_class")
+    require(isinstance(by_class, dict), f"counts summary {key}.by_class must be an object")
+    for class_name, value in by_class.items():
+        require(isinstance(class_name, str), f"counts summary {key}.by_class keys must be strings")
+        require(
+            isinstance(value, int) and value >= 0,
+            f"counts summary {key}.by_class[{class_name!r}] must be a non-negative integer",
+        )
+    total = block.get("total")
+    require(isinstance(total, int) and total >= 0, f"counts summary {key}.total must be a non-negative integer")
+    require(total == sum(by_class.values()), f"counts summary {key}.total does not match by_class sum")
+    return total
+
+
+def check_count_contract(dataset_root: Path, qa_summary: dict, images: int) -> dict[str, int]:
+    counts_summary = read_json(dataset_root / "counts" / "summary.json")
+    targets = read_jsonl(dataset_root / "counts" / "targets.jsonl")
+    require(isinstance(counts_summary, dict), "counts/summary.json must be an object")
+    require(int(counts_summary.get("images", -1)) == images, "counts summary image count must match QA summary")
+    require(len(targets) == images, "counts targets rows must match QA summary image count")
+    for index, row in enumerate(targets, start=1):
+        require(isinstance(row, dict), f"counts targets row {index} must be an object")
+
+    physical_total = require_count_block(counts_summary, "physical_visible_instances")
+    require_count_block(counts_summary, "kept_fragments")
+    require_count_block(counts_summary, "ignored_fragments")
+    require_count_block(counts_summary, "parent_fused_kept_fragments")
+    parent_fused_all_total = require_count_block(counts_summary, "parent_fused_all_fragments")
+
+    qa_visible_total = int_at(qa_summary, "visible_instances", "total")
+    require(physical_total == qa_visible_total, "counts physical total must match QA visible instance total")
+    require(parent_fused_all_total == physical_total, "parent-fused all-fragment total must match physical total")
+    require(
+        counts_summary.get("parent_fused_all_matches_physical") is True,
+        "parent_fused_all_matches_physical must be true",
+    )
+    for key in [
+        "naive_kept_fragment_overcount",
+        "naive_all_fragment_overcount",
+        "kept_split_parent_count",
+        "all_split_parent_count",
+    ]:
+        value = counts_summary.get(key)
+        require(isinstance(value, int) and value >= 0, f"counts summary {key} must be a non-negative integer")
+    policy = counts_summary.get("policy", {})
+    require(isinstance(policy, dict), "counts summary policy must be an object")
+    require(
+        policy.get("count_truth") == "physical_visible_instances",
+        "counts summary policy.count_truth must be physical_visible_instances",
+    )
+    return {
+        "physical_total": physical_total,
+        "parent_fused_all_total": parent_fused_all_total,
+    }
 
 
 def main() -> int:
@@ -159,6 +238,9 @@ def main() -> int:
     visible = int_at(summary, "visible_instances", "total")
     if not args.allow_zero_visible:
         require(visible > 0, "trainable candidates must expose at least one visible banknote unless --allow-zero-visible is set")
+    count_contract = {"physical_total": visible, "parent_fused_all_total": visible}
+    if not args.skip_count_contract:
+        count_contract = check_count_contract(dataset_root, summary, images)
 
     train_views = parse_train_views(args.train_views)
     fragment_status_counts = summary.get("fragments", {}).get("evidence_status_counts", {})
@@ -177,7 +259,9 @@ def main() -> int:
 
     print(
         f"ok: {recipe_name} trainable-candidate gate passed "
-        f"({images} images, views={','.join(sorted(train_views))}, review_required={review_required}, rejected_obb={rejected_obb})"
+        f"({images} images, views={','.join(sorted(train_views))}, visible={visible}, "
+        f"parent_fused={count_contract['parent_fused_all_total']}, "
+        f"review_required={review_required}, rejected_obb={rejected_obb})"
     )
     return 0
 
