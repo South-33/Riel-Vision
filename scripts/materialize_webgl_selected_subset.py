@@ -89,6 +89,7 @@ def source_render_defaults(variant_dirs: list[tuple[int, Path]]) -> dict[str, An
     camera = scene_config.get("camera", {}) if isinstance(scene_config, dict) else {}
     asset_side_policy_counts: Counter[str] = Counter()
     camera_profile_counts: Counter[str] = Counter()
+    note_print_tone_policy_counts: Counter[str] = Counter()
     stack_pose_policy_counts: Counter[str] = Counter()
     for row in metadata_rows:
         if not isinstance(row, dict):
@@ -99,6 +100,8 @@ def source_render_defaults(variant_dirs: list[tuple[int, Path]]) -> dict[str, An
         if isinstance(row_asset, dict):
             asset_side_policy_counts[str(row_asset.get("sidePolicy", "any"))] += 1
             stack_pose_policy_counts[str(row_asset.get("stackPosePolicy", "default"))] += 1
+        if isinstance(row_scene, dict):
+            note_print_tone_policy_counts[str(row_scene.get("notePrintTonePolicy", "off"))] += 1
         if isinstance(row_camera, dict):
             camera_profile_counts[str(row_camera.get("profileRequested", "phone_closeup_clean_like"))] += 1
 
@@ -119,10 +122,15 @@ def source_render_defaults(variant_dirs: list[tuple[int, Path]]) -> dict[str, An
             camera_profile_counts,
             str(camera.get("profileRequested", "phone_closeup_clean_like")) if isinstance(camera, dict) else "phone_closeup_clean_like",
         ),
+        "note_print_tone_policy": selected_policy(
+            note_print_tone_policy_counts,
+            str(scene_config.get("notePrintTonePolicy", "off")) if isinstance(scene_config, dict) else "off",
+        ),
         "stack_pose_policy": selected_policy(stack_pose_policy_counts, "default"),
         "source_policy_counts": {
             "asset_side_policy": dict(sorted(asset_side_policy_counts.items())),
             "camera_profile": dict(sorted(camera_profile_counts.items())),
+            "note_print_tone_policy": dict(sorted(note_print_tone_policy_counts.items())),
             "stack_pose_policy": dict(sorted(stack_pose_policy_counts.items())),
         },
     }
@@ -156,6 +164,7 @@ def recipe_args(args: argparse.Namespace, selection: dict[str, Any], variant_dir
         browser_executable=None,
         note_condition_policy="mixed",
         lens_distortion_policy="off",
+        note_print_tone_policy=render["note_print_tone_policy"],
         stack_pose_policy=render["stack_pose_policy"],
         asset_side_policy=render["asset_side_policy"],
         camera_profile=render["camera_profile"],
