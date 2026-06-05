@@ -19,7 +19,12 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from webgl_constants import WEBGL_ASSET_SIDE_POLICIES, WEBGL_CAMERA_PROFILES, WEBGL_STACK_POSE_POLICIES
+from webgl_constants import (
+    WEBGL_ASSET_SIDE_POLICIES,
+    WEBGL_CAMERA_PROFILES,
+    WEBGL_NOTE_PRINT_TONE_POLICIES,
+    WEBGL_STACK_POSE_POLICIES,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -112,6 +117,12 @@ def parse_args() -> argparse.Namespace:
         choices=["off", "phone_mild"],
         default="off",
         help="Optional shared RGB/ID/label radial lens-warp policy.",
+    )
+    parser.add_argument(
+        "--note-print-tone-policy",
+        choices=sorted(WEBGL_NOTE_PRINT_TONE_POLICIES),
+        default="off",
+        help="Optional per-note print dynamic-range treatment before WebGL material rendering.",
     )
     parser.add_argument("--recipe-name", default="", help="Human-readable recipe name to write into recipe.json.")
     parser.add_argument(
@@ -262,6 +273,8 @@ def render_variant(variant: int, out_dir: Path, scene_mode: str, background_dir:
         cmd.extend(["--note-condition-policy", args.note_condition_policy])
     if args.lens_distortion_policy != "off":
         cmd.extend(["--lens-distortion-policy", args.lens_distortion_policy])
+    if args.note_print_tone_policy != "off":
+        cmd.extend(["--note-print-tone-policy", args.note_print_tone_policy])
     if background_dir is not None:
         cmd.extend(["--background-dir", str(background_dir)])
     if args.environment_dir is not None:
@@ -1047,6 +1060,8 @@ def write_yolo_dataset(
     stack_pose_policy_counts: Counter[str] = Counter()
     asset_side_counts: Counter[str] = Counter()
     front_back_mix_counts: Counter[str] = Counter()
+    note_print_tone_policy_counts: Counter[str] = Counter()
+    note_print_tone_contrasts: list[float] = []
     camera_profile_request_counts: Counter[str] = Counter()
     camera_profile_counts: Counter[str] = Counter()
     visible_pixels_per_instance: list[float] = []
@@ -1141,6 +1156,16 @@ def write_yolo_dataset(
                 front_back_mix_counts[
                     "satisfied" if bool(asset_selection.get("frontBackMixSatisfied")) else "unsatisfied"
                 ] += 1
+        for asset in source_metadata.get("assets", []):
+            if not isinstance(asset, dict):
+                continue
+            print_tone = asset.get("printTone", {})
+            if not isinstance(print_tone, dict):
+                print_tone = {}
+            note_print_tone_policy_counts[str(print_tone.get("policy", "off"))] += 1
+            contrast = print_tone.get("contrast")
+            if isinstance(contrast, (int, float)) and not isinstance(contrast, bool):
+                note_print_tone_contrasts.append(float(contrast))
         fragment_rows, fragment_metadata, ignored_fragment_metadata = build_fragment_labels(
             id_path,
             boxes_path,
@@ -1408,6 +1433,10 @@ def write_yolo_dataset(
                 "side_counts": dict(sorted(asset_side_counts.items())),
                 "front_back_mix_counts": dict(sorted(front_back_mix_counts.items())),
             },
+            "note_print_tone": {
+                "policy_counts": dict(sorted(note_print_tone_policy_counts.items())),
+                "contrast": summarize_values(note_print_tone_contrasts),
+            },
             "camera_profiles": {
                 "requested_counts": dict(sorted(camera_profile_request_counts.items())),
                 "selected_counts": dict(sorted(camera_profile_counts.items())),
@@ -1552,6 +1581,7 @@ def write_recipe_metadata(
             "browser_executable": rel(args.browser_executable) if args.browser_executable else "",
             "note_condition_policy": args.note_condition_policy,
             "lens_distortion_policy": args.lens_distortion_policy,
+            "note_print_tone_policy": args.note_print_tone_policy,
             "stack_pose_policy": args.stack_pose_policy,
         },
         "asset_side_policy": args.asset_side_policy,

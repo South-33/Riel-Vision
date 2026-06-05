@@ -10,7 +10,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-from webgl_constants import WEBGL_ASSET_SIDE_POLICIES, WEBGL_CAMERA_PROFILES, WEBGL_STACK_POSE_POLICIES
+from webgl_constants import (
+    WEBGL_ASSET_SIDE_POLICIES,
+    WEBGL_CAMERA_PROFILES,
+    WEBGL_NOTE_PRINT_TONE_POLICIES,
+    WEBGL_STACK_POSE_POLICIES,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,6 +49,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--class-sequence", default="", help="Override catalog class sequence for supported scene modes.")
     parser.add_argument("--note-condition-policy", default="", help="Override catalog per-note dirt/crinkle/wetness policy.")
     parser.add_argument("--lens-distortion-policy", default="", help="Override catalog shared radial lens-warp policy.")
+    parser.add_argument("--note-print-tone-policy", default="", help="Override catalog per-note print dynamic-range policy.")
     parser.add_argument("--artifact-status", choices=["smoke", "diagnostic", "trainable-candidate"], default="")
     parser.add_argument("--background-dir", type=Path, default=None)
     parser.add_argument("--environment-dir", type=Path, default=None, help="Optional equirectangular environment map directory for visual lighting/reflections.")
@@ -172,6 +178,9 @@ def main() -> int:
     lens_distortion_policy = args.lens_distortion_policy.strip() or str(recipe.get("lens_distortion_policy", "off")).strip() or "off"
     if lens_distortion_policy not in {"off", "phone_mild"}:
         raise SystemExit(f"unsupported lens_distortion_policy: {lens_distortion_policy}")
+    note_print_tone_policy = args.note_print_tone_policy.strip() or str(recipe.get("note_print_tone_policy", "off")).strip() or "off"
+    if note_print_tone_policy not in WEBGL_NOTE_PRINT_TONE_POLICIES:
+        raise SystemExit(f"unsupported note_print_tone_policy: {note_print_tone_policy}")
     count = int(args.count if args.count is not None else recipe.get("render_pool_count", 4))
     if count < 1:
         raise SystemExit("--count must be positive")
@@ -273,6 +282,8 @@ def main() -> int:
         cmd.extend(["--note-condition-policy", note_condition_policy])
     if lens_distortion_policy != "off":
         cmd.extend(["--lens-distortion-policy", lens_distortion_policy])
+    if note_print_tone_policy != "off":
+        cmd.extend(["--note-print-tone-policy", note_print_tone_policy])
     if balanced_subset_count > 0:
         cmd.extend(["--balanced-subset-count", str(balanced_subset_count)])
         if balanced_subset_classes:

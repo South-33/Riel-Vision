@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from webgl_constants import WEBGL_NOTE_PRINT_TONE_POLICIES
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CATALOG = ROOT / "configs" / "synthetic_recipes" / "cashsnap_webgl_recipe_catalog_v1.json"
@@ -146,6 +148,27 @@ def run_note_condition_diversity_gate(root: Path, gate: dict[str, Any], recipe: 
     add_int_option(cmd, gate, "min_dirty_notes", "--min-dirty-notes")
     add_int_option(cmd, gate, "min_pristine_notes", "--min-pristine-notes")
     add_int_option(cmd, gate, "min_wet_notes", "--min-wet-notes")
+    run(cmd)
+
+
+def run_note_print_tone_gate(root: Path, gate: dict[str, Any], recipe: dict[str, Any]) -> None:
+    cmd = [
+        sys.executable,
+        "scripts/check_webgl_note_print_tone.py",
+        "--root",
+        str(root),
+    ]
+    expected_policy = str(gate.get("expected_policy", recipe.get("note_print_tone_policy", ""))).strip()
+    if expected_policy:
+        if expected_policy not in WEBGL_NOTE_PRINT_TONE_POLICIES:
+            raise SystemExit(f"note_print_tone.expected_policy must be one of {sorted(WEBGL_NOTE_PRINT_TONE_POLICIES)}")
+        cmd.extend(["--expected-policy", expected_policy])
+    add_int_option(cmd, gate, "min_notes", "--min-notes")
+    add_float_option(cmd, gate, "min_mean_contrast", "--min-mean-contrast")
+    add_float_option(cmd, gate, "max_mean_contrast", "--max-mean-contrast")
+    add_float_option(cmd, gate, "min_contrast_range", "--min-contrast-range")
+    if gate.get("allow_missing"):
+        cmd.append("--allow-missing")
     run(cmd)
 
 
@@ -286,6 +309,12 @@ def main() -> int:
         if not isinstance(note_condition_diversity, dict):
             raise SystemExit(f"{args.recipe_id}: note_condition_diversity gate must be an object")
         run_note_condition_diversity_gate(root, note_condition_diversity, recipe)
+
+    note_print_tone = gates.get("note_print_tone")
+    if note_print_tone is not None:
+        if not isinstance(note_print_tone, dict):
+            raise SystemExit(f"{args.recipe_id}: note_print_tone gate must be an object")
+        run_note_print_tone_gate(root, note_print_tone, recipe)
 
     hard_negative_diversity = gates.get("hard_negative_diversity")
     if hard_negative_diversity is not None:

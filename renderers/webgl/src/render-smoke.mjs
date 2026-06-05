@@ -30,6 +30,7 @@ const CAMERA_PROFILE = argValue("--camera-profile", "generic_phone_jitter");
 const CLASS_SEQUENCE_RAW = argValue("--class-sequence", "");
 const NOTE_CONDITION_POLICY = argValue("--note-condition-policy", "mixed");
 const LENS_DISTORTION_POLICY = argValue("--lens-distortion-policy", "off");
+const NOTE_PRINT_TONE_POLICY = argValue("--note-print-tone-policy", "off");
 const BROWSER_EXECUTABLE = argValue("--browser-executable", process.env.CASHSNAP_WEBGL_BROWSER || EDGE);
 const WIDTH = Number.parseInt(argValue("--width", "1440"), 10);
 const HEIGHT = Number.parseInt(argValue("--height", "1080"), 10);
@@ -138,6 +139,10 @@ if (!["mixed", "pristine_only", "heavy_wear", "wet_stress"].includes(NOTE_CONDIT
 
 if (!["off", "phone_mild"].includes(LENS_DISTORTION_POLICY)) {
   throw new Error("--lens-distortion-policy must be one of: off, phone_mild");
+}
+
+if (!["off", "local_dynamic_range_v1"].includes(NOTE_PRINT_TONE_POLICY)) {
+  throw new Error("--note-print-tone-policy must be one of: off, local_dynamic_range_v1");
 }
 
 const effectiveSceneMode = SCENE_MODE === "auto" ? (VARIANT >= 100 ? "fan" : "stack") : SCENE_MODE;
@@ -275,6 +280,39 @@ function noteConditionFor(asset, variant, index) {
     creaseAngle: round3(randomBetween(rng, -1.4, 1.4)),
     creaseOffset: round3(randomBetween(rng, -0.28, 0.28)),
     wavePhase: round3(randomBetween(rng, 0, Math.PI * 2)),
+  };
+}
+
+function notePrintToneFor(asset, variant, index, condition = {}) {
+  const seed = 90714113 + variant * 1297 + index * 3253 + (asset.classIndex ?? 0) * 101;
+  if (NOTE_PRINT_TONE_POLICY === "off") {
+    return {
+      policy: "off",
+      seed,
+      contrast: 1.0,
+      saturation: 1.0,
+      brightness: 0.0,
+      shadowPull: 0.0,
+      highlightPush: 0.0,
+    };
+  }
+  const rng = mulberry32(seed);
+  const wetness = clamp(condition.wetness || 0, 0, 1);
+  const dirtiness = clamp(condition.dirtiness || 0, 0, 1);
+  const crinkle = clamp(condition.crinkle || 0, 0, 1);
+  const cleanScene = Boolean(asset.clean || asset.cleanSingle || effectiveSceneMode === "clean" || effectiveSceneMode === "clean_single");
+  const wetDampening = 1.0 - wetness * 0.13;
+  const wearBoost = 1.0 + Math.min(0.12, (dirtiness + crinkle) * 0.055);
+  const cleanDampening = cleanScene ? 0.92 : 1.0;
+  const contrast = randomBetween(rng, 1.52, 1.92) * wetDampening * wearBoost * cleanDampening;
+  return {
+    policy: NOTE_PRINT_TONE_POLICY,
+    seed,
+    contrast: round3(contrast),
+    saturation: round3(randomBetween(rng, 1.02, 1.16)),
+    brightness: round3(randomBetween(rng, -18.0, -4.0) - dirtiness * 3.0),
+    shadowPull: round3(randomBetween(rng, 24.0, 58.0) * (1.0 + dirtiness * 0.25)),
+    highlightPush: round3(randomBetween(rng, 8.0, 22.0) * (1.0 - wetness * 0.20)),
   };
 }
 
@@ -515,6 +553,7 @@ function sceneConfig(variant, mode, backgroundPath, environmentPath) {
   const lensDistortion = lensDistortionConfig(rng, cameraProfile);
   return {
     noteConditionPolicy: NOTE_CONDITION_POLICY,
+    notePrintTonePolicy: NOTE_PRINT_TONE_POLICY,
     surface: {
       ...surface,
       base: hexToNumber(surface.base),
@@ -775,21 +814,25 @@ function selectAssetPath(className, variant, index) {
 
 function enrichAsset(asset, variant, index) {
   const assetPath = selectAssetPath(asset.className, variant, index);
+  const condition = noteConditionFor(asset, variant, index);
   return {
     ...asset,
     path: assetPath,
     side: sideForAssetPath(assetPath),
     assetSidePolicy: ASSET_SIDE_POLICY,
-    condition: noteConditionFor(asset, variant, index),
+    condition,
+    printTone: notePrintToneFor(asset, variant, index, condition),
   };
 }
 
 function annotateAsset(asset, index) {
+  const condition = noteConditionFor(asset, 0, index);
   return {
     ...asset,
     side: sideForAssetPath(asset.path),
     assetSidePolicy: ASSET_SIDE_POLICY,
-    condition: noteConditionFor(asset, 0, index),
+    condition,
+    printTone: notePrintToneFor(asset, 0, index, condition),
   };
 }
 
@@ -1678,6 +1721,40 @@ function applyMaskedOverlay(baseCanvas, drawOverlay) {
   return overlay;
 }
 
+function clampByte(value) {
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function applyPrintToneAdjustment(canvas, printTone) {
+  if (!printTone || printTone.policy === "off") return;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  const image = context.getImageData(0, 0, canvas.width, canvas.height);
+  const data = image.data;
+  const contrast = Number.isFinite(printTone.contrast) ? printTone.contrast : 1.0;
+  const saturation = Number.isFinite(printTone.saturation) ? printTone.saturation : 1.0;
+  const brightness = Number.isFinite(printTone.brightness) ? printTone.brightness : 0.0;
+  const shadowPull = Number.isFinite(printTone.shadowPull) ? printTone.shadowPull : 0.0;
+  const highlightPush = Number.isFinite(printTone.highlightPush) ? printTone.highlightPush : 0.0;
+  for (let offset = 0; offset < data.length; offset += 4) {
+    const alpha = data[offset + 3] / 255;
+    if (alpha <= 0) continue;
+    let red = data[offset];
+    let green = data[offset + 1];
+    let blue = data[offset + 2];
+    const luma = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+    red = luma + (red - luma) * saturation;
+    green = luma + (green - luma) * saturation;
+    blue = luma + (blue - luma) * saturation;
+    const adjustedLuma = luma < 128
+      ? -shadowPull * (1 - luma / 128)
+      : highlightPush * ((luma - 128) / 127);
+    data[offset] = clampByte((red - 128) * contrast + 128 + brightness + adjustedLuma);
+    data[offset + 1] = clampByte((green - 128) * contrast + 128 + brightness + adjustedLuma);
+    data[offset + 2] = clampByte((blue - 128) * contrast + 128 + brightness + adjustedLuma);
+  }
+  context.putImageData(image, 0, 0);
+}
+
 function drawConditionedLines(context, width, height, rng, condition) {
   const crinkle = clamp01(condition.crinkle);
   const count = Math.max(0, condition.creaseCount || 0);
@@ -1703,13 +1780,16 @@ function drawConditionedLines(context, width, height, rng, condition) {
   }
 }
 
-function makeConditionedNoteTexture(sourceTexture, condition) {
-  if (!condition) return sourceTexture;
+function makeConditionedNoteTexture(sourceTexture, condition, printTone) {
+  const hasPrintTone = Boolean(printTone && printTone.policy !== "off");
+  if (!condition && !hasPrintTone) return sourceTexture;
+  condition = condition || {};
   const dirt = clamp01(condition.dirtiness);
   const crinkle = clamp01(condition.crinkle);
   const wet = clamp01(condition.wetness);
   const edgeWear = clamp01(condition.edgeWear);
-  if (dirt < 0.01 && crinkle < 0.01 && wet < 0.01 && edgeWear < 0.01) return sourceTexture;
+  const hasConditionTone = dirt >= 0.01 || crinkle >= 0.01 || wet >= 0.01 || edgeWear >= 0.01;
+  if (!hasConditionTone && !hasPrintTone) return sourceTexture;
 
   const source = sourceTexture.image;
   const width = source.naturalWidth || source.width;
@@ -1721,106 +1801,110 @@ function makeConditionedNoteTexture(sourceTexture, condition) {
   context.drawImage(source, 0, 0, width, height);
   const rng = browserMulberry32(condition.seed || 1);
 
-  const wash = applyMaskedOverlay(canvas, (overlay, w, h) => {
-    overlay.fillStyle = "rgba(117,82,38," + (dirt * 0.10) + ")";
-    overlay.fillRect(0, 0, w, h);
-    if (wet > 0) {
-      overlay.fillStyle = "rgba(29,43,47," + (wet * 0.16) + ")";
+  if (hasConditionTone) {
+    const wash = applyMaskedOverlay(canvas, (overlay, w, h) => {
+      overlay.fillStyle = "rgba(117,82,38," + (dirt * 0.10) + ")";
       overlay.fillRect(0, 0, w, h);
-    }
-  });
-  context.drawImage(wash, 0, 0);
+      if (wet > 0) {
+        overlay.fillStyle = "rgba(29,43,47," + (wet * 0.16) + ")";
+        overlay.fillRect(0, 0, w, h);
+      }
+    });
+    context.drawImage(wash, 0, 0);
 
-  const marks = applyMaskedOverlay(canvas, (overlay, w, h) => {
-    const speckles = Math.min(260, Math.max(0, condition.speckleCount || 0));
-    for (let i = 0; i < speckles; i += 1) {
-      const x = rng() * w;
-      const y = rng() * h;
-      const radius = Math.max(0.6, (0.003 + rng() * 0.011) * Math.min(w, h));
-      overlay.fillStyle = "rgba(54,42,27," + (0.025 + dirt * (0.08 + rng() * 0.12)) + ")";
-      overlay.beginPath();
-      overlay.ellipse(x, y, radius * (0.6 + rng()), radius * (0.4 + rng() * 0.8), rng() * Math.PI, 0, Math.PI * 2);
-      overlay.fill();
-    }
-    const stains = Math.min(8, Math.max(0, condition.stainCount || 0));
-    for (let i = 0; i < stains; i += 1) {
-      const x = rng() * w;
-      const y = rng() * h;
-      const radius = (0.04 + rng() * 0.11) * Math.min(w, h);
-      const gradient = overlay.createRadialGradient(x, y, radius * 0.1, x, y, radius);
-      gradient.addColorStop(0, "rgba(67,48,28," + (0.09 + dirt * 0.14) + ")");
-      gradient.addColorStop(1, "rgba(67,48,28,0)");
-      overlay.fillStyle = gradient;
-      overlay.fillRect(x - radius, y - radius, radius * 2, radius * 2);
-    }
-    if (wet > 0) {
-      const patches = Math.max(1, Math.ceil(wet * 5));
-      for (let i = 0; i < patches; i += 1) {
+    const marks = applyMaskedOverlay(canvas, (overlay, w, h) => {
+      const speckles = Math.min(260, Math.max(0, condition.speckleCount || 0));
+      for (let i = 0; i < speckles; i += 1) {
         const x = rng() * w;
         const y = rng() * h;
-        const radius = (0.07 + rng() * 0.15) * Math.min(w, h);
+        const radius = Math.max(0.6, (0.003 + rng() * 0.011) * Math.min(w, h));
+        overlay.fillStyle = "rgba(54,42,27," + (0.025 + dirt * (0.08 + rng() * 0.12)) + ")";
+        overlay.beginPath();
+        overlay.ellipse(x, y, radius * (0.6 + rng()), radius * (0.4 + rng() * 0.8), rng() * Math.PI, 0, Math.PI * 2);
+        overlay.fill();
+      }
+      const stains = Math.min(8, Math.max(0, condition.stainCount || 0));
+      for (let i = 0; i < stains; i += 1) {
+        const x = rng() * w;
+        const y = rng() * h;
+        const radius = (0.04 + rng() * 0.11) * Math.min(w, h);
         const gradient = overlay.createRadialGradient(x, y, radius * 0.1, x, y, radius);
-        gradient.addColorStop(0, "rgba(22,28,25," + (0.14 + wet * 0.20) + ")");
-        gradient.addColorStop(0.55, "rgba(44,48,39," + (0.06 + wet * 0.10) + ")");
-        gradient.addColorStop(1, "rgba(44,48,39,0)");
+        gradient.addColorStop(0, "rgba(67,48,28," + (0.09 + dirt * 0.14) + ")");
+        gradient.addColorStop(1, "rgba(67,48,28,0)");
         overlay.fillStyle = gradient;
         overlay.fillRect(x - radius, y - radius, radius * 2, radius * 2);
       }
-    }
-    if (wet > 0.05) {
-      const wetPatches = Math.min(6, Math.max(1, Math.round(1 + wet * 5)));
-      for (let i = 0; i < wetPatches; i += 1) {
-        const x = rng() * w;
-        const y = rng() * h;
-        const radiusX = (0.055 + rng() * 0.15) * w;
-        const radiusY = (0.045 + rng() * 0.13) * h;
-        const gradient = overlay.createRadialGradient(x, y, Math.min(radiusX, radiusY) * 0.08, x, y, Math.max(radiusX, radiusY));
-        gradient.addColorStop(0, "rgba(18,29,31," + (wet * (0.10 + rng() * 0.08)) + ")");
-        gradient.addColorStop(0.62, "rgba(46,64,64," + (wet * 0.07) + ")");
-        gradient.addColorStop(1, "rgba(46,64,64,0)");
+      if (wet > 0) {
+        const patches = Math.max(1, Math.ceil(wet * 5));
+        for (let i = 0; i < patches; i += 1) {
+          const x = rng() * w;
+          const y = rng() * h;
+          const radius = (0.07 + rng() * 0.15) * Math.min(w, h);
+          const gradient = overlay.createRadialGradient(x, y, radius * 0.1, x, y, radius);
+          gradient.addColorStop(0, "rgba(22,28,25," + (0.14 + wet * 0.20) + ")");
+          gradient.addColorStop(0.55, "rgba(44,48,39," + (0.06 + wet * 0.10) + ")");
+          gradient.addColorStop(1, "rgba(44,48,39,0)");
+          overlay.fillStyle = gradient;
+          overlay.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+        }
+      }
+      if (wet > 0.05) {
+        const wetPatches = Math.min(6, Math.max(1, Math.round(1 + wet * 5)));
+        for (let i = 0; i < wetPatches; i += 1) {
+          const x = rng() * w;
+          const y = rng() * h;
+          const radiusX = (0.055 + rng() * 0.15) * w;
+          const radiusY = (0.045 + rng() * 0.13) * h;
+          const gradient = overlay.createRadialGradient(x, y, Math.min(radiusX, radiusY) * 0.08, x, y, Math.max(radiusX, radiusY));
+          gradient.addColorStop(0, "rgba(18,29,31," + (wet * (0.10 + rng() * 0.08)) + ")");
+          gradient.addColorStop(0.62, "rgba(46,64,64," + (wet * 0.07) + ")");
+          gradient.addColorStop(1, "rgba(46,64,64,0)");
+          overlay.save();
+          overlay.translate(x, y);
+          overlay.rotate(rng() * Math.PI);
+          overlay.fillStyle = gradient;
+          overlay.beginPath();
+          overlay.ellipse(0, 0, radiusX, radiusY, 0, 0, Math.PI * 2);
+          overlay.fill();
+          overlay.restore();
+        }
+        const glints = Math.min(5, Math.max(1, Math.round(wet * 4)));
         overlay.save();
-        overlay.translate(x, y);
-        overlay.rotate(rng() * Math.PI);
-        overlay.fillStyle = gradient;
-        overlay.beginPath();
-        overlay.ellipse(0, 0, radiusX, radiusY, 0, 0, Math.PI * 2);
-        overlay.fill();
+        overlay.globalCompositeOperation = "screen";
+        for (let i = 0; i < glints; i += 1) {
+          const x = rng() * w;
+          const y = rng() * h;
+          overlay.strokeStyle = "rgba(220,234,225," + (wet * (0.08 + rng() * 0.08)) + ")";
+          overlay.lineWidth = Math.max(1, Math.min(w, h) * (0.002 + rng() * 0.004));
+          overlay.lineCap = "round";
+          overlay.beginPath();
+          overlay.moveTo(x, y);
+          overlay.bezierCurveTo(
+            x + (rng() - 0.5) * w * 0.14,
+            y + (rng() - 0.5) * h * 0.05,
+            x + (rng() - 0.5) * w * 0.24,
+            y + (rng() - 0.5) * h * 0.10,
+            x + (rng() - 0.5) * w * 0.30,
+            y + (rng() - 0.5) * h * 0.12
+          );
+          overlay.stroke();
+        }
         overlay.restore();
       }
-      const glints = Math.min(5, Math.max(1, Math.round(wet * 4)));
-      overlay.save();
-      overlay.globalCompositeOperation = "screen";
-      for (let i = 0; i < glints; i += 1) {
-        const x = rng() * w;
-        const y = rng() * h;
-        overlay.strokeStyle = "rgba(220,234,225," + (wet * (0.08 + rng() * 0.08)) + ")";
-        overlay.lineWidth = Math.max(1, Math.min(w, h) * (0.002 + rng() * 0.004));
-        overlay.lineCap = "round";
-        overlay.beginPath();
-        overlay.moveTo(x, y);
-        overlay.bezierCurveTo(
-          x + (rng() - 0.5) * w * 0.14,
-          y + (rng() - 0.5) * h * 0.05,
-          x + (rng() - 0.5) * w * 0.24,
-          y + (rng() - 0.5) * h * 0.10,
-          x + (rng() - 0.5) * w * 0.30,
-          y + (rng() - 0.5) * h * 0.12
-        );
-        overlay.stroke();
+      drawConditionedLines(overlay, w, h, rng, condition);
+      if (edgeWear > 0) {
+        overlay.lineWidth = Math.max(1, Math.min(w, h) * (0.004 + edgeWear * 0.010));
+        overlay.strokeStyle = "rgba(246,238,211," + (edgeWear * 0.18) + ")";
+        for (let i = 0; i < 3; i += 1) {
+          const inset = i * overlay.lineWidth * 1.8;
+          overlay.strokeRect(inset, inset, w - inset * 2, h - inset * 2);
+        }
       }
-      overlay.restore();
-    }
-    drawConditionedLines(overlay, w, h, rng, condition);
-    if (edgeWear > 0) {
-      overlay.lineWidth = Math.max(1, Math.min(w, h) * (0.004 + edgeWear * 0.010));
-      overlay.strokeStyle = "rgba(246,238,211," + (edgeWear * 0.18) + ")";
-      for (let i = 0; i < 3; i += 1) {
-        const inset = i * overlay.lineWidth * 1.8;
-        overlay.strokeRect(inset, inset, w - inset * 2, h - inset * 2);
-      }
-    }
-  });
-  context.drawImage(marks, 0, 0);
+    });
+    context.drawImage(marks, 0, 0);
+  }
+
+  applyPrintToneAdjustment(canvas, printTone);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -1831,7 +1915,7 @@ function makeConditionedNoteTexture(sourceTexture, condition) {
 async function addNotes() {
   for (const asset of [...assets].sort((a, b) => a.layer - b.layer)) {
     const sourceTexture = await loader.loadAsync(asset.textureUrl);
-    const texture = makeConditionedNoteTexture(sourceTexture, asset.condition);
+    const texture = makeConditionedNoteTexture(sourceTexture, asset.condition, asset.printTone);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = visualRenderer.capabilities.getMaxAnisotropy();
     texture.minFilter = THREE.LinearMipmapLinearFilter;

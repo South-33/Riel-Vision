@@ -8,7 +8,12 @@ import json
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from webgl_constants import WEBGL_ASSET_SIDE_POLICIES, WEBGL_CAMERA_PROFILES, WEBGL_STACK_POSE_POLICIES
+from webgl_constants import (
+    WEBGL_ASSET_SIDE_POLICIES,
+    WEBGL_CAMERA_PROFILES,
+    WEBGL_NOTE_PRINT_TONE_POLICIES,
+    WEBGL_STACK_POSE_POLICIES,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -106,6 +111,7 @@ def validate_diagnostic_gates(recipe_id: str, gates: object) -> None:
         "class_distribution",
         "count_stress",
         "note_condition_diversity",
+        "note_print_tone",
         "hard_negative_diversity",
         "domain_gap",
     }
@@ -183,6 +189,29 @@ def validate_diagnostic_gates(recipe_id: str, gates: object) -> None:
             not expected_policy or expected_policy in NOTE_CONDITION_POLICIES,
             f"{recipe_id}: note_condition_diversity.expected_policy must be one of {sorted(NOTE_CONDITION_POLICIES)}",
         )
+
+    note_print_tone = gates.get("note_print_tone")
+    if note_print_tone is not None:
+        require(isinstance(note_print_tone, dict), f"{recipe_id}: note_print_tone gate must be an object")
+        expected_policy = str(note_print_tone.get("expected_policy", "")).strip()
+        require(
+            not expected_policy or expected_policy in WEBGL_NOTE_PRINT_TONE_POLICIES,
+            f"{recipe_id}: note_print_tone.expected_policy must be one of {sorted(WEBGL_NOTE_PRINT_TONE_POLICIES)}",
+        )
+        if "min_notes" in note_print_tone:
+            require_nonnegative_int(
+                note_print_tone["min_notes"],
+                f"{recipe_id}: note_print_tone.min_notes must be a non-negative integer",
+            )
+        for field in ("min_mean_contrast", "max_mean_contrast", "min_contrast_range"):
+            if field in note_print_tone:
+                value = note_print_tone[field]
+                require(
+                    isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0,
+                    f"{recipe_id}: note_print_tone.{field} must be a non-negative number",
+                )
+        if "allow_missing" in note_print_tone:
+            require(type(note_print_tone["allow_missing"]) is bool, f"{recipe_id}: note_print_tone.allow_missing must be boolean")
 
     hard_negative_diversity = gates.get("hard_negative_diversity")
     if hard_negative_diversity is not None:
@@ -285,6 +314,11 @@ def main() -> int:
         require(
             lens_distortion_policy in LENS_DISTORTION_POLICIES,
             f"{recipe_id}: invalid lens_distortion_policy {lens_distortion_policy!r}",
+        )
+        note_print_tone_policy = str(row.get("note_print_tone_policy", "off"))
+        require(
+            note_print_tone_policy in WEBGL_NOTE_PRINT_TONE_POLICIES,
+            f"{recipe_id}: invalid note_print_tone_policy {note_print_tone_policy!r}",
         )
         validate_diagnostic_gates(recipe_id, row.get("diagnostic_gates"))
         for target_id in target_ids:

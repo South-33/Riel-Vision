@@ -7,6 +7,8 @@ WEBGL_ASSET_SIDE_POLICIES = {"any", "front_only", "back_only", "front_back_mix"}
 
 WEBGL_STACK_POSE_POLICIES = {"default", "real_aspect_v1", "real_aspect_v2"}
 
+WEBGL_NOTE_PRINT_TONE_POLICIES = {"off", "local_dynamic_range_v1"}
+
 WEBGL_CAMERA_PROFILES = {
     "generic_phone_jitter",
     "phone_auto",
