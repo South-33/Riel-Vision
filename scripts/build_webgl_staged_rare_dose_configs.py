@@ -60,7 +60,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--control-source",
-        choices=("background", "first", "class", "class_mix"),
+        choices=("background", "first", "class", "class_mix", "real_class_mix"),
         default="background",
         help="Base rows to duplicate for matched row-count controls.",
     )
@@ -278,6 +278,11 @@ def label_class_counts(image: Path) -> Counter[int]:
     return Counter(label_classes(image))
 
 
+def is_synthetic_row(row: str) -> bool:
+    normalized = row.replace("\\", "/").lower()
+    return normalized.startswith("data/synthetic/") or "/data/synthetic/" in normalized
+
+
 def image_class_summary(dataset_root: Path, rows: list[str], names: dict[int, str]) -> dict[str, Any]:
     class_counts: Counter[int] = Counter()
     background_count = 0
@@ -319,6 +324,7 @@ def row_count_control_rows(
     source: str,
     class_id: int | None = None,
     target_rows: list[str] | None = None,
+    selection_report: list[dict[str, Any]] | None = None,
 ) -> list[str]:
     if count < 1:
         raise SystemExit("row-count control count must be positive")
@@ -342,16 +348,22 @@ def row_count_control_rows(
         ]
         if not pool:
             raise SystemExit(f"base train list has no rows for class id {class_id}")
-    elif source == "class_mix":
+    elif source in {"class_mix", "real_class_mix"}:
         if not target_rows:
-            raise SystemExit("--control-source class_mix requires selected dose rows")
+            raise SystemExit(f"--control-source {source} requires selected dose rows")
         base_counts = [
             (row, label_class_counts(image_path_from_repo_line(dataset_root, row)))
             for row in base_rows
         ]
-        pool = [item for item in base_counts if item[1]]
+        real_only = source == "real_class_mix"
+        pool = [
+            item
+            for item in base_counts
+            if item[1] and (not real_only or not is_synthetic_row(item[0]))
+        ]
         if not pool:
-            raise SystemExit("base train list has no labeled rows for class_mix row-count controls")
+            qualifier = "real labeled" if real_only else "labeled"
+            raise SystemExit(f"base train list has no {qualifier} rows for {source} row-count controls")
         control_rows: list[str] = []
         for target_row in target_rows:
             target_counts = label_class_counts(image_path_from_repo_line(dataset_root, target_row))
@@ -360,17 +372,40 @@ def row_count_control_rows(
                 continue
             target_classes = set(target_counts)
 
-            def score(item: tuple[str, Counter[int]]) -> tuple[int, int, int, str]:
-                row, counts = item
+            def match_details(row: str, counts: Counter[int]) -> dict[str, Any]:
                 missing = sum(max(0, target_counts[class_id] - counts.get(class_id, 0)) for class_id in target_classes)
                 extra = sum(count for class_id, count in counts.items() if class_id not in target_classes)
                 surplus = sum(max(0, counts.get(class_id, 0) - target_counts[class_id]) for class_id in target_classes)
                 overlap = sum(min(target_counts[class_id], counts.get(class_id, 0)) for class_id in target_classes)
-                return (missing, extra + surplus, -overlap, row)
+                return {
+                    "target_row": target_row,
+                    "control_row": row,
+                    "real_only": real_only,
+                    "missing": int(missing),
+                    "extra": int(extra),
+                    "surplus": int(surplus),
+                    "overlap": int(overlap),
+                    "exact": missing == 0 and extra == 0 and surplus == 0,
+                    "target_class_counts": dict(sorted((int(key), int(value)) for key, value in target_counts.items())),
+                    "control_class_counts": dict(sorted((int(key), int(value)) for key, value in counts.items())),
+                }
 
-            control_rows.append(min(pool, key=score)[0])
+            def score(item: tuple[str, Counter[int]]) -> tuple[int, int, int, str]:
+                row, counts = item
+                details = match_details(row, counts)
+                return (
+                    int(details["missing"]),
+                    int(details["extra"]) + int(details["surplus"]),
+                    -int(details["overlap"]),
+                    row,
+                )
+
+            selected_row, selected_counts = min(pool, key=score)
+            control_rows.append(selected_row)
+            if selection_report is not None:
+                selection_report.append(match_details(selected_row, selected_counts))
         if len(control_rows) != count:
-            raise SystemExit(f"class_mix produced {len(control_rows)} controls for requested count {count}")
+            raise SystemExit(f"{source} produced {len(control_rows)} controls for requested count {count}")
         return control_rows
     else:
         raise SystemExit(f"unsupported row-count control source: {source}")
@@ -560,6 +595,7 @@ def main() -> int:
         )
 
         if args.write_row_count_controls:
+            control_match_report: list[dict[str, Any]] = []
             control_rows = row_count_control_rows(
                 dataset_root,
                 base_rows,
@@ -567,6 +603,7 @@ def main() -> int:
                 args.control_source,
                 class_id=control_class_id,
                 target_rows=dose_image_rows,
+                selection_report=control_match_report,
             )
             control_summary = image_class_summary(dataset_root, control_rows, class_names)
             control_stem = f"{control_stem_prefix}_dose{dose}"
@@ -575,6 +612,8 @@ def main() -> int:
                 control_source_label = f"{args.control_source}:{class_names[control_class_id]}"
             elif args.control_source == "class_mix":
                 control_source_label = "class_mix:synthetic_dose_rows"
+            elif args.control_source == "real_class_mix":
+                control_source_label = "real_class_mix:synthetic_dose_rows"
             control_note = (
                 "Duplicates base rows to match train-list row count without adding synthetic note exposure."
             )
@@ -588,11 +627,36 @@ def main() -> int:
                     "Duplicates base rows selected to match each synthetic dose row's class mix; "
                     "rows may be real or synthetic depending on the base train list."
                 )
+            elif args.control_source == "real_class_mix":
+                control_note = (
+                    "Duplicates real base rows selected to approximate each synthetic dose row's class mix; "
+                    "check class_mix_match_report before interpreting it as an exact real-control."
+                )
+            exact_matches = sum(1 for row in control_match_report if row.get("exact"))
+            match_suffix = (
+                f" class_mix_exact={exact_matches}/{len(control_match_report)}"
+                if control_match_report
+                else ""
+            )
             print(
                 f"row_control dose={dose} source={control_source_label} "
-                f"unique={control_summary['unique_images']} backgrounds={control_summary['backgrounds']}",
+                f"unique={control_summary['unique_images']} backgrounds={control_summary['backgrounds']}"
+                f"{match_suffix}",
                 flush=True,
             )
+            row_count_control_payload = {
+                "base_config": repo_rel(base_path),
+                "base_train_list": repo_rel(base_train_list),
+                "stem_prefix": control_stem_prefix,
+                "source": control_source_label,
+                "matched_dose_images": int(dose),
+                "control_image_rows": control_rows,
+                "note": control_note,
+            }
+            if control_match_report:
+                row_count_control_payload["class_mix_match_report"] = control_match_report
+                row_count_control_payload["class_mix_exact_matches"] = int(exact_matches)
+                row_count_control_payload["class_mix_all_exact"] = exact_matches == len(control_match_report)
             emit_config(
                 stem=control_stem,
                 combined_rows=[*base_rows, *control_rows],
@@ -606,15 +670,7 @@ def main() -> int:
                     "row_count_control_base_train_list": repo_rel(base_train_list),
                     "row_count_control_source": control_source_label,
                 },
-                row_count_control={
-                    "base_config": repo_rel(base_path),
-                    "base_train_list": repo_rel(base_train_list),
-                    "stem_prefix": control_stem_prefix,
-                    "source": control_source_label,
-                    "matched_dose_images": int(dose),
-                    "control_image_rows": control_rows,
-                    "note": control_note,
-                },
+                row_count_control=row_count_control_payload,
             )
 
     return 0
