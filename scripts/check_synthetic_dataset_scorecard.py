@@ -18,6 +18,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_READINESS = ROOT / "runs" / "cashsnap" / "synthetic_pipeline_readiness_latest.json"
 DEFAULT_DOMAIN_GAP = ROOT / "runs" / "cashsnap" / "domain_gap_accepted_nowarmup_train.json"
+DEFAULT_MINED_REVIEW = ROOT / "runs" / "cashsnap" / "mined_real_benchmark_review_latest.json"
 DEFAULT_JSON_OUT = ROOT / "runs" / "cashsnap" / "synthetic_dataset_scorecard_latest.json"
 
 STATUS_ORDER = {"pass": 0, "review": 1, "missing": 2, "blocked": 3}
@@ -28,6 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--readiness", type=Path, default=DEFAULT_READINESS)
     parser.add_argument("--domain-gap", type=Path, default=DEFAULT_DOMAIN_GAP)
+    parser.add_argument("--mined-review", type=Path, default=DEFAULT_MINED_REVIEW)
     parser.add_argument("--json-out", type=Path, default=DEFAULT_JSON_OUT)
     parser.add_argument("--strict", action="store_true", help="Exit non-zero when any axis is blocked or missing.")
     return parser.parse_args()
@@ -160,7 +162,7 @@ def domain_gap_axis(domain_gap: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def build_scorecard(readiness: dict[str, Any], domain_gap: dict[str, Any]) -> dict[str, Any]:
+def build_scorecard(readiness: dict[str, Any], domain_gap: dict[str, Any], mined_review: dict[str, Any]) -> dict[str, Any]:
     required = int(readiness.get("required_conditions", 0) or 0)
     trainable = int(readiness.get("required_with_trainable_candidate", 0) or 0)
     real_ready = int(readiness.get("required_with_real_role_labels", 0) or 0)
@@ -211,14 +213,29 @@ def build_scorecard(readiness: dict[str, Any], domain_gap: dict[str, Any]) -> di
 
     candidates = candidate_totals(readiness)
     candidate_condition_count = review_candidate_condition_count(readiness)
+    mined_review_total = int(mined_review.get("selected_total", 0) or 0)
+    mined_review_scenes = mined_review.get("selected_by_scene", {})
+    if not isinstance(mined_review_scenes, dict):
+        mined_review_scenes = {}
+    edge_summary = f"Mined real-dataset review candidates exist for {candidate_condition_count} required condition(s)."
+    if mined_review_total:
+        edge_summary += f" A draft-only review package has {mined_review_total} selected candidate(s)."
     axes.append(
         axis(
             "edge_case_inventory",
             "review" if candidate_condition_count else "blocked",
-            f"Mined real-dataset review candidates exist for {candidate_condition_count} required condition(s).",
-            evidence={"unique_origin_counts": candidates},
+            edge_summary,
+            evidence={
+                "unique_origin_counts": candidates,
+                "mined_review_package": {
+                    "selected_total": mined_review_total,
+                    "selected_by_scene": mined_review_scenes,
+                    "review_index": mined_review.get("review_index", ""),
+                    "policy": mined_review.get("policy", {}),
+                },
+            },
             blockers=[] if candidate_condition_count else ["no mined real-dataset candidate hints were loaded"],
-            next_action="Review/promote overlap, thin-slice, weak-class, and same-denomination candidates; true fan/hand/hard-negative gaps remain separate.",
+            next_action="Visually audit the mined review package, add per-box quality rows only for protected/use-safe labels, and keep true fan/hand/hard-negative gaps separate.",
         )
     )
 
@@ -286,7 +303,8 @@ def main() -> int:
     args = parse_args()
     readiness = read_json(args.readiness)
     domain_gap = read_json(args.domain_gap, required=False)
-    scorecard = build_scorecard(readiness, domain_gap)
+    mined_review = read_json(args.mined_review, required=False)
+    scorecard = build_scorecard(readiness, domain_gap, mined_review)
     out = resolve(args.json_out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(scorecard, indent=2, sort_keys=True) + "\n", encoding="utf-8")
