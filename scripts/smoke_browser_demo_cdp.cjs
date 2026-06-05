@@ -53,6 +53,9 @@ function parseArgs(argv) {
     detectorModel: "",
     fragmentClassifierModel: "",
     stackConfig: "",
+    rejectFragmentDisagreement: false,
+    fragmentDisagreementMinConf: "",
+    unclassifiedMinConf: "",
     nmsIou: "",
     cropPadding: "",
     minSameClass: null,
@@ -112,6 +115,14 @@ function parseArgs(argv) {
     } else if (key === "--stack-config" || key === "--config") {
       args.stackConfig = value;
       index += 1;
+    } else if (key === "--reject-fragment-disagreement") {
+      args.rejectFragmentDisagreement = true;
+    } else if (key === "--fragment-disagreement-min-conf") {
+      args.fragmentDisagreementMinConf = value;
+      index += 1;
+    } else if (key === "--unclassified-min-conf") {
+      args.unclassifiedMinConf = value;
+      index += 1;
     } else if (key === "--nms-iou") {
       args.nmsIou = value;
       index += 1;
@@ -158,6 +169,9 @@ Options:
   --detector-model PATH Override detector ONNX model path served from the repo root.
   --fragment-classifier-model PATH Override fragment classifier ONNX model path served from the repo root.
   --stack-config PATH Override stack config JSON served from the repo root.
+  --reject-fragment-disagreement Reject proposals when detector and fragment classifier disagree.
+  --fragment-disagreement-min-conf N Minimum fragment confidence for disagreement rejection.
+  --unclassified-min-conf N Reject proposals below N when they are not fragment-classified.
   --nms-iou N         Override browser fusion NMS IoU.
   --crop-padding N    Override fragment crop padding fraction.
   --min-same-class N  Fail if labeled final same-class matches are below N.
@@ -600,6 +614,9 @@ function browserUrl(args) {
   if (args.detectorModel) params.set("detectorModel", args.detectorModel);
   if (args.fragmentClassifierModel) params.set("fragmentClassifierModel", args.fragmentClassifierModel);
   if (args.stackConfig) params.set("stackConfig", args.stackConfig);
+  if (args.rejectFragmentDisagreement) params.set("rejectFragmentDisagreement", "1");
+  if (args.fragmentDisagreementMinConf) params.set("fragmentDisagreementMinConf", args.fragmentDisagreementMinConf);
+  if (args.unclassifiedMinConf) params.set("unclassifiedMinConf", args.unclassifiedMinConf);
   if (args.nmsIou) params.set("nmsIou", args.nmsIou);
   if (args.cropPadding) params.set("cropPadding", args.cropPadding);
   return `http://127.0.0.1:${args.port}/demo/browser/?${params.toString()}`;

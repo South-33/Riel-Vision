@@ -111,6 +111,14 @@ function queryNumber(name) {
   return Number.isFinite(value) ? value : null;
 }
 
+function queryFlag(name) {
+  const raw = params.get(name);
+  if (raw === null) {
+    return false;
+  }
+  return !["", "0", "false", "no", "off"].includes(raw.trim().toLowerCase());
+}
+
 function queryText(...names) {
   for (const name of names) {
     const raw = params.get(name);
@@ -133,6 +141,8 @@ function applyConfigOverrides() {
   const cropPadding = queryNumber("cropPadding");
   const detectorModel = queryText("detectorModel", "detectorPath");
   const fragmentClassifierModel = queryText("fragmentClassifierModel", "fragmentModel", "fragmentPath");
+  const fragmentDisagreementMinConf = queryNumber("fragmentDisagreementMinConf");
+  const unclassifiedMinConf = queryNumber("unclassifiedMinConf");
   if (proposalConf !== null) {
     state.config.detector.proposal_confidence = proposalConf;
   }
@@ -144,6 +154,15 @@ function applyConfigOverrides() {
   }
   if (detectorOverride !== null) {
     state.config.fusion.detector_override_confidence = detectorOverride;
+  }
+  if (queryFlag("rejectFragmentDisagreement")) {
+    state.config.fusion.reject_fragment_disagreement = true;
+  }
+  if (fragmentDisagreementMinConf !== null) {
+    state.config.fusion.reject_fragment_disagreement_min_conf = fragmentDisagreementMinConf;
+  }
+  if (unclassifiedMinConf !== null) {
+    state.config.fusion.unclassified_min_conf = unclassifiedMinConf;
   }
   if (nmsIou !== null) {
     state.config.fusion.nms_iou = nmsIou;
@@ -350,11 +369,17 @@ async function classifyFragments(detections) {
     const fragmentName = fragmentClassNames[bestIndex];
     const fragmentScore = probs[bestIndex];
     const overrideConf = state.config?.fusion?.detector_override_confidence ?? 0.17;
+    const rejectOnDisagreement = state.config?.fusion?.reject_fragment_disagreement ?? false;
+    const disagreementMinConf = state.config?.fusion?.reject_fragment_disagreement_min_conf ?? 0;
+    const rejected =
+      rejectOnDisagreement && fragmentName !== detection.detectorName && fragmentScore >= disagreementMinConf;
     const useDetector = detection.detectorScore >= overrideConf;
     classified[index] = {
       ...detection,
       fragmentName,
       fragmentScore,
+      rejected,
+      rejectReason: rejected ? "fragment_disagreement" : "",
       name: useDetector ? detection.detectorName : fragmentName,
       score: useDetector ? detection.detectorScore : fragmentScore,
     };
@@ -472,19 +497,32 @@ async function runModel() {
   const output = outputs[state.detectorSession.outputNames[0]];
   const proposals = parseOutput(output, meta);
   const classified = await classifyFragments(proposals);
-  state.detections = nms(classified);
-  const fragmentClassified = classified.filter((detection) => detection.fragmentName).length;
+  const unclassifiedMinConf = state.config?.fusion?.unclassified_min_conf ?? 0;
+  const filtered = classified.map((detection) => {
+    if (!detection.fragmentName && unclassifiedMinConf > 0 && detection.detectorScore < unclassifiedMinConf) {
+      return { ...detection, rejected: true, rejectReason: "unclassified_low_conf" };
+    }
+    return detection;
+  });
+  const accepted = filtered.filter((detection) => !detection.rejected);
+  state.detections = nms(accepted);
+  const fragmentClassified = filtered.filter((detection) => detection.fragmentName).length;
+  const rejectedProposals = filtered.filter((detection) => detection.rejected).length;
   state.debug = {
     countingMode: COUNTING_MODE,
     countSource: COUNT_SOURCE,
     detectorOutputDims: output.dims,
     detectorProposals: proposals.length,
-    classifiedProposals: classified.length,
+    classifiedProposals: filtered.length,
     fragmentClassifiedProposals: fragmentClassified,
+    rejectedProposals,
+    fragmentDisagreementReject: state.config?.fusion?.reject_fragment_disagreement ?? false,
+    unclassifiedMinConf,
     finalDetections: state.detections.length,
     proposals: proposals.length,
-    classified: classified.length,
+    classified: filtered.length,
     fragmentClassified,
+    rejected: rejectedProposals,
     final: state.detections.length,
   };
   renderDetections();

@@ -46,6 +46,21 @@ def parse_args() -> argparse.Namespace:
         help="Optional fragment classifier ONNX path served from the repo root.",
     )
     parser.add_argument("--stack-config", "--config", dest="stack_config", default="", help="Optional stack config JSON path.")
+    parser.add_argument(
+        "--reject-fragment-disagreement",
+        action="store_true",
+        help="Reject browser proposals when detector and fragment classifier disagree.",
+    )
+    parser.add_argument(
+        "--fragment-disagreement-min-conf",
+        default="",
+        help="Optional minimum fragment confidence for --reject-fragment-disagreement.",
+    )
+    parser.add_argument(
+        "--unclassified-min-conf",
+        default="",
+        help="Reject browser proposals below this detector confidence when they are not fragment-classified.",
+    )
     parser.add_argument("--nms-iou", default="", help="Optional fusion NMS IoU override.")
     parser.add_argument("--crop-padding", default="", help="Optional fragment crop padding override.")
     parser.add_argument("--summary-json", type=Path, help="Optional aggregate JSON summary output path.")
@@ -205,6 +220,9 @@ def browser_stress_report(args: argparse.Namespace, summaries: list[dict], failu
             if args.fragment_classifier_model
             else "",
             "stack_config": repo_asset_arg(args.stack_config, "stack config") if args.stack_config else "",
+            "reject_fragment_disagreement": args.reject_fragment_disagreement,
+            "fragment_disagreement_min_conf": args.fragment_disagreement_min_conf,
+            "unclassified_min_conf": args.unclassified_min_conf,
             "nms_iou": args.nms_iou,
             "crop_padding": args.crop_padding,
         },
@@ -247,6 +265,12 @@ def command_for_case(case: dict[str, str], args: argparse.Namespace, index: int)
         )
     if args.stack_config:
         command.extend(["--stack-config", repo_asset_arg(args.stack_config, "stack config")])
+    if args.reject_fragment_disagreement:
+        command.append("--reject-fragment-disagreement")
+    if args.fragment_disagreement_min_conf:
+        command.extend(["--fragment-disagreement-min-conf", args.fragment_disagreement_min_conf])
+    if args.unclassified_min_conf:
+        command.extend(["--unclassified-min-conf", args.unclassified_min_conf])
     if args.nms_iou:
         command.extend(["--nms-iou", args.nms_iou])
     if args.crop_padding:
