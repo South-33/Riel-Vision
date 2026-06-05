@@ -53,6 +53,7 @@ Done and trusted:
 - `run_yolo_fixed_step_probe.py` is the generic two-config model probe wrapper for staged-dose work: it derives `--max-train-batches` from a reference train list, trains/evals baseline and candidate, then writes the JSON comparison and probe manifest.
 - `check_webgl_class_distribution.py` gates targeted WebGL dose packages from `counts/summary.json`, so class-sequence probes can fail automatically on class leakage, missing expected classes, or excessive class imbalance.
 - `check_webgl_count_stress.py` gates per-image count stress from `counts/targets.jsonl`, including same-class repeat images, max same-class count, split-parent counts, and fragment-overcount pressure.
+- `probe_fragment_count_fusion.py` reports naive fragment overcount, oracle parent-fused counts, and same-class proposal-fused counts with JSON output and optional gates; use it before claiming fragment evidence can preserve physical-note counts.
 - Diagnostic recipe gates can live in `cashsnap_webgl_recipe_catalog_v1.json` and run via `check_webgl_recipe_diagnostic_gates.py`; rare-class and same-class-repeat recipes now declare their accepted audit thresholds.
 - `check_webgl_appearance_diversity.py` is wired into the trainable-candidate gate so accepted packages must keep meaningful camera-profile, surface, luma, and non-geometric RGB postprocess spread instead of collapsing into one synthetic look.
 - `check_synthetic_pipeline_readiness.py` is the mission-level scale audit: it joins target-matrix conditions, recipe catalog rows, the active trainable-candidate suite, rendered package metadata, real benchmark roles, and real capture inventory so synthetic scale decisions fail on explicit condition/validation gaps instead of vibes.
@@ -69,7 +70,7 @@ Still missing:
 - Scoreable real fan/overlap labels for P1 transfer.
 - Scoreable real repeated-denomination fan labels for same-class counting/fusion transfer.
 - Real-derived camera/postprocess profiles from CashSnap captures and EXIF.
-- A fragment-to-physical-note fusion path for real inference.
+- A fragment-to-physical-note fusion path for real browser/inference outputs.
 - Accepted trainable real background banks.
 - A `KHR_2000`/`KHR_50000`-safe accepted blend from staged dose/class shaping, or a justified per-class tolerance for rare-class test variance.
 - A promotable real-only curriculum expansion that beats the p24 gate while preserving rare `KHR_50000`/`KHR_20000` transfer.
@@ -118,6 +119,7 @@ Current useful checks:
 - Trainable-candidate dry run: `rl python scripts\run_webgl_trainable_candidate_pipeline.py --dry-run --train-smoke`
 - Targeted class-dose gate: `rl python scripts\check_webgl_class_distribution.py --root <webgl_root> --expected-classes '<CSV>' --min-images <n> --min-per-class <n> --max-class-spread <n>`
 - Count-stress gate: `rl python scripts\check_webgl_count_stress.py --root <webgl_root> --min-repeat-images <n> --min-max-same-class <n>`
+- Fragment/count fusion probe: `rl python scripts\probe_fragment_count_fusion.py --root <webgl_root> --json-out runs\cashsnap\<name>.json --require-proposal-fused-kept-match --require-proposal-fused-all-match`
 - Recipe diagnostic gates: `rl python scripts\check_webgl_recipe_diagnostic_gates.py --root <webgl_root> --recipe-id <recipe_id>`
 - Appearance diversity gate: `rl python scripts\check_webgl_appearance_diversity.py --root <webgl_root> --min-images <n>`
 - Real benchmark boundary: `rl python scripts\check_real_fan_benchmark.py`
@@ -190,6 +192,7 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-06-05 | evaluation | keep | Fixed-step dose2 probe (`--max-train-batches 223`, matching the 445-row accepted base at batch 2) confirms one extra optimizer batch is not the whole dose2 confound. Neutral row-control dose2 drops from `0.847043` to `0.842007` (`-0.005035`, `KHR_50000 -0.090657` vs full epoch), but fixed-step KHR_10000 clean dose2 drops to `0.817981` and still fails the fixed-step neutral control by `-0.024026` with three per-class failures. Future tiny-dose model probes should use both matched row/class controls and explicit fixed-step budgets. |
 | 2026-06-05 | evaluation | keep | KHR_50000 clean dose2 fixed-step repeats the KHR_10000 conclusion. With the same 223-batch cap it tests at `0.818783`, fails fixed-step neutral row-control by `-0.023224` (worst `KHR_50000 -0.218492`, three per-class failures), and is `-0.006857` below its own full-epoch result (`0.825640`). Fixed-step removes only a small row-count effect; the remaining gap points to curriculum/order/class interaction rather than a uniquely bad synthetic image row. |
 | 2026-06-05 | gates | keep | `check_webgl_trainable_candidate_gate.py` now requires every package to carry a valid count contract: `counts/summary.json` image totals must match QA, `counts/targets.jsonl` must have one row per image, physical totals must match QA visible instances, and `parent_fused_all_fragments` must match physical counts. The existing 7-root trainable-candidate suite passes with 304 images and parent-fused counts matching physical counts; this hardens synthetic count truth but does not replace the still-missing real inference fusion path. |
+| 2026-06-05 | fusion | keep | `probe_fragment_count_fusion.py` now separates naive fragment counting, oracle parent fusion, and same-class proposal fusion. On `webgl_same_class_repeat_fan_v1` balanced audit, naive kept fragments overcount by `+40` and kept+ignored fragments by `+122`, while parent fusion and same-class proposal fusion both recover the 60 physical targets exactly with zero unassigned fragments. This validates the synthetic benchmark and suggests the inference path should count detector proposals with fragment evidence, not raw fragments. |
 | 2026-06-05 | research | keep | Paper pass for best dataset construction supports the current proof-harness direction: domain randomization should cover target nuisance variables, structured randomization should sample plausible scene/context distributions, copy-paste/synthetic augmentation can help rare classes but must be guarded for context/artifacts, synthetic-real mixes beat blind replacement in object detection studies, and curriculum/order matters. Translate this into acceptance criteria: every synthetic scale step needs condition coverage, exact-label QA, domain/dose gates, matched row/class controls, and real-only stress validation. |
 
 ## Trainable Candidate Artifacts
