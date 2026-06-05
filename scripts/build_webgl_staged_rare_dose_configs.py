@@ -568,6 +568,27 @@ def main() -> int:
             repo_rel(dose_root / str(row["image"]))
             for row in selected_rows
         ]
+        if (
+            args.write_row_count_controls
+            and args.fail_on_inexact_real_class_mix_control
+            and args.control_source == "real_class_mix"
+        ):
+            precheck_match_report: list[dict[str, Any]] = []
+            row_count_control_rows(
+                dataset_root,
+                base_rows,
+                dose,
+                args.control_source,
+                class_id=control_class_id,
+                target_rows=dose_image_rows,
+                selection_report=precheck_match_report,
+            )
+            precheck_exact_matches = sum(1 for row in precheck_match_report if row.get("exact"))
+            if precheck_match_report and precheck_exact_matches != len(precheck_match_report):
+                raise SystemExit(
+                    "real_class_mix row-count control is not exact "
+                    f"for dose {dose}: {precheck_exact_matches}/{len(precheck_match_report)} exact matches"
+                )
         combined_rows = list(dict.fromkeys([*base_rows, *dose_image_rows]))
         stem = f"{args.stem_prefix}_dose{dose}"
 
