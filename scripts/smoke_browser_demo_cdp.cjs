@@ -50,6 +50,9 @@ function parseArgs(argv) {
     matchIou: 0.5,
     proposalConf: "",
     detectorOverride: "",
+    detectorModel: "",
+    fragmentClassifierModel: "",
+    stackConfig: "",
     nmsIou: "",
     cropPadding: "",
     minSameClass: null,
@@ -95,6 +98,20 @@ function parseArgs(argv) {
     } else if (key === "--detector-override") {
       args.detectorOverride = value;
       index += 1;
+    } else if (key === "--detector-model" || key === "--detector-path") {
+      args.detectorModel = value;
+      index += 1;
+    } else if (
+      key === "--fragment-classifier-model" ||
+      key === "--fragment-classifier-path" ||
+      key === "--fragment-model" ||
+      key === "--fragment-path"
+    ) {
+      args.fragmentClassifierModel = value;
+      index += 1;
+    } else if (key === "--stack-config" || key === "--config") {
+      args.stackConfig = value;
+      index += 1;
     } else if (key === "--nms-iou") {
       args.nmsIou = value;
       index += 1;
@@ -138,6 +155,9 @@ Options:
   --match-iou NUMBER  IoU threshold for --labels evaluation. Default: 0.5.
   --proposal-conf N   Override browser detector proposal confidence.
   --detector-override N Override detector-vs-fragment threshold.
+  --detector-model PATH Override detector ONNX model path served from the repo root.
+  --fragment-classifier-model PATH Override fragment classifier ONNX model path served from the repo root.
+  --stack-config PATH Override stack config JSON served from the repo root.
   --nms-iou N         Override browser fusion NMS IoU.
   --crop-padding N    Override fragment crop padding fraction.
   --min-same-class N  Fail if labeled final same-class matches are below N.
@@ -577,6 +597,9 @@ function browserUrl(args) {
   params.set("autorun", "1");
   if (args.proposalConf) params.set("proposalConf", args.proposalConf);
   if (args.detectorOverride) params.set("detectorOverride", args.detectorOverride);
+  if (args.detectorModel) params.set("detectorModel", args.detectorModel);
+  if (args.fragmentClassifierModel) params.set("fragmentClassifierModel", args.fragmentClassifierModel);
+  if (args.stackConfig) params.set("stackConfig", args.stackConfig);
   if (args.nmsIou) params.set("nmsIou", args.nmsIou);
   if (args.cropPadding) params.set("cropPadding", args.cropPadding);
   return `http://127.0.0.1:${args.port}/demo/browser/?${params.toString()}`;

@@ -74,7 +74,7 @@ const countsList = document.getElementById("countsList");
 async function loadModel() {
   try {
     ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/";
-    const configResponse = await fetch(STACK_CONFIG_URL);
+    const configResponse = await fetch(stackConfigUrl());
     if (!configResponse.ok) {
       throw new Error(`Config HTTP ${configResponse.status}`);
     }
@@ -111,13 +111,36 @@ function queryNumber(name) {
   return Number.isFinite(value) ? value : null;
 }
 
+function queryText(...names) {
+  for (const name of names) {
+    const raw = params.get(name);
+    if (raw !== null && raw.trim() !== "") {
+      return raw.trim();
+    }
+  }
+  return "";
+}
+
+function stackConfigUrl() {
+  const override = queryText("stackConfig", "config");
+  return override ? repoUrl(override) : STACK_CONFIG_URL;
+}
+
 function applyConfigOverrides() {
   const proposalConf = queryNumber("proposalConf") ?? queryNumber("conf");
   const detectorOverride = queryNumber("detectorOverride");
   const nmsIou = queryNumber("nmsIou");
   const cropPadding = queryNumber("cropPadding");
+  const detectorModel = queryText("detectorModel", "detectorPath");
+  const fragmentClassifierModel = queryText("fragmentClassifierModel", "fragmentModel", "fragmentPath");
   if (proposalConf !== null) {
     state.config.detector.proposal_confidence = proposalConf;
+  }
+  if (detectorModel) {
+    state.config.detector.path = detectorModel;
+  }
+  if (fragmentClassifierModel) {
+    state.config.fragment_classifier.path = fragmentClassifierModel;
   }
   if (detectorOverride !== null) {
     state.config.fusion.detector_override_confidence = detectorOverride;

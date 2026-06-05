@@ -29,6 +29,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--edge", default="", help="Optional Edge executable path forwarded to the node smoke script.")
     parser.add_argument("--proposal-conf", default="", help="Optional browser detector proposal confidence override.")
     parser.add_argument("--detector-override", default="", help="Optional detector-vs-fragment fusion threshold override.")
+    parser.add_argument(
+        "--detector-model",
+        "--detector-path",
+        dest="detector_model",
+        default="",
+        help="Optional detector ONNX path served from the repo root.",
+    )
+    parser.add_argument(
+        "--fragment-classifier-model",
+        "--fragment-classifier-path",
+        "--fragment-model",
+        "--fragment-path",
+        dest="fragment_classifier_model",
+        default="",
+        help="Optional fragment classifier ONNX path served from the repo root.",
+    )
+    parser.add_argument("--stack-config", "--config", dest="stack_config", default="", help="Optional stack config JSON path.")
     parser.add_argument("--nms-iou", default="", help="Optional fusion NMS IoU override.")
     parser.add_argument("--crop-padding", default="", help="Optional fragment crop padding override.")
     parser.add_argument("--summary-json", type=Path, help="Optional aggregate JSON summary output path.")
@@ -64,7 +81,29 @@ def fingerprint_file(path: Path) -> dict[str, object]:
     return row
 
 
-def browser_stack_config_path() -> Path:
+def browser_asset_path(value: str) -> Path:
+    raw = value.strip()
+    if raw.startswith("/"):
+        return ROOT / raw.lstrip("/")
+    return resolve(Path(raw))
+
+
+def repo_asset_arg(value: str, label: str) -> str:
+    raw = value.strip()
+    if not raw:
+        return ""
+    path = browser_asset_path(raw)
+    if not path.exists():
+        raise ValueError(f"{label} not found: {raw}")
+    try:
+        return path.resolve().relative_to(ROOT).as_posix()
+    except ValueError as exc:
+        raise ValueError(f"{label} must be under repo root for browser serving: {raw}") from exc
+
+
+def browser_stack_config_path(override: str = "") -> Path:
+    if override.strip():
+        return browser_asset_path(override)
     app_text = DEFAULT_BROWSER_APP.read_text(encoding="utf-8")
     match = re.search(r'STACK_CONFIG_URL\s*=\s*"([^"]+)"', app_text)
     if not match:
@@ -83,23 +122,23 @@ def read_browser_stack_config(path: Path) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def browser_input_fingerprints(cases_path: Path) -> dict[str, dict[str, object]]:
-    stack_path = browser_stack_config_path()
+def browser_input_fingerprints(args: argparse.Namespace) -> dict[str, dict[str, object]]:
+    stack_path = browser_stack_config_path(args.stack_config)
     stack_config = read_browser_stack_config(stack_path)
     fingerprints: dict[str, dict[str, object]] = {
-        "case_manifest": fingerprint_file(cases_path),
+        "case_manifest": fingerprint_file(args.cases),
         "smoke_runner": fingerprint_file(Path(__file__)),
         "smoke_cdp": fingerprint_file(DEFAULT_SMOKE_CDP),
         "browser_app": fingerprint_file(DEFAULT_BROWSER_APP),
         "browser_index": fingerprint_file(DEFAULT_BROWSER_INDEX),
         "browser_stack_config": fingerprint_file(stack_path),
     }
-    detector_path = str((stack_config.get("detector") or {}).get("path", "")).strip()
+    detector_path = args.detector_model.strip() or str((stack_config.get("detector") or {}).get("path", "")).strip()
     if detector_path:
-        fingerprints["detector_model"] = fingerprint_file(Path(detector_path))
-    fragment_path = str((stack_config.get("fragment_classifier") or {}).get("path", "")).strip()
+        fingerprints["detector_model"] = fingerprint_file(browser_asset_path(detector_path))
+    fragment_path = args.fragment_classifier_model.strip() or str((stack_config.get("fragment_classifier") or {}).get("path", "")).strip()
     if fragment_path:
-        fingerprints["fragment_classifier_model"] = fingerprint_file(Path(fragment_path))
+        fingerprints["fragment_classifier_model"] = fingerprint_file(browser_asset_path(fragment_path))
     return fingerprints
 
 
@@ -155,12 +194,17 @@ def browser_stress_report(args: argparse.Namespace, summaries: list[dict], failu
         "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "case_count": len(summaries),
         "case_manifest": repo_path(resolve(args.cases)),
-        "input_fingerprints": browser_input_fingerprints(args.cases),
+        "input_fingerprints": browser_input_fingerprints(args),
         "settings": {
             "timeout_ms": int(args.timeout_ms),
             "edge": args.edge,
             "proposal_conf": args.proposal_conf,
             "detector_override": args.detector_override,
+            "detector_model": repo_asset_arg(args.detector_model, "detector model") if args.detector_model else "",
+            "fragment_classifier_model": repo_asset_arg(args.fragment_classifier_model, "fragment classifier model")
+            if args.fragment_classifier_model
+            else "",
+            "stack_config": repo_asset_arg(args.stack_config, "stack config") if args.stack_config else "",
             "nms_iou": args.nms_iou,
             "crop_padding": args.crop_padding,
         },
@@ -195,6 +239,14 @@ def command_for_case(case: dict[str, str], args: argparse.Namespace, index: int)
         command.extend(["--proposal-conf", args.proposal_conf])
     if args.detector_override:
         command.extend(["--detector-override", args.detector_override])
+    if args.detector_model:
+        command.extend(["--detector-model", repo_asset_arg(args.detector_model, "detector model")])
+    if args.fragment_classifier_model:
+        command.extend(
+            ["--fragment-classifier-model", repo_asset_arg(args.fragment_classifier_model, "fragment classifier model")]
+        )
+    if args.stack_config:
+        command.extend(["--stack-config", repo_asset_arg(args.stack_config, "stack config")])
     if args.nms_iou:
         command.extend(["--nms-iou", args.nms_iou])
     if args.crop_padding:
@@ -217,6 +269,12 @@ def command_for_case(case: dict[str, str], args: argparse.Namespace, index: int)
 
 def main() -> None:
     args = parse_args()
+    for value, label in [
+        (args.detector_model, "detector model"),
+        (args.fragment_classifier_model, "fragment classifier model"),
+        (args.stack_config, "stack config"),
+    ]:
+        repo_asset_arg(value, label)
     cases = read_cases(args.cases)
     if not cases:
         raise SystemExit(f"no smoke cases found in {resolve(args.cases).relative_to(ROOT)}")
