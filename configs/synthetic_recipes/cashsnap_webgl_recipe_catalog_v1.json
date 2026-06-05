@@ -66,6 +66,7 @@
       "scene_modes": ["fan"],
       "asset_side_policy": "any",
       "camera_profile": "phone_auto",
+      "render_pool_count": 20,
       "class_sequence": [
         "KHR_5000",
         "KHR_5000",
@@ -80,6 +81,13 @@
         "KHR_50000",
         "KHR_50000"
       ],
+      "balanced_subset": {
+        "count": 12,
+        "classes": ["KHR_5000", "KHR_10000", "KHR_20000", "KHR_50000"],
+        "min_per_class": 15,
+        "max_class_spread": 2,
+        "max_class_ratio": 1.14
+      },
       "diagnostic_gates": {
         "class_distribution": {
           "expected_classes": ["KHR_5000", "KHR_10000", "KHR_20000", "KHR_50000"],
@@ -98,7 +106,7 @@
       },
       "intended_use": "Stress repeated same-denomination bills inside one handheld fan so count/fusion logic does not merge physical notes.",
       "promotion_gate": "same-class repeat count metrics improve while parent fusion preserves physical instances and clean/browser guardrails hold",
-      "current_blocker": "Sequence distribution and count-stress audit passed on 12 fan images; still needs real repeated-denomination fan validation before trainable-candidate use."
+      "current_blocker": "Balanced subset selection packages 12 fan images from a 20-image render pool for repeat-count stress; still needs real repeated-denomination fan validation before trainable-candidate use."
     },
     {
       "id": "webgl_hand_occlusion_fragments_v1",
