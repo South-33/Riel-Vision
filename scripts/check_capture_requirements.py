@@ -114,6 +114,10 @@ def write_shot_list(path: Path, reports: list[dict[str, object]], inbox: Path) -
     lines = [
         "# CashSnap Real Capture Shot List",
         "",
+        "Create or refresh the capture folders and guide files with:",
+        "",
+        "`rl python scripts/init_capture_inbox.py --write-guides`",
+        "",
         "Drop phone photos into the listed folders, then register them with:",
         "",
         f"`rl python scripts/register_capture_photos.py --images-dir {inbox_path} --recursive --scene-type-from-parent --dry-run`",
