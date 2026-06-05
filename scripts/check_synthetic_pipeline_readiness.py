@@ -18,6 +18,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+try:
+    from capture_artifact_guard import derived_capture_reason, derived_capture_tokens
+except ModuleNotFoundError:  # Allows importing this script as scripts.check_synthetic_pipeline_readiness.
+    from scripts.capture_artifact_guard import derived_capture_reason, derived_capture_tokens
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TARGETS = ROOT / "configs" / "synthetic_targets" / "cashsnap_real_target_matrix_v1.json"
@@ -83,17 +88,6 @@ BLOCKING_TARGET_STATUSES = {
 }
 
 USABLE_RIGHTS = {"own_photo", "rights_clear", "public_domain", "cc0"}
-DERIVED_CAPTURE_ARTIFACT_TOKENS = {
-    "annotated",
-    "bpmn",
-    "contact_sheet",
-    "diagram",
-    "overlay",
-    "prediction",
-    "preview",
-    "screenshot",
-    "synthetic",
-}
 
 
 def parse_args() -> argparse.Namespace:
@@ -234,19 +228,14 @@ def scoreable_real_images_by_role(source_rows: list[dict[str, str]], scoreable_i
     return {role: sorted(image_ids) for role, image_ids in sorted(role_images.items())}
 
 
-def derived_capture_tokens(local_path: str) -> list[str]:
-    haystack = local_path.replace("\\", "/").lower()
-    return sorted(token for token in DERIVED_CAPTURE_ARTIFACT_TOKENS if token in haystack)
-
-
 def capture_inventory_issues(rows: list[dict[str, str]]) -> list[str]:
     issues: list[str] = []
     for row in rows:
         image_id = row.get("image_id", "").strip() or "<missing image_id>"
         local_path = row.get("local_path", "").strip()
-        tokens = derived_capture_tokens(local_path)
-        if tokens:
-            issues.append(f"{image_id}: likely derived/non-raw capture artifact ({','.join(tokens)})")
+        reason = derived_capture_reason(local_path)
+        if reason:
+            issues.append(f"{image_id}: {reason}")
     return issues
 
 

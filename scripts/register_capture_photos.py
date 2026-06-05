@@ -5,6 +5,11 @@ import csv
 import re
 from pathlib import Path
 
+try:
+    from capture_artifact_guard import derived_capture_tokens
+except ModuleNotFoundError:  # Allows importing this script as scripts.register_capture_photos.
+    from scripts.capture_artifact_guard import derived_capture_tokens
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INVENTORY = ROOT / "manifests" / "real_partial_capture_inventory.csv"
@@ -21,17 +26,6 @@ FIELDNAMES = [
     "notes",
 ]
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
-DERIVED_ARTIFACT_TOKENS = {
-    "annotated",
-    "bpmn",
-    "contact_sheet",
-    "diagram",
-    "overlay",
-    "prediction",
-    "preview",
-    "screenshot",
-    "synthetic",
-}
 
 
 def parse_args() -> argparse.Namespace:
@@ -87,11 +81,6 @@ def slug(value: str) -> str:
 def iter_images(images_dir: Path, recursive: bool) -> list[Path]:
     pattern = "**/*" if recursive else "*"
     return sorted(path for path in images_dir.glob(pattern) if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS)
-
-
-def derived_artifact_tokens(path: Path) -> list[str]:
-    haystack = path.as_posix().lower()
-    return sorted(token for token in DERIVED_ARTIFACT_TOKENS if token in haystack)
 
 
 def read_existing(path: Path) -> list[dict[str, str]]:
@@ -165,7 +154,7 @@ def validate_scene_types(args: argparse.Namespace, images_dir: Path, images: lis
 def validate_raw_capture_images(args: argparse.Namespace, images: list[Path]) -> None:
     if args.allow_derived_artifacts:
         return
-    rejected = [(image, derived_artifact_tokens(image)) for image in images]
+    rejected = [(image, derived_capture_tokens(image.as_posix())) for image in images]
     rejected = [(image, tokens) for image, tokens in rejected if tokens]
     if not rejected:
         return
