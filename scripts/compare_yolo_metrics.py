@@ -39,6 +39,21 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Allow at most this much negative delta for each comparable class.",
     )
+    parser.add_argument(
+        "--only-classes",
+        default="",
+        help="Optional comma/semicolon separated class-name filter for per-class comparison.",
+    )
+    parser.add_argument(
+        "--classes-from-summary",
+        default=None,
+        help="Optional dataset summary JSON whose 'classes' keys define the per-class comparison filter.",
+    )
+    parser.add_argument(
+        "--ignore-missing-classes",
+        action="store_true",
+        help="Do not fail the per-class guard for filtered classes missing from one metrics file.",
+    )
     parser.add_argument("--json-out", default=None, help="Optional machine-readable comparison output.")
     parser.add_argument("--no-fail", action="store_true", help="Always exit 0, even when the comparison fails.")
     return parser.parse_args()
@@ -69,11 +84,29 @@ def per_class_by_name(document: dict) -> dict[str, dict]:
     return by_name
 
 
-def compare_per_class(baseline: dict, candidate: dict, metric_name: str = "map50_95") -> list[dict]:
+def parse_class_filter(raw_value: str) -> set[str]:
+    return {value.strip() for value in raw_value.replace(";", ",").split(",") if value.strip()}
+
+
+def summary_classes(path: Path) -> set[str]:
+    document = read_json(path)
+    classes = document.get("classes", {})
+    if not isinstance(classes, dict):
+        raise ValueError(f"{path}: expected object at 'classes'")
+    return {str(name) for name in classes}
+
+
+def compare_per_class(
+    baseline: dict,
+    candidate: dict,
+    metric_name: str = "map50_95",
+    only_classes: set[str] | None = None,
+) -> list[dict]:
     baseline_rows = per_class_by_name(baseline)
     candidate_rows = per_class_by_name(candidate)
     rows = []
-    for class_name in sorted(set(baseline_rows) | set(candidate_rows)):
+    class_names = only_classes if only_classes is not None else set(baseline_rows) | set(candidate_rows)
+    for class_name in sorted(class_names):
         baseline_value = baseline_rows.get(class_name, {}).get(metric_name)
         candidate_value = candidate_rows.get(class_name, {}).get(metric_name)
         row = {
@@ -88,7 +121,7 @@ def compare_per_class(baseline: dict, candidate: dict, metric_name: str = "map50
     return rows
 
 
-def per_class_guard(rows: list[dict], max_drop: float) -> tuple[dict, list[dict]]:
+def per_class_guard(rows: list[dict], max_drop: float, *, ignore_missing_classes: bool = False) -> tuple[dict, list[dict]]:
     if max_drop < 0:
         raise ValueError("--max-per-class-drop must be non-negative")
 
@@ -96,16 +129,18 @@ def per_class_guard(rows: list[dict], max_drop: float) -> tuple[dict, list[dict]
     missing = [row for row in rows if row.get("delta") is None]
     failures = [row for row in comparable if float(row["delta"]) < -max_drop]
     worst = min(comparable, key=lambda row: float(row["delta"]), default=None)
+    blocking_missing = [] if ignore_missing_classes else missing
     check = {
         "name": "max_per_class_drop",
-        "passed": not failures and not missing,
+        "passed": not failures and not blocking_missing,
         "threshold": -max_drop,
         "actual_delta": None if worst is None else float(worst["delta"]),
         "worst_class": None if worst is None else worst.get("class_name"),
         "failed_classes": [row.get("class_name") for row in failures],
         "missing_classes": [row.get("class_name") for row in missing],
+        "ignore_missing_classes": ignore_missing_classes,
     }
-    return check, failures + missing
+    return check, failures + blocking_missing
 
 
 def write_json(path: Path, payload: dict) -> None:
@@ -122,7 +157,15 @@ def main() -> int:
     baseline_value = result_metric(baseline, args.metric)
     candidate_value = result_metric(candidate, args.metric)
     delta = candidate_value - baseline_value
-    per_class_rows = compare_per_class(baseline, candidate, args.per_class_metric)
+    only_classes = parse_class_filter(args.only_classes)
+    if args.classes_from_summary:
+        only_classes.update(summary_classes(resolve(args.classes_from_summary)))
+    per_class_rows = compare_per_class(
+        baseline,
+        candidate,
+        args.per_class_metric,
+        only_classes=only_classes or None,
+    )
 
     checks = [
         {
@@ -143,7 +186,11 @@ def main() -> int:
         )
     per_class_failures = []
     if args.max_per_class_drop is not None:
-        check, per_class_failures = per_class_guard(per_class_rows, args.max_per_class_drop)
+        check, per_class_failures = per_class_guard(
+            per_class_rows,
+            args.max_per_class_drop,
+            ignore_missing_classes=args.ignore_missing_classes,
+        )
         checks.append(check)
 
     passed = all(check["passed"] for check in checks)
@@ -158,6 +205,7 @@ def main() -> int:
         "checks": checks,
         "per_class_metric": args.per_class_metric,
         "max_per_class_drop": args.max_per_class_drop,
+        "only_classes": sorted(only_classes),
         "per_class_failures": per_class_failures,
         "per_class_map50_95": per_class_rows,
     }
