@@ -48,6 +48,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-domain-gap-gate", action="store_true")
     parser.add_argument("--fail-on-domain-gap", action="store_true")
     parser.add_argument("--skip-yolo-check", action="store_true")
+    parser.add_argument(
+        "--write-row-count-controls",
+        action="store_true",
+        help="Also write matched configs that append duplicate base rows instead of synthetic dose rows.",
+    )
+    parser.add_argument(
+        "--control-stem-prefix",
+        default=None,
+        help="Output stem prefix for row-count controls; defaults to '<stem-prefix>_row_control'.",
+    )
+    parser.add_argument(
+        "--control-source",
+        choices=("background", "first"),
+        default="background",
+        help="Base rows to duplicate for matched row-count controls.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -265,9 +281,30 @@ def image_class_summary(dataset_root: Path, rows: list[str], names: dict[int, st
                 class_counts[class_id] += 1
     return {
         "images": len(rows),
+        "unique_images": len(set(rows)),
         "backgrounds": int(background_count),
         "class_images": {names[class_id]: int(class_counts[class_id]) for class_id in sorted(names)},
     }
+
+
+def row_count_control_rows(dataset_root: Path, base_rows: list[str], count: int, source: str) -> list[str]:
+    if count < 1:
+        raise SystemExit("row-count control count must be positive")
+    if source == "background":
+        pool = [
+            row
+            for row in base_rows
+            if not label_classes(image_path_from_repo_line(dataset_root, row))
+        ]
+        if not pool:
+            raise SystemExit("base train list has no empty-label background rows for row-count controls")
+    elif source == "first":
+        pool = list(base_rows)
+    else:
+        raise SystemExit(f"unsupported row-count control source: {source}")
+    if not pool:
+        raise SystemExit("base train list is empty")
+    return [pool[index % len(pool)] for index in range(count)]
 
 
 def names_by_id(config: dict[str, Any]) -> dict[int, str]:
@@ -338,30 +375,21 @@ def main() -> int:
     class_names = names_by_id(base_config)
     dose_manifest = manifest_rows(dose_root)
     row_counts = [visible_counts_for_row(dose_root, row) for row in dose_manifest]
+    control_stem_prefix = args.control_stem_prefix or f"{args.stem_prefix}_row_control"
 
-    for dose in doses:
-        selected_rows, dose_report = selected_dose_rows(
-            dose_manifest,
-            row_counts,
-            dose,
-            dose_classes,
-            args.max_combinations,
-        )
-        dose_image_rows = [
-            repo_rel(dose_root / str(row["image"]))
-            for row in selected_rows
-        ]
-        combined_rows = list(dict.fromkeys([*base_rows, *dose_image_rows]))
-        stem = f"{args.stem_prefix}_dose{dose}"
+    def emit_config(
+        *,
+        stem: str,
+        combined_rows: list[str],
+        extra_policy: dict[str, Any],
+        extra_sources: dict[str, Any],
+        staged_dose: dict[str, Any] | None = None,
+        row_count_control: dict[str, Any] | None = None,
+    ) -> None:
         out_path = out_dir / f"{stem}.yaml"
         train_list = list_dir / f"{stem}_train.txt"
         domain_gap_json = domain_gap_dir / f"domain_gap_{stem}_train.json"
 
-        print(
-            f"dose={dose} variants={','.join(str(v) for v in dose_report['selected_variants'])} "
-            f"counts={json.dumps(dose_report['selected_counts']['by_class'], sort_keys=True)}",
-            flush=True,
-        )
         if args.dry_run:
             print(f"would_write {repo_rel(out_path)}")
             print(f"would_write {repo_rel(train_list)}")
@@ -372,35 +400,29 @@ def main() -> int:
             config["train"] = repo_rel(train_list)
             config.pop("cashsnap_webgl_blend_gate", None)
             config.pop("cashsnap_domain_gap_gate", None)
+            config.pop("cashsnap_webgl_staged_dose", None)
+            config.pop("cashsnap_row_count_control", None)
             policy = copy.deepcopy(config.get("cashsnap_subset_policy", {}))
             if not isinstance(policy, dict):
                 policy = {}
             selected_summary = image_class_summary(dataset_root, combined_rows, class_names)
-            dose_summary = image_class_summary(dataset_root, dose_image_rows, class_names)
-            policy["selected_unique_images"] = selected_summary["images"]
+            policy["selected_unique_images"] = selected_summary["unique_images"]
             policy["selected_images"] = selected_summary["images"]
             policy["selected_backgrounds"] = selected_summary["backgrounds"]
             policy["selected_class_images"] = selected_summary["class_images"]
-            policy["staged_dose_images"] = dose_summary["images"]
-            policy["staged_dose_class_images"] = dose_summary["class_images"]
+            policy.update(extra_policy)
             config["cashsnap_subset_policy"] = policy
             sources = copy.deepcopy(config.get("cashsnap_sources", {}))
             if not isinstance(sources, dict):
                 sources = {}
             sources["base_config"] = repo_rel(base_path)
             sources["base_train_list"] = repo_rel(base_train_list)
-            sources["staged_dose_root"] = repo_rel(dose_root)
-            sources["staged_dose_recipe_id"] = args.recipe_id
+            sources.update(extra_sources)
             config["cashsnap_sources"] = sources
-            config["cashsnap_webgl_staged_dose"] = {
-                "base_config": repo_rel(base_path),
-                "base_train_list": repo_rel(base_train_list),
-                "dose_root": repo_rel(dose_root),
-                "dose_recipe_id": args.recipe_id,
-                "stem_prefix": args.stem_prefix,
-                "dose_image_rows": dose_image_rows,
-                **dose_report,
-            }
+            if staged_dose is not None:
+                config["cashsnap_webgl_staged_dose"] = staged_dose
+            if row_count_control is not None:
+                config["cashsnap_row_count_control"] = row_count_control
             write_yaml(out_path, config)
 
         check_command = yolo_check_command(out_path, args.skip_yolo_check)
@@ -420,6 +442,82 @@ def main() -> int:
         if not args.dry_run:
             print(f"wrote {repo_rel(out_path)}")
             print(f"wrote {repo_rel(train_list)}")
+
+    for dose in doses:
+        selected_rows, dose_report = selected_dose_rows(
+            dose_manifest,
+            row_counts,
+            dose,
+            dose_classes,
+            args.max_combinations,
+        )
+        dose_image_rows = [
+            repo_rel(dose_root / str(row["image"]))
+            for row in selected_rows
+        ]
+        combined_rows = list(dict.fromkeys([*base_rows, *dose_image_rows]))
+        stem = f"{args.stem_prefix}_dose{dose}"
+
+        print(
+            f"dose={dose} variants={','.join(str(v) for v in dose_report['selected_variants'])} "
+            f"counts={json.dumps(dose_report['selected_counts']['by_class'], sort_keys=True)}",
+            flush=True,
+        )
+        dose_summary = image_class_summary(dataset_root, dose_image_rows, class_names)
+        emit_config(
+            stem=stem,
+            combined_rows=combined_rows,
+            extra_policy={
+                "staged_dose_images": dose_summary["images"],
+                "staged_dose_class_images": dose_summary["class_images"],
+            },
+            extra_sources={
+                "staged_dose_root": repo_rel(dose_root),
+                "staged_dose_recipe_id": args.recipe_id,
+            },
+            staged_dose={
+                "base_config": repo_rel(base_path),
+                "base_train_list": repo_rel(base_train_list),
+                "dose_root": repo_rel(dose_root),
+                "dose_recipe_id": args.recipe_id,
+                "stem_prefix": args.stem_prefix,
+                "dose_image_rows": dose_image_rows,
+                **dose_report,
+            },
+        )
+
+        if args.write_row_count_controls:
+            control_rows = row_count_control_rows(dataset_root, base_rows, dose, args.control_source)
+            control_summary = image_class_summary(dataset_root, control_rows, class_names)
+            control_stem = f"{control_stem_prefix}_dose{dose}"
+            print(
+                f"row_control dose={dose} source={args.control_source} "
+                f"unique={control_summary['unique_images']} backgrounds={control_summary['backgrounds']}",
+                flush=True,
+            )
+            emit_config(
+                stem=control_stem,
+                combined_rows=[*base_rows, *control_rows],
+                extra_policy={
+                    "row_count_control_images": control_summary["images"],
+                    "row_count_control_unique_images": control_summary["unique_images"],
+                    "row_count_control_backgrounds": control_summary["backgrounds"],
+                    "row_count_control_class_images": control_summary["class_images"],
+                },
+                extra_sources={
+                    "row_count_control_base_train_list": repo_rel(base_train_list),
+                    "row_count_control_source": args.control_source,
+                },
+                row_count_control={
+                    "base_config": repo_rel(base_path),
+                    "base_train_list": repo_rel(base_train_list),
+                    "stem_prefix": control_stem_prefix,
+                    "source": args.control_source,
+                    "matched_dose_images": int(dose),
+                    "control_image_rows": control_rows,
+                    "note": "Duplicates base rows to match train-list row count without adding synthetic note exposure.",
+                },
+            )
 
     return 0
 
