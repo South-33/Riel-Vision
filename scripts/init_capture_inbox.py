@@ -66,6 +66,8 @@ def denomination_hint(scene_type: str) -> str:
         return " --denominations \"KHR_5000\""
     if lower == "single_khr":
         return " --denominations \"KHR_...\""
+    if lower == "mixed_usd_khr_rare_common":
+        return " --denominations \"KHR_50000;KHR_...;USD_...\""
     if lower == "mixed_usd_khr":
         return " --denominations \"KHR_...;USD_...\""
     return ""
@@ -111,7 +113,7 @@ def root_guide_text(rows: list[dict[str, str]], out_dir: Path) -> str:
             "After adding photos, register them with:",
             f"rl python scripts/register_capture_photos.py --images-dir {repo_path(out_dir)} --recursive --scene-type-from-parent --dry-run",
             f"rl python scripts/register_capture_photos.py --images-dir {repo_path(out_dir)} --recursive --scene-type-from-parent",
-            "Thin-slice folder names auto-fill their KHR denomination during registration.",
+            "Thin-slice and mixed rare/common folder names auto-fill their denomination hints during registration.",
             "",
             "Then check remaining gaps with:",
             "rl python scripts/check_capture_requirements.py",
