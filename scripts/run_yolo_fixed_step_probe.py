@@ -67,6 +67,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-per-class-drop", type=float, default=0.05)
     parser.add_argument("--fail-on-row-count-mismatch", action="store_true")
     parser.add_argument("--fail-on-step-reference-mismatch", action="store_true")
+    parser.add_argument(
+        "--fail-on-inexact-real-class-mix-control",
+        action="store_true",
+        help="Fail preflight if either config declares a real_class_mix row-count control that is not exact.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -96,6 +101,24 @@ def read_yaml(path: Path) -> dict[str, Any]:
     if not isinstance(config, dict):
         raise ValueError(f"expected YAML mapping: {path}")
     return config
+
+
+def row_count_control(path: Path) -> dict[str, Any]:
+    control = read_yaml(path).get("cashsnap_row_count_control", {})
+    return control if isinstance(control, dict) else {}
+
+
+def inexact_real_class_mix_control_reason(path: Path) -> str | None:
+    control = row_count_control(path)
+    source = str(control.get("source", ""))
+    if not source.startswith("real_class_mix"):
+        return None
+    if control.get("class_mix_all_exact") is True:
+        return None
+    report = control.get("class_mix_match_report", [])
+    total = len(report) if isinstance(report, list) else control.get("matched_dose_images", "?")
+    matches = control.get("class_mix_exact_matches", "?")
+    return f"{repo_rel(path)} real_class_mix control is inexact ({matches}/{total} exact)"
 
 
 def data_root(config_path: Path, config: dict[str, Any]) -> Path:
@@ -489,6 +512,12 @@ def main() -> int:
     reference_rows = int(reference_rows_summary["rows"])
     steps = args.max_train_batches or math.ceil(reference_rows / args.batch)
     args.project.mkdir(parents=True, exist_ok=True)
+    real_class_mix_control_failures = [
+        {"role": role, "reason": reason}
+        for role, path in (("baseline", args.baseline_data), ("candidate", args.candidate_data))
+        for reason in [inexact_real_class_mix_control_reason(path)]
+        if reason is not None
+    ]
 
     preflight = {
         "baseline_data": repo_rel(args.baseline_data),
@@ -510,7 +539,9 @@ def main() -> int:
         "guards": {
             "fail_on_row_count_mismatch": args.fail_on_row_count_mismatch,
             "fail_on_step_reference_mismatch": args.fail_on_step_reference_mismatch,
+            "fail_on_inexact_real_class_mix_control": args.fail_on_inexact_real_class_mix_control,
         },
+        "real_class_mix_control_failures": real_class_mix_control_failures,
     }
     if args.preflight_json is not None:
         args.preflight_json = resolve(args.preflight_json)
@@ -526,6 +557,9 @@ def main() -> int:
             "step-reference train row count differs from baseline "
             f"({reference_rows} vs {baseline_rows['rows']}); rerun without --fail-on-step-reference-mismatch if deliberate"
         )
+    if args.fail_on_inexact_real_class_mix_control and real_class_mix_control_failures:
+        reasons = "; ".join(f"{row['role']}: {row['reason']}" for row in real_class_mix_control_failures)
+        raise SystemExit(f"inexact real_class_mix row-count control(s): {reasons}")
     if args.preflight_only:
         print(
             "preflight_ok "
