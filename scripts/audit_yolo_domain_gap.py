@@ -50,6 +50,7 @@ DOMAIN_GAP_PRESETS = {
         },
         "max_synthetic_image_ratio": 0.60,
         "max_synthetic_box_ratio": 1.25,
+        "max_synthetic_class_box_ratio": 3.00,
     }
 }
 
@@ -89,6 +90,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--max-synthetic-image-ratio", type=float, default=None)
     parser.add_argument("--max-synthetic-box-ratio", type=float, default=None)
+    parser.add_argument("--max-synthetic-class-box-ratio", type=float, default=None)
     parser.add_argument("--min-real-images", type=int, default=1)
     parser.add_argument("--min-synthetic-images", type=int, default=1)
     return parser.parse_args()
@@ -363,6 +365,11 @@ def gate_domain_gap(payload: dict[str, Any], args: argparse.Namespace) -> dict[s
         if args.max_synthetic_box_ratio is not None
         else preset.get("max_synthetic_box_ratio")
     )
+    max_synthetic_class_box_ratio = (
+        args.max_synthetic_class_box_ratio
+        if args.max_synthetic_class_box_ratio is not None
+        else preset.get("max_synthetic_class_box_ratio")
+    )
     gate_requested = bool(
         args.fail_on_gap
         or args.gate_preset
@@ -370,6 +377,7 @@ def gate_domain_gap(payload: dict[str, Any], args: argparse.Namespace) -> dict[s
         or box_limits
         or max_synthetic_image_ratio is not None
         or max_synthetic_box_ratio is not None
+        or max_synthetic_class_box_ratio is not None
     )
     failures: list[str] = []
     by_family = payload.get("by_family", {})
@@ -410,6 +418,26 @@ def gate_domain_gap(payload: dict[str, Any], args: argparse.Namespace) -> dict[s
             failures.append("cannot compute synthetic/real box ratio with zero real boxes")
         elif box_ratio > max_synthetic_box_ratio:
             failures.append(f"synthetic/real box ratio {box_ratio:.4f} exceeds {max_synthetic_box_ratio:.4f}")
+    class_box_ratios: dict[str, float | None] = {}
+    if max_synthetic_class_box_ratio is not None:
+        real_classes = real.get("class_counts", {})
+        synthetic_classes = synthetic.get("class_counts", {})
+        if not isinstance(real_classes, dict) or not isinstance(synthetic_classes, dict):
+            failures.append("cannot compute class box ratios from malformed class_counts")
+        else:
+            for class_name in sorted(set(real_classes) | set(synthetic_classes)):
+                real_count = int(real_classes.get(class_name, 0) or 0)
+                synthetic_count = int(synthetic_classes.get(class_name, 0) or 0)
+                class_ratio = ratio(synthetic_count, real_count)
+                class_box_ratios[str(class_name)] = class_ratio
+                if class_ratio is None:
+                    if synthetic_count > 0:
+                        failures.append(f"{class_name} has {synthetic_count} synthetic boxes and zero real boxes")
+                elif class_ratio > max_synthetic_class_box_ratio:
+                    failures.append(
+                        f"{class_name} synthetic/real box ratio {class_ratio:.4f} exceeds "
+                        f"{max_synthetic_class_box_ratio:.4f}"
+                    )
 
     deltas = payload.get("deltas", {}).get("synthetic_minus_real", {})
     for section_name, limits in (("image_stats", image_limits), ("box_stats", box_limits)):
@@ -432,6 +460,7 @@ def gate_domain_gap(payload: dict[str, Any], args: argparse.Namespace) -> dict[s
             "preset": args.gate_preset,
             "max_synthetic_image_ratio": max_synthetic_image_ratio,
             "max_synthetic_box_ratio": max_synthetic_box_ratio,
+            "max_synthetic_class_box_ratio": max_synthetic_class_box_ratio,
             "min_real_images": args.min_real_images,
             "min_synthetic_images": args.min_synthetic_images,
         },
@@ -442,6 +471,7 @@ def gate_domain_gap(payload: dict[str, Any], args: argparse.Namespace) -> dict[s
             "synthetic_boxes": synthetic_boxes,
             "synthetic_image_ratio": image_ratio,
             "synthetic_box_ratio": box_ratio,
+            "synthetic_class_box_ratios": class_box_ratios,
         },
     }
 
