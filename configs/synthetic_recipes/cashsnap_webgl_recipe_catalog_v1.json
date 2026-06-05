@@ -131,7 +131,7 @@
       },
       "intended_use": "Diagnostic close-up stack replay with class-conditioned in-plane pose bands tuned from real-vs-WebGL visible-box aspect gaps.",
       "promotion_gate": "per-class visible-box aspect and aggregate real-vs-synthetic geometry pass before any trainable-candidate use",
-      "current_blocker": "Selected current-code v1/v2/oblique packaging now passes strict geometry, package QA, appearance diversity, note-condition diversity, and count-contract gates, but bounded model probes reject it: full 40-image dose fails accepted_blend_v1 before training, and fixed-step seed0 doses 1/2/4 all lose to matched background row-controls with KHR_50000 as the worst drop. Next blocker is KHR_50000 transfer/curriculum diagnosis, not more package mechanics."
+      "current_blocker": "Selected current-code v1/v2/oblique packaging now passes strict geometry, package QA, appearance diversity, note-condition diversity, and count-contract gates, but bounded model probes reject it: full 40-image dose fails accepted_blend_v1 before training, and fixed-step seed0 doses 1/2/4 all lose to matched background row-controls with KHR_50000 as the worst drop. Crop visual audit shows KHR_50000 dynamic-range compression (luma_std -0.112, luma_p05 +0.172, luma_p95 -0.175), so the next blocker is KHR_50000 transfer/curriculum diagnosis, not more package mechanics."
     },
     {
       "id": "webgl_overlap_stack_v1",
