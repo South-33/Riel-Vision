@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CashSnap: Khmer/USD Cash Counting Assistant - Presentation</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #121212;
+            --bg-card: #1e1e1e;
+            --accent-blue: #3f8efc;
+            --accent-green: #34d399;
+            --accent-red: #f87171;
+            --text-primary: #f5f5f5;
+            --text-secondary: #cccccc;
+            --border-color: #333333;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #080808;
+            color: var(--text-primary);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        /* Slide Deck Container (16:9 Aspect Ratio) */
+        .presentation-deck {
+            width: 100vw;
+            max-width: 1280px;
+            height: 56.25vw;
+            max-height: 720px;
+            background-color: var(--bg-dark);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+
+        /* Slide Wrapper */
+        .slide {
+            display: none;
+            width: 100%;
+            height: 100%;
+            padding: 50px 60px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+
+        .slide.active {
+            display: flex;
+        }
+
+        /* Slide Titles */
+        .slide-title {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--accent-blue);
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 10px;
+            width: 100%;
+        }
+
+        /* Content layouts */
+        .slide-body {
+            display: flex;
+            flex-direction: row;
+            gap: 40px;
+            height: calc(100% - 80px);
+            width: 100%;
+        }
+
+        .slide-content-full {
+            width: 100%;
+        }
+
+        .slide-content-left {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .slide-content-right {
+            width: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: var(--bg-card);
+            overflow: hidden;
+            padding: 10px;
+        }
+
+        .slide-content-right img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 4px;
+        }
+
+        /* Typography & Bullets */
+        ul {
+            margin-left: 20px;
+        }
+
+        li {
+            font-size: 18px;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+
+        li strong {
+            color: var(--accent-green);
+        }
+
+        .highlight-red {
+            color: var(--accent-red);
+            font-weight: 600;
+        }
+
+        /* Cover Slide Specifics */
+        .cover-slide {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .cover-title {
+            font-size: 56px;
+            font-weight: 800;
+            color: var(--accent-blue);
+            margin-bottom: 15px;
+        }
+
+        .cover-subtitle {
+            font-size: 24px;
+            color: var(--text-secondary);
+            margin-bottom: 40px;
+        }
+
+        .cover-meta {
+            font-size: 14px;
+            color: #777777;
+            border-top: 1px solid var(--border-color);
+            padding-top: 20px;
+            width: 80%;
+        }
+
+        /* Navigation Controls */
+        .nav-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 30px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .nav-btn {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .nav-btn:hover {
+            background-color: var(--accent-blue);
+            color: #000000;
+        }
+
+        .slide-counter {
+            font-size: 14px;
+            color: #777777;
+            align-self: center;
+        }
+    </style>
+</head>
+<body>
+
+<div class="presentation-deck">
+    <!-- SLIDE 1: COVER -->
+    <div class="slide cover-slide active">
+        <h1 class="cover-title">CashSnap</h1>
+        <div class="cover-subtitle">Khmer Riel & US Dollar Cash Counting Assistant</div>
+        <div class="cover-meta">
+            AI-Assisted Computer Vision App | Course Assignment Submission<br>
+            Target: Overlapped, Fanned, and Occluded Banknotes in Retail
+        </div>
+    </div>
+
+    <!-- SLIDE 2: THE PROBLEM -->
+    <div class="slide">
+        <h2 class="slide-title">The Problem: Cash Counting is Not Simple Detection</h2>
+        <div class="slide-body">
+            <div class="slide-content-full">
+                <ul>
+                    <li>Standard object detection model setups expect **clean, isolated** banknotes on flat, plain backgrounds.</li>
+                    <li>In actual retail counter layouts (e.g. wet markets), banknotes are **overlapped, fanned, or held**.</li>
+                    <li>When banknotes are fanned or overlapping, a single physical note is split into **multiple visual fragments**.</li>
+                    <li>Naive detection counting will count each fragment as a distinct bill, leading to **severe overcounting**.</li>
+                    <li>Solving this spatial problem requires a custom **two-stage pipeline combined with fragment fusion**.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE 3: HARD CASES -->
+    <div class="slide">
+        <h2 class="slide-title">Hard Real-World Cases Handled</h2>
+        <div class="slide-body">
+            <div class="slide-content-left">
+                <ul>
+                    <li><strong>Overlapped Bills</strong>: Partial note visibility and visual obstructions.</li>
+                    <li><strong>Fanned Stacks</strong>: Banks layered closely where only thin border edges are visible.</li>
+                    <li><strong>Hand Occlusions</strong>: Fingers block banknote features during counter placement.</li>
+                    <li><strong>Circulation Wear</strong>: Crinkled, wet, or dirty notes common in circulation.</li>
+                    <li><strong>Distractor Negatives</strong>: Preventing wallets, empty tables, or papers from triggering counts.</li>
+                </ul>
+            </div>
+            <div class="slide-content-right">
+                <img src="source/screenshots/synthetic_note_hq_visual.png" alt="HQ Visual Render">
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE 4: APP FEATURES / PRD -->
+    <div class="slide">
+        <h2 class="slide-title">Core App Features (PRD)</h2>
+        <div class="slide-body">
+            <div class="slide-content-full">
+                <ul>
+                    <li><strong>Camera & File Input</strong>: Capture cash via webcam or upload pre-saved images.</li>
+                    <li><strong>Image Preview & Retake</strong>: Double-check image framing and crop alignment.</li>
+                    <li><strong>Banknote Detection & Denomination Rec.</strong>: Locates boundaries and labels KHR/USD notes.</li>
+                    <li><strong>NMS Fragment Fusion</strong>: Fuses overlapping fragment proposals back into physical note counts.</li>
+                    <li><strong>Counting & Multi-Currency Totals</strong>: Aggregates sums separately by currency (USD/KHR).</li>
+                    <li><strong>Warning Alerts</strong>: Triggers warning messages for low-confidence detections, prompting user adjustments.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE 5: USER JOURNEY -->
+    <div class="slide">
+        <h2 class="slide-title">End-to-End User Journey</h2>
+        <div class="slide-body">
+            <div class="slide-content-full">
+                <ol style="margin-left: 20px;">
+                    <li style="font-size: 16px; margin-bottom: 10px;">User opens the CashSnap app in their phone browser.</li>
+                    <li style="font-size: 16px; margin-bottom: 10px;">Chooses between Camera Capture or File Upload.</li>
+                    <li style="font-size: 16px; margin-bottom: 10px;">Displays preview, user clicks "Analyze Cash".</li>
+                    <li style="font-size: 16px; margin-bottom: 10px;">App sends image bytes securely to Hugging Face API or local ONNX runtime.</li>
+                    <li style="font-size: 16px; margin-bottom: 10px;">AI model proposes boxes; system merges fragments based on IoU overlap.</li>
+                    <li style="font-size: 16px; margin-bottom: 10px;">App displays visual boxes, denomination breakdowns, and final totals.</li>
+                    <li style="font-size: 16px; margin-bottom: 10px;">User downloads CSV history or starts a new layout scan.</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE 6: SYSTEM FLOW (BPMN) -->
+    <div class="slide">
+        <h2 class="slide-title">BPMN Flow: Camera to Result</h2>
+        <div class="slide-body">
+            <div class="slide-content-left">
+                <ul>
+                    <li><strong>User Lane</strong>: Controls camera previews, file selections, and handles crop confirmation.</li>
+                    <li><strong>System Lane</strong>: Queries Hugging Face API, runs detectors, triggers fragment checks, and aggregates counts.</li>
+                    <li><strong>Evidence Gate</strong>: Verifies if enough denomination evidence exists, flagging warnings on low confidence.</li>
+                </ul>
+            </div>
+            <div class="slide-content-right">
+                <img src="source/screenshots/bpmn_diagram.png" alt="BPMN Diagram">
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE 7: HUGGING FACE INFERENCE PIPELINE -->
+    <div class="slide">
+        <h2 class="slide-title">Hugging Face API & Pipeline Logic</h2>
+        <div class="slide-body">
+            <div class="slide-content-left">
+                <ul>
+                    <li><strong>Preprocessing</strong>: Resize image to 416x416 input size and normalize pixel arrays.</li>
+                    <li><strong>YOLO Detector Stage</strong>: Proposes rotated or bounding boxes for visible note regions.</li>
+                    <li><strong>MobileNetV3 Classifier Stage</strong>: Crops low-confidence boxes and overrides denominations.</li>
+                    <li><strong>NMS Fragment Fusion</strong>: Joins boxes overlapping above a <strong>0.85 IoU</strong> threshold.</li>
+                    <li><strong>Local ONNX Mode</strong>: Fully offline execution running models directly on CPU via Streamlit.</li>
+                </ul>
+            </div>
+            <div class="slide-content-right">
+                <img src="source/screenshots/domain_gap_visual_probe_contact_sheet.jpg" alt="Domain Gap Audit">
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE 8: SYNTHETIC DATA ENGINE -->
+    <div class="slide">
+        <h2 class="slide-title">Synthetic Data Engine (WebGL Renderer)</h2>
+        <div class="slide-body">
+            <div class="slide-content-left">
+                <ul>
+                    <li><strong>Pre-training scaling</strong>: Hand-labeled real overlap datasets are costly and scarce.</li>
+                    <li><strong>WebGL Canvas</strong>: Exports pixel-perfect RGB passes, ID masks, and parent note count metadata.</li>
+                    <li><strong>Note Conditions</strong>: Simulates circulated wear (creasing, wet glossiness, speckles).</li>
+                    <li><strong>Lighting reviews</strong>: Environmental reflections verified using Poly Haven HDRI maps.</li>
+                    <li><strong>Fragment labels</strong>: Binds fragmented visual islands back to their physical parents.</li>
+                </ul>
+            </div>
+            <div class="slide-content-right">
+                <img src="source/screenshots/synthetic_note_condition_batch_contact_sheet.png" alt="Note Condition Batch">
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE 9: PIPELINE EVIDENCE -->
+    <div class="slide">
+        <h2 class="slide-title">WebGL Synthetic Data Pipeline Validation</h2>
+        <div class="slide-body">
+            <div class="slide-content-left">
+                <ul>
+                    <li><strong>Note Condition randomizations</strong>: Verification of creasing and wetness levels.</li>
+                    <li><strong>HD variants</strong>: High-resolution visual prints.</li>
+                    <li><strong>Poly Haven Environment reviews</strong>: Ensuring surface specular highlights look realistic under retail lighting.</li>
+                </ul>
+            </div>
+            <div class="slide-content-right">
+                <img src="source/screenshots/synthetic_polyhaven_environment_review_contact_sheet.png" alt="Polyhaven Review">
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE 10: LIMITATIONS & NEXT STEPS -->
+    <div class="slide">
+        <h2 class="slide-title">Limitations & Next Steps</h2>
+        <div class="slide-body">
+            <div class="slide-content-full">
+                <ul>
+                    <li>Clean note detection is mature, but fanned and overlapping note counting remains the core bottleneck.</li>
+                    <li>Synthetic data is strong, but **real fan/overlap/hand stress validation** is still the next major proof step.</li>
+                    <li>Requires phone captures of mixed layout stress sets to validate fragment fusion precision in production.</li>
+                    <li>CC0 environmental HDRI banks require registry verification to check reflection realism.</li>
+                    <li><span class="highlight-red">Disclaimer:</span> App counts cash assistance only. Counterfeit detection is out of scope.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Controls -->
+    <div class="nav-controls">
+        <span class="slide-counter" id="slideCounter">Slide 1 of 10</span>
+        <button class="nav-btn" onclick="prevSlide()">Prev</button>
+        <button class="nav-btn" onclick="nextSlide()">Next</button>
+    </div>
+</div>
+
+<script>
+    let currentSlide = 0;
+    const slides = document.querySelectorAll('.slide');
+    const counterEl = document.getElementById('slideCounter');
+
+    function showSlide(index) {
+        slides[currentSlide].classList.remove('active');
+        currentSlide = (index + slides.length) % slides.length;
+        slides[currentSlide].classList.add('active');
+        counterEl.textContent = `Slide ${currentSlide + 1} of ${slides.length}`;
+    }
+
+    function nextSlide() {
+        showSlide(currentSlide + 1);
+    }
+
+    function prevSlide() {
+        showSlide(currentSlide - 1);
+    }
+
+    // Keyboard controls
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'ArrowRight' || event.key === ' ') {
+            nextSlide();
+        } else if (event.key === 'ArrowLeft') {
+            prevSlide();
+        }
+    });
+</script>
+
+</body>
+</html>

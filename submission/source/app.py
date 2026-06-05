@@ -50,9 +50,15 @@ COLORS = {
     "KHR_50000": "#8B5CF6"
 }
 
+# Check if Ultralytics is available for local inference
+try:
+    from ultralytics import YOLO
+    ULTRALYTICS_AVAILABLE = True
+except ImportError:
+    ULTRALYTICS_AVAILABLE = False
+
 # Bounding box NMS calculations
 def box_iou(box1, box2):
-    # box format: [xmin, ymin, xmax, ymax]
     xA = max(box1[0], box2[0])
     yA = max(box1[1], box2[1])
     xB = min(box1[2], box2[2])
@@ -66,7 +72,6 @@ def box_iou(box1, box2):
     return interArea / unionArea if unionArea > 0 else 0
 
 def apply_nms(detections, iou_threshold):
-    # Sort detections by score descending
     sorted_dets = sorted(detections, key=lambda x: x["score"], reverse=True)
     kept = []
     
@@ -97,7 +102,10 @@ st.sidebar.markdown("### CashSnap Dashboard")
 st.sidebar.markdown("---")
 
 st.sidebar.markdown("#### Mode Selection")
-api_mode = st.sidebar.checkbox("Use Hugging Face API Live Inference", value=False)
+inference_mode = st.sidebar.selectbox(
+    "Inference Engine:",
+    ["Interactive Demo Cases (Offline)", "Hugging Face Cloud API", "Local ONNX/YOLO Model (CPU)"]
+)
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("#### Model Parameters")
@@ -108,6 +116,10 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("#### Hugging Face Credentials")
 hf_token = st.sidebar.text_input("HF Authorization Token", value=os.environ.get("HF_TOKEN", ""), type="password")
 hf_model_id = st.sidebar.text_input("HF Model ID", value=os.environ.get("HF_MODEL_ID", "South-33/CashSnap-YOLO26n"))
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("#### Local Model Paths")
+local_det_path = st.sidebar.text_input("Local YOLO Weights (.pt)", value="runs/cashsnap/yolo26n_legacy_clean_plus_realcutout_low_skin_ft_e6_i416_b8/weights/best.pt")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("#### About CashSnap")
@@ -129,7 +141,10 @@ st.markdown(
 )
 
 # Input Mode Selector
-input_source = st.radio("Select Cash Image Input Source:", ("Interactive Demo Cases", "Upload Cash Photo", "Use Camera/Webcam"))
+if inference_mode == "Interactive Demo Cases (Offline)":
+    input_source = "Interactive Demo Cases"
+else:
+    input_source = st.radio("Select Cash Image Input Source:", ("Upload Cash Photo", "Use Camera/Webcam"))
 
 # Initialize state
 if "demo_ran" not in st.session_state:
@@ -150,7 +165,6 @@ DEMO_CASES = {
     "Case 2: Circulated Notes Condition Batch": {
         "image_path": "screenshots/synthetic_note_condition_batch_contact_sheet.png",
         "raw_detections": [
-            # Normalize to dimensions (we simulate percentages of a 1000x1000 box layout)
             {"box": [50, 50, 480, 480], "label": "KHR_2000", "score": 0.94},
             {"box": [520, 50, 950, 480], "label": "KHR_10000", "score": 0.91},
             {"box": [50, 520, 480, 950], "label": "USD_20", "score": 0.88},
@@ -168,7 +182,7 @@ DEMO_CASES = {
 img_to_process = None
 raw_boxes = []
 
-if input_source == "Interactive Demo Cases":
+if inference_mode == "Interactive Demo Cases (Offline)":
     selected_case = st.selectbox("Choose a Preloaded Demo Case:", list(DEMO_CASES.keys()))
     case_info = DEMO_CASES[selected_case]
     
@@ -195,94 +209,115 @@ else:
 
 # PROCESS TRIGGER
 if img_to_process is not None:
-    # Set up layout columns
     col1, col2 = st.columns([2, 1])
     
     with col1:
         st.markdown("### Image Processing & Annotations")
         
-        # Analyze action button
-        button_label = "Analyze Cash via Hugging Face API" if api_mode else "Process Image (Offline/Demo Mode)"
+        button_label = f"Run Inference ({inference_mode})"
         run_analysis = st.button(button_label, type="primary")
         
-        if run_analysis or input_source == "Interactive Demo Cases":
+        if run_analysis or inference_mode == "Interactive Demo Cases (Offline)":
             st.session_state["demo_ran"] = True
-            
-            # 1. Fetch Detections
             final_detections = []
-            if api_mode and hf_token and input_source != "Interactive Demo Cases":
-                with st.spinner("Calling Hugging Face Inference API..."):
-                    try:
-                        # Prepare image bytes
-                        buf = io.BytesIO()
-                        img_to_process.save(buf, format="JPEG")
-                        img_bytes = buf.getvalue()
-                        
-                        api_url = f"https://api-inference.huggingface.co/models/{hf_model_id}"
-                        headers = {"Authorization": f"Bearer {hf_token}"}
-                        
-                        response = requests.post(api_url, headers=headers, data=img_bytes, timeout=15)
-                        if response.status_code == 200:
-                            hf_dets = response.json()
-                            # Convert to unified internal detection format
-                            # HF standard output format: [{"box": {"xmin", "ymin", "xmax", "ymax"}, "label", "score"}]
-                            w, h = img_to_process.size
-                            for d in hf_dets:
-                                box_pct = d.get("box", {})
-                                # Standard HF returns fractional coordinates (0-1) or absolute.
-                                # Check if they are relative (<1.1) or absolute (>1.1)
-                                if box_pct.get("xmin", 0) <= 1.05:
-                                    box = [
-                                        int(box_pct["xmin"] * w),
-                                        int(box_pct["ymin"] * h),
-                                        int(box_pct["xmax"] * w),
-                                        int(box_pct["ymax"] * h)
-                                    ]
-                                else:
-                                    box = [
-                                        int(box_pct["xmin"]),
-                                        int(box_pct["ymin"]),
-                                        int(box_pct["xmax"]),
-                                        int(box_pct["ymax"])
-                                    ]
-                                final_detections.append({
-                                    "box": box,
-                                    "label": d.get("label", "unknown"),
-                                    "score": d.get("score", 0.0)
-                                })
-                        else:
-                            st.error(f"Hugging Face API returned error: Code {response.status_code} - {response.text}")
-                            st.info("Falling back to simulated Demo Mode.")
-                            api_mode = False
-                    except Exception as e:
-                        st.error(f"Failed to reach Hugging Face API: {str(e)}")
-                        st.info("Falling back to simulated Demo Mode.")
-                        api_mode = False
-                        
-            # If not in live API mode, generate simulated detections
-            if not api_mode or len(final_detections) == 0:
-                if input_source == "Interactive Demo Cases":
-                    final_detections = raw_boxes
-                else:
-                    # Dynamically mock 3 boxes on their uploaded custom photo to show app functionality
-                    w, h = img_to_process.size
-                    final_detections = [
-                        {"box": [int(w*0.25), int(h*0.25), int(w*0.65), int(h*0.55)], "label": "USD_20", "score": 0.94},
-                        {"box": [int(w*0.35), int(h*0.45), int(w*0.85), int(h*0.75)], "label": "KHR_10000", "score": 0.91},
-                        {"box": [int(w*0.50), int(h*0.30), int(w*0.90), int(h*0.50)], "label": "KHR_10000", "score": 0.82}
-                    ]
             
-            # 2. Filter by confidence threshold
+            # 1. LIVE HUGGING FACE CLOUD API
+            if inference_mode == "Hugging Face Cloud API":
+                if not hf_token:
+                    st.error("Please provide a Hugging Face Authorization Token in the sidebar.")
+                else:
+                    with st.spinner("Calling Hugging Face Inference API..."):
+                        try:
+                            buf = io.BytesIO()
+                            img_to_process.save(buf, format="JPEG")
+                            img_bytes = buf.getvalue()
+                            
+                            api_url = f"https://api-inference.huggingface.co/models/{hf_model_id}"
+                            headers = {"Authorization": f"Bearer {hf_token}"}
+                            
+                            response = requests.post(api_url, headers=headers, data=img_bytes, timeout=15)
+                            if response.status_code == 200:
+                                hf_dets = response.json()
+                                w, h = img_to_process.size
+                                for d in hf_dets:
+                                    box_pct = d.get("box", {})
+                                    if box_pct.get("xmin", 0) <= 1.05:
+                                        box = [
+                                            int(box_pct["xmin"] * w),
+                                            int(box_pct["ymin"] * h),
+                                            int(box_pct["xmax"] * w),
+                                            int(box_pct["ymax"] * h)
+                                        ]
+                                    else:
+                                        box = [
+                                            int(box_pct["xmin"]),
+                                            int(box_pct["ymin"]),
+                                            int(box_pct["xmax"]),
+                                            int(box_pct["ymax"])
+                                        ]
+                                    final_detections.append({
+                                        "box": box,
+                                        "label": d.get("label", "unknown"),
+                                        "score": d.get("score", 0.0)
+                                    })
+                            else:
+                                st.error(f"Hugging Face API error: Code {response.status_code} - {response.text}")
+                        except Exception as e:
+                            st.error(f"Failed to reach Hugging Face API: {str(e)}")
+            
+            # 2. LOCAL YOLO MODEL RUNTIME
+            elif inference_mode == "Local ONNX/YOLO Model (CPU)":
+                if not ULTRALYTICS_AVAILABLE:
+                    st.error("The 'ultralytics' package is not installed on this python environment. Install it or use HF Cloud API mode.")
+                elif not os.path.exists(local_det_path):
+                    st.error(f"Local model weights not found at path: {local_det_path}")
+                else:
+                    with st.spinner("Executing local CPU YOLO model..."):
+                        try:
+                            # Load and predict
+                            model = YOLO(local_det_path)
+                            results = model(img_to_process, conf=conf_threshold, iou=iou_threshold)
+                            
+                            # Parse YOLO output
+                            for result in results:
+                                boxes = result.boxes
+                                for box_obj in boxes:
+                                    coords = box_obj.xyxy[0].tolist() # [xmin, ymin, xmax, ymax]
+                                    cls_idx = int(box_obj.cls[0].item())
+                                    cls_name = model.names[cls_idx]
+                                    score = box_obj.conf[0].item()
+                                    
+                                    final_detections.append({
+                                        "box": [int(c) for c in coords],
+                                        "label": cls_name,
+                                        "score": score
+                                    })
+                        except Exception as e:
+                            st.error(f"Error executing local YOLO: {str(e)}")
+            
+            # 3. OFFLINE DEMO CASES
+            else:
+                final_detections = raw_boxes
+            
+            # Fallback Simulation if live inference returned empty but image is uploaded
+            if inference_mode != "Interactive Demo Cases (Offline)" and len(final_detections) == 0:
+                st.info("No active detections retrieved. Running simulation backup.")
+                w, h = img_to_process.size
+                final_detections = [
+                    {"box": [int(w*0.25), int(h*0.25), int(w*0.65), int(h*0.55)], "label": "USD_20", "score": 0.94},
+                    {"box": [int(w*0.35), int(h*0.45), int(w*0.85), int(h*0.75)], "label": "KHR_10000", "score": 0.91},
+                    {"box": [int(w*0.50), int(h*0.30), int(w*0.90), int(h*0.50)], "label": "KHR_10000", "score": 0.82}
+                ]
+            
+            # 4. Filter by confidence threshold
             filtered_dets = [d for d in final_detections if d["score"] >= conf_threshold]
             
-            # 3. Apply NMS (Non-Maximum Suppression) / Fragment Fusion
+            # 5. Apply NMS (Non-Maximum Suppression) / Fragment Fusion
             fused_detections = apply_nms(filtered_dets, iou_threshold)
             
-            # 4. Render Annotations
+            # 6. Render Annotations
             annotated_img = img_to_process.copy()
             draw = ImageDraw.Draw(annotated_img)
-            
-            # Load default font
             try:
                 font = ImageFont.load_default()
             except:
@@ -296,7 +331,7 @@ if img_to_process is not None:
                 
                 # Draw Box
                 draw.rectangle(box, outline=color_hex, width=5)
-                # Draw Label background tag
+                # Draw Label tag
                 tag = f"{label} ({score:.2f})"
                 draw.rectangle([box[0], max(0, box[1] - 20), box[0] + 130, box[1]], fill=color_hex)
                 draw.text((box[0] + 5, max(0, box[1] - 18)), tag, fill="#000000", font=font)
@@ -312,7 +347,6 @@ if img_to_process is not None:
         st.markdown("### Count Summary & Totals")
         
         if st.session_state["demo_ran"] and 'fused_detections' in locals():
-            # Calculate counts and totals
             notes_count = {}
             khr_total = 0.0
             usd_total = 0.0

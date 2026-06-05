@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CashSnap: Khmer/USD Cash Counting Assistant - Documentation</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #182b49;
+            --primary-light: #24416f;
+            --accent: #1a73e8;
+            --text-dark: #202124;
+            --text-light: #5f6368;
+            --bg-light: #f8f9fa;
+            --border-color: #dadce0;
+            --warning-bg: #fef7e0;
+            --warning-border: #fbbc04;
+            --warning-text: #b06000;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            color: var(--text-dark);
+            background-color: var(--bg-light);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        /* Cover Page Styling */
+        .cover-page {
+            background-color: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 80px 40px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            margin-bottom: 40px;
+            min-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .cover-subtitle-top {
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--accent);
+            margin-bottom: 20px;
+        }
+
+        .cover-title {
+            font-size: 38px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 15px;
+            line-height: 1.2;
+        }
+
+        .cover-subtitle {
+            font-size: 20px;
+            font-weight: 400;
+            color: var(--text-light);
+            margin-bottom: 40px;
+        }
+
+        .cover-divider {
+            width: 120px;
+            height: 4px;
+            background-color: var(--accent);
+            margin-bottom: 60px;
+            border-radius: 2px;
+        }
+
+        .cover-meta {
+            font-size: 14px;
+            color: var(--text-light);
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            max-width: 400px;
+            text-align: left;
+            border-top: 1px solid var(--border-color);
+            padding-top: 30px;
+            width: 100%;
+        }
+
+        .cover-meta-item strong {
+            color: var(--primary);
+        }
+
+        /* Document Sheet Styling */
+        .doc-sheet {
+            background-color: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 60px 50px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            margin-bottom: 40px;
+        }
+
+        section {
+            margin-bottom: 50px;
+        }
+
+        h2 {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--primary);
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+        }
+
+        h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--primary-light);
+            margin: 25px 0 12px 0;
+        }
+
+        p {
+            font-size: 15px;
+            color: var(--text-dark);
+            margin-bottom: 15px;
+            text-align: justify;
+        }
+
+        ul, ol {
+            margin-left: 20px;
+            margin-bottom: 20px;
+        }
+
+        li {
+            font-size: 15px;
+            color: var(--text-dark);
+            margin-bottom: 8px;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+
+        th, td {
+            border: 1px solid var(--border-color);
+            padding: 12px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            background-color: var(--primary);
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        tr:nth-child(even) {
+            background-color: #fcfdfe;
+        }
+
+        /* Callouts */
+        .disclaimer-box {
+            background-color: var(--warning-bg);
+            border-left: 4px solid var(--warning-border);
+            color: var(--warning-text);
+            padding: 15px;
+            border-radius: 4px;
+            margin: 25px 0;
+            font-size: 14px;
+        }
+
+        .disclaimer-box strong {
+            color: #b00020;
+        }
+
+        /* Image Display */
+        .figure-box {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            background-color: #ffffff;
+            margin: 25px 0;
+            text-align: center;
+        }
+
+        .figure-box img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            border: 1px solid #f1f3f4;
+        }
+
+        .figure-caption {
+            font-size: 13px;
+            color: var(--text-light);
+            margin-top: 10px;
+            font-style: italic;
+        }
+
+        .grid-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        /* Print formatting */
+        @media print {
+            body {
+                background-color: #ffffff;
+                color: #000000;
+                font-size: 12pt;
+            }
+
+            .container {
+                max-width: 100%;
+                padding: 0;
+            }
+
+            .cover-page {
+                border: none;
+                box-shadow: none;
+                page-break-after: always;
+                height: 95vh;
+                padding: 100px 20px;
+            }
+
+            .doc-sheet {
+                border: none;
+                box-shadow: none;
+                padding: 0;
+            }
+
+            section {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+
+            h2 {
+                page-break-before: always;
+                font-size: 18pt;
+            }
+
+            h2:first-of-type {
+                page-break-before: avoid;
+            }
+
+            table {
+                page-break-inside: avoid;
+            }
+
+            tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+
+            .figure-box {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- COVER PAGE -->
+    <div class="cover-page">
+        <div class="cover-subtitle-top">AI-Assisted Computer Vision App</div>
+        <h1 class="cover-title">CashSnap: Khmer/USD Cash Counting Assistant</h1>
+        <div class="cover-subtitle">Project Technical Documentation & Blueprint</div>
+        <div class="cover-divider"></div>
+        
+        <div class="cover-meta">
+            <div class="cover-meta-item"><strong>Course:</strong> Computer Vision Assignment Phase 1</div>
+            <div class="cover-meta-item"><strong>Topic:</strong> Multiclass Banknote Detection, Classification, and Fragment Fusion</div>
+            <div class="cover-meta-item"><strong>Target Currencies:</strong> US Dollar (USD) & Khmer Riel (KHR)</div>
+            <div class="cover-meta-item"><strong>Inference Infrastructure:</strong> Local ONNX Runtime / Hugging Face API</div>
+        </div>
+    </div>
+
+    <!-- DOCUMENT BODY -->
+    <div class="doc-sheet">
+        <!-- 1. Theme Choice -->
+        <section id="section-theme">
+            <h2>1. Theme Choice</h2>
+            <p>
+                CashSnap is an AI-assisted computer vision app developed to assist retail vendors, cashiers, and users in automatically counting mixed US Dollars (USD) and Khmer Riel (KHR) banknotes from a casual photograph captured on a mobile phone or laptop webcam. The app detects visible banknotes in the frame, recognizes their denominations, and aggregates final cash totals.
+            </p>
+            <p>
+                Unlike basic note detection setups designed for pristine, single-note layouts, CashSnap specifically targets challenging real-world retail layouts, providing robust counting under the following constraints:
+            </p>
+            <ul>
+                <li><strong>Overlapped Banknotes</strong>: Banknotes laid on top of each other, partially obscuring denomination designs.</li>
+                <li><strong>Fanned Stacks</strong>: Banknotes layered closely in fan geometries where only thin edges, numeric values, or border labels are exposed.</li>
+                <li><strong>Hand Occlusions</strong>: Fingers block banknote features during counter placement (as shown in Figure 1).</li>
+                <li><strong>Circulation Wear</strong>: Banknotes that are wet, dirty, folded, crinkled, or low-contrast due to circulation.</li>
+                <li><strong>Negative distractors</strong>: Table tops, wallets, receipts, and coins that should not trigger false positive counts.</li>
+            </ul>
+
+            <!-- Image: Note Condition Batch Sheet -->
+            <div class="figure-box">
+                <img src="source/screenshots/synthetic_note_condition_batch_contact_sheet.png" alt="Note Condition Batch">
+                <div class="figure-caption">Figure 1: WebGL Note Condition Contact Sheet showcasing randomized creasing, surface speckling, stains, and hand occlusions (orange cylinders).</div>
+            </div>
+
+            <div class="disclaimer-box">
+                <strong>IMPORTANT DISCLAIMER:</strong> CashSnap is designed strictly for banknote counting assistance and currency denomination calculation. Counterfeit detection is outside the project scope.
+            </div>
+        </section>
+
+        <!-- 2. PRD -->
+        <section id="section-prd">
+            <h2>2. Project Requirement Document (PRD)</h2>
+            <p>
+                The following table outlines the minimum functional requirements for the CashSnap application:
+            </p>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 20%;">Feature</th>
+                        <th style="width: 50%;">Description</th>
+                        <th style="width: 30%;">Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Camera Capture</strong></td>
+                        <td>Captures high-resolution images of cash layouts using a phone camera or browser webcam.</td>
+                        <td>Enable immediate cash layout capture.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Image Upload</strong></td>
+                        <td>Allows users to upload saved images (JPEG/PNG).</td>
+                        <td>Support saved cash photos.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Image Preview</strong></td>
+                        <td>Displays the selected image on the interface before running model inference.</td>
+                        <td>Allow checking photo clarity before analysis.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Banknote Detection</strong></td>
+                        <td>Runs YOLO object detection to propose bounding boxes of potential banknotes.</td>
+                        <td>Locate individual notes in the frame.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Denomination Rec.</strong></td>
+                        <td>Identifies mix values (USD_1 to USD_100, KHR_500 to KHR_50000).</td>
+                        <td>Allow multi-currency value calculation.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Partial Note Rec.</strong></td>
+                        <td>Detects notes from partial evidence (slivers, corners, edges) when overlap exists.</td>
+                        <td>Support counting in dense fanned stacks.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Fragment Fusion</strong></td>
+                        <td>Matches overlapping boxes (IoU threshold 0.85) to avoid counting single notes twice.</td>
+                        <td>Prevent overcounting from fragmented views.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Total Calculation</strong></td>
+                        <td>Calculates cash totals separately for USD and KHR.</td>
+                        <td>Display clear Multi-currency total.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Confidence Display</strong></td>
+                        <td>Displays confidence scores and warns of low-confidence predictions.</td>
+                        <td>Ensure transparency of count uncertainty.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Result Display</strong></td>
+                        <td>Superimposes colored bounding boxes, labels, and value counts on the image.</td>
+                        <td>Make detection results understandable.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Error Handling</strong></td>
+                        <td>Gracefully logs API timeouts or camera permissions errors.</td>
+                        <td>Provide a stable user interface.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Scan History</strong></td>
+                        <td>Maintains local transaction lists with CSV export functions.</td>
+                        <td>Allow record-keeping and sharing.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Non-Functional Requirements</h3>
+            <ul>
+                <li><strong>Accuracy</strong>: Minimizes double-counting of fanned notes while maintaining high recognition recall on visible banknote corners.</li>
+                <li><strong>Response Time</strong>: Live cloud Inference (Hugging Face API) completes in under 2.0 seconds; local ONNX inference processes in under 1.5 seconds on CPU.</li>
+                <li><strong>Privacy</strong>: Image data transfers are encrypted via HTTPS; API credentials are loaded strictly from secure `.env` files.</li>
+                <li><strong>Compatibility</strong>: Web layout renders smoothly on standard mobile browsers (Safari/Chrome) and desktops.</li>
+                <li><strong>Usability</strong>: Accessible high-contrast layout, single-click operations, and warnings on low-confidence outputs.</li>
+                <li><strong>Robustness</strong>: Standard fallback options to simulated Demo Mode if model servers are unreachable.</li>
+                <li><strong>Transparency</strong>: Displays warning messages and confidence ratings when banknote visibility is too low or blurry.</li>
+            </ul>
+        </section>
+
+        <!-- 3. User Stories -->
+        <section id="section-stories">
+            <h2>3. User Stories</h2>
+            <ol>
+                <li><strong>Shop Owner</strong>: <em>"As a shop owner, I want to take a photo of mixed cash so that I can quickly count the total amount."</em></li>
+                <li><strong>Cashier</strong>: <em>"As a cashier, I want the app to detect Khmer Riel and USD denominations so that I can separate totals by currency."</em></li>
+                <li><strong>Overlapped Handling</strong>: <em>"As a user, I want the app to handle overlapped and fanned bills so that I do not need to arrange every note perfectly."</em></li>
+                <li><strong>Duplicate Prevention</strong>: <em>"As a user, I want the app to avoid counting one physical bill multiple times so that visible fragments do not cause overcounting."</em></li>
+                <li><strong>Confidence Warning</strong>: <em>"As a user, I want to see confidence scores and warning messages so that I know when the result may need manual checking."</em></li>
+                <li><strong>Image Quality Fallback</strong>: <em>"As a user, I want to retake or upload another image when the photo is blurry so that the AI can produce a better result."</em></li>
+            </ol>
+        </section>
+
+        <!-- 4. User Journey -->
+        <section id="section-journey">
+            <h2>4. User Journey</h2>
+            <p>The standard user journey consists of the following steps:</p>
+            <ol>
+                <li>User opens the CashSnap web application in their browser.</li>
+                <li>User chooses either the <strong>Capture Image</strong> (camera/webcam) or <strong>Upload Image</strong> option.</li>
+                <li>The browser requests camera permissions (if camera capture is chosen).</li>
+                <li>User captures the cash photo or uploads a photo from the gallery.</li>
+                <li>The app displays an image preview for confirmation.</li>
+                <li>User reviews the preview and clicks <strong>"Analyze Cash"</strong>.</li>
+                <li>The app securely transmits image data to the local ONNX inference engine or Hugging Face API.</li>
+                <li>The AI model runs YOLO banknote detection to locate all note coordinates.</li>
+                <li>The fragment fusion algorithm resolves overlapping bounding boxes.</li>
+                <li>System calculates banknote counts grouped by denomination.</li>
+                <li>System calculates final values separately for US Dollars (USD) and Khmer Riel (KHR).</li>
+                <li>The app displays annotated bounding boxes, total counts, and low-confidence warning banners.</li>
+                <li>User exports transaction logs as a CSV file, runs a new scan, or closes the app.</li>
+            </ol>
+        </section>
+
+        <!-- 5. BPMN Diagram -->
+        <section id="section-bpmn">
+            <h2>5. BPMN Diagram</h2>
+            <p>
+                The BPMN flowchart below outlines the system logic split between the User's actions and the System / AI Model backend, showing the pipeline from camera permission checks to NMS fragment fusion and display.
+            </p>
+            
+            <div class="figure-box">
+                <img src="source/screenshots/bpmn_diagram.png" alt="BPMN Diagram">
+                <div class="figure-caption">Figure 2: CashSnap System BPMN Flowchart (User Lane & System Lane boundary)</div>
+            </div>
+        </section>
+
+        <!-- 6. Technologies Used -->
+        <section id="section-techs">
+            <h2>6. Technologies Used</h2>
+            <ul>
+                <li><strong>Python</strong>: Core programming language for processing, data structures, and script runtimes.</li>
+                <li><strong>OpenCV & Pillow</strong>: Image decoding, preprocessing, geometric cropping, and bounding box annotations.</li>
+                <li><strong>Hugging Face API</strong>: Cloud inference hosting for YOLOv8 object detection and MobileNetV3 classifiers.</li>
+                <li><strong>ONNX Runtime</strong>: Lightweight CPU inference engine executing `.onnx` models locally within the Streamlit code.</li>
+                <li><strong>Streamlit</strong>: Web app framework used to build the responsive frontend UI.</li>
+                <li><strong>Requests & Dotenv</strong>: Issuing HTTPS API posts and loading secure keys from `.env` configurations.</li>
+                <li><strong>WebGL & Three.js</strong>: Synthetic generation engine used to generate pre-training sheets, note condition batches, and environment lighting review maps (as shown in Figure 3).</li>
+            </ul>
+
+            <!-- Image: Polyhaven Environment Review -->
+            <div class="figure-box">
+                <img src="source/screenshots/synthetic_polyhaven_environment_review_contact_sheet.png" alt="Polyhaven Environment Review">
+                <div class="figure-caption">Figure 3: WebGL Poly Haven Environment Lighting Review Map validating glossiness and reflections.</div>
+            </div>
+        </section>
+
+        <!-- 7. Challenges and Limitations -->
+        <section id="section-challenges">
+            <h2>7. Challenges and Limitations</h2>
+            <p>
+                Banknote counting under retail conditions is a complex spatial problem. The biggest challenge lies in **overlaps and fanning**: when notes are layered, a single note can appear as multiple disconnected fragments. Naive counting methods that treat every box as a distinct banknote will severely overcount.
+            </p>
+            <p>
+                To mitigate this, CashSnap implements a **Fragment Fusion NMS algorithm** (IoU threshold 0.85). In test suites like `probe_fragment_count_fusion.py`, naive counts resulted in an overcount of **+40** notes, whereas the same-class proposal fusion matched the true count of **60** physical bills.
+            </p>
+            <p>
+                Furthermore, banknote physical wear (stains, damp glossiness, folds, dirt) introduces domain noise. While WebGL synthetic data pre-training aids robustness, validation on real-world hand-fan layouts remains the major proof bottleneck. CashSnap uses a domain gap validation harness (shown in Figure 4) to audit synthetic-to-real transfer maps.
+            </p>
+
+            <!-- Image: Domain Gap visual probe -->
+            <div class="figure-box">
+                <img src="source/screenshots/domain_gap_visual_probe_contact_sheet.jpg" alt="Domain Gap Visual Probe">
+                <div class="figure-caption">Figure 4: Domain Gap Visual Audit Sheet comparing real-world test images (top) against synthetic training renders (bottom).</div>
+            </div>
+        </section>
+
+        <!-- 8. Conclusion -->
+        <section id="section-conclusion">
+            <h2>8. Conclusion</h2>
+            <p>
+                CashSnap demonstrates a robust computer vision blueprint by combining lightweight local ONNX/Hugging Face models with custom spatial NMS fusion rules to solve multi-currency counting. Focused on Khmer Riel and USD layouts, it resolves fanning and hand occlusions. While the synthetic pre-training renderer is highly robust, validating and proving real-world fan transfer scores remains the next major milestone.
+            </p>
+        </section>
+    </div>
+</div>
+
+</body>
+</html>
