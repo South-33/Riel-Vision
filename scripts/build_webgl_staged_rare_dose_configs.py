@@ -60,9 +60,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--control-source",
-        choices=("background", "first"),
+        choices=("background", "first", "class"),
         default="background",
         help="Base rows to duplicate for matched row-count controls.",
+    )
+    parser.add_argument(
+        "--control-class",
+        default=None,
+        help="Class name/id to duplicate when --control-source class.",
     )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
@@ -287,7 +292,29 @@ def image_class_summary(dataset_root: Path, rows: list[str], names: dict[int, st
     }
 
 
-def row_count_control_rows(dataset_root: Path, base_rows: list[str], count: int, source: str) -> list[str]:
+def class_id_from_value(names: dict[int, str], value: str | None) -> int:
+    if value is None or not value.strip():
+        raise SystemExit("--control-class is required when --control-source class")
+    token = value.strip()
+    if token.isdigit() or (token.startswith("-") and token[1:].isdigit()):
+        class_id = int(token)
+        if class_id not in names:
+            raise SystemExit(f"--control-class id is not in config names: {class_id}")
+        return class_id
+    matches = [class_id for class_id, class_name in names.items() if class_name == token]
+    if not matches:
+        valid = ", ".join(names[class_id] for class_id in sorted(names))
+        raise SystemExit(f"--control-class must be one of: {valid}")
+    return matches[0]
+
+
+def row_count_control_rows(
+    dataset_root: Path,
+    base_rows: list[str],
+    count: int,
+    source: str,
+    class_id: int | None = None,
+) -> list[str]:
     if count < 1:
         raise SystemExit("row-count control count must be positive")
     if source == "background":
@@ -300,6 +327,16 @@ def row_count_control_rows(dataset_root: Path, base_rows: list[str], count: int,
             raise SystemExit("base train list has no empty-label background rows for row-count controls")
     elif source == "first":
         pool = list(base_rows)
+    elif source == "class":
+        if class_id is None:
+            raise SystemExit("--control-class is required when --control-source class")
+        pool = [
+            row
+            for row in base_rows
+            if class_id in label_classes(image_path_from_repo_line(dataset_root, row))
+        ]
+        if not pool:
+            raise SystemExit(f"base train list has no rows for class id {class_id}")
     else:
         raise SystemExit(f"unsupported row-count control source: {source}")
     if not pool:
@@ -376,6 +413,7 @@ def main() -> int:
     dose_manifest = manifest_rows(dose_root)
     row_counts = [visible_counts_for_row(dose_root, row) for row in dose_manifest]
     control_stem_prefix = args.control_stem_prefix or f"{args.stem_prefix}_row_control"
+    control_class_id = class_id_from_value(class_names, args.control_class) if args.control_source == "class" else None
 
     def emit_config(
         *,
@@ -487,11 +525,28 @@ def main() -> int:
         )
 
         if args.write_row_count_controls:
-            control_rows = row_count_control_rows(dataset_root, base_rows, dose, args.control_source)
+            control_rows = row_count_control_rows(
+                dataset_root,
+                base_rows,
+                dose,
+                args.control_source,
+                class_id=control_class_id,
+            )
             control_summary = image_class_summary(dataset_root, control_rows, class_names)
             control_stem = f"{control_stem_prefix}_dose{dose}"
+            control_source_label = args.control_source
+            if control_class_id is not None:
+                control_source_label = f"{args.control_source}:{class_names[control_class_id]}"
+            control_note = (
+                "Duplicates base rows to match train-list row count without adding synthetic note exposure."
+            )
+            if control_class_id is not None:
+                control_note = (
+                    "Duplicates base rows to match train-list row count and labeled class exposure "
+                    "without adding new synthetic images."
+                )
             print(
-                f"row_control dose={dose} source={args.control_source} "
+                f"row_control dose={dose} source={control_source_label} "
                 f"unique={control_summary['unique_images']} backgrounds={control_summary['backgrounds']}",
                 flush=True,
             )
@@ -506,16 +561,16 @@ def main() -> int:
                 },
                 extra_sources={
                     "row_count_control_base_train_list": repo_rel(base_train_list),
-                    "row_count_control_source": args.control_source,
+                    "row_count_control_source": control_source_label,
                 },
                 row_count_control={
                     "base_config": repo_rel(base_path),
                     "base_train_list": repo_rel(base_train_list),
                     "stem_prefix": control_stem_prefix,
-                    "source": args.control_source,
+                    "source": control_source_label,
                     "matched_dose_images": int(dose),
                     "control_image_rows": control_rows,
-                    "note": "Duplicates base rows to match train-list row count without adding synthetic note exposure.",
+                    "note": control_note,
                 },
             )
 
