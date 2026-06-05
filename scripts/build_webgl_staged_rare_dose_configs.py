@@ -25,6 +25,7 @@ DEFAULT_OUT_DIR = ROOT / "configs" / "webgl_staged_dose"
 DEFAULT_LIST_DIR = ROOT / "configs" / "generated_lists" / "webgl_staged_dose"
 DEFAULT_DOMAIN_GAP_DIR = ROOT / "runs" / "cashsnap"
 DEFAULT_CLASSES = "KHR_2000,KHR_50000,KHR_20000,KHR_10000,KHR_5000"
+DEFAULT_STEM_PREFIX = "cashsnap_v1_plus_webgl_accepted_rare_support"
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,6 +36,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--list-dir", type=Path, default=DEFAULT_LIST_DIR)
     parser.add_argument("--domain-gap-dir", type=Path, default=DEFAULT_DOMAIN_GAP_DIR)
+    parser.add_argument(
+        "--stem-prefix",
+        default=DEFAULT_STEM_PREFIX,
+        help="Output stem prefix; dose number is appended as '_dose<N>'.",
+    )
     parser.add_argument("--doses", default="1,2,4,8,16", help="Comma/space-separated dose image counts.")
     parser.add_argument("--dose-classes", default=DEFAULT_CLASSES)
     parser.add_argument("--max-combinations", type=int, default=500_000)
@@ -346,7 +352,7 @@ def main() -> int:
             for row in selected_rows
         ]
         combined_rows = list(dict.fromkeys([*base_rows, *dose_image_rows]))
-        stem = f"cashsnap_v1_plus_webgl_accepted_rare_support_dose{dose}"
+        stem = f"{args.stem_prefix}_dose{dose}"
         out_path = out_dir / f"{stem}.yaml"
         train_list = list_dir / f"{stem}_train.txt"
         domain_gap_json = domain_gap_dir / f"domain_gap_{stem}_train.json"
@@ -391,6 +397,7 @@ def main() -> int:
                 "base_train_list": repo_rel(base_train_list),
                 "dose_root": repo_rel(dose_root),
                 "dose_recipe_id": args.recipe_id,
+                "stem_prefix": args.stem_prefix,
                 "dose_image_rows": dose_image_rows,
                 **dose_report,
             }
