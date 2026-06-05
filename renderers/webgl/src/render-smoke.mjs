@@ -112,8 +112,8 @@ if (!["any", "front_only", "back_only", "front_back_mix"].includes(ASSET_SIDE_PO
   throw new Error("--asset-side-policy must be one of: any, front_only, back_only, front_back_mix");
 }
 
-if (!["default", "real_aspect_v1"].includes(STACK_POSE_POLICY)) {
-  throw new Error("--stack-pose-policy must be one of: default, real_aspect_v1");
+if (!["default", "real_aspect_v1", "real_aspect_v2"].includes(STACK_POSE_POLICY)) {
+  throw new Error("--stack-pose-policy must be one of: default, real_aspect_v1, real_aspect_v2");
 }
 
 if (![
@@ -624,11 +624,29 @@ const STACK_REAL_ASPECT_Z_ABS_RANGES = {
   KHR_50000: [0.06, 0.24],
 };
 
+const STACK_REAL_ASPECT_V2_Z_ABS_RANGES = {
+  ...STACK_REAL_ASPECT_Z_ABS_RANGES,
+  USD_50: [0.00, 0.12],
+  KHR_10000: [0.00, 0.06],
+  KHR_20000: [0.00, 0.08],
+};
+
+const STACK_REAL_ASPECT_V2_POSITION_LIMITS = {
+  USD_50: { x: [-0.28, 0.18], y: [-0.12, 0.14] },
+  KHR_10000: { x: [-0.30, 0.22], y: [-0.12, 0.18] },
+  KHR_20000: { x: [-0.32, 0.22], y: [-0.12, 0.18] },
+};
+
+function stackRealAspectZRanges() {
+  if (STACK_POSE_POLICY === "real_aspect_v2") return STACK_REAL_ASPECT_V2_Z_ABS_RANGES;
+  return STACK_REAL_ASPECT_Z_ABS_RANGES;
+}
+
 function stackZRotationForClass(className, baseZ, rng) {
   if (STACK_POSE_POLICY === "default") {
     return baseZ + randomBetween(rng, -0.34, 0.34);
   }
-  const range = STACK_REAL_ASPECT_Z_ABS_RANGES[className];
+  const range = stackRealAspectZRanges()[className];
   if (!range) {
     throw new Error(`No stack real-aspect z-rotation range for class ${className}`);
   }
@@ -636,9 +654,49 @@ function stackZRotationForClass(className, baseZ, rng) {
 }
 
 function stackExposurePriority(className) {
-  if (STACK_POSE_POLICY !== "real_aspect_v1") return 0;
-  if (className === "KHR_20000") return 2;
+  if (STACK_POSE_POLICY === "real_aspect_v1") {
+    if (className === "KHR_20000") return 2;
+    return 0;
+  }
+  if (STACK_POSE_POLICY === "real_aspect_v2") {
+    if (className === "KHR_20000") return 2;
+    if (className === "KHR_10000") return 1;
+    if (className === "USD_50") return 1;
+  }
   return 0;
+}
+
+function clampValue(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function stackPositionLimitsForClass(className) {
+  if (STACK_POSE_POLICY !== "real_aspect_v2") return null;
+  return STACK_REAL_ASPECT_V2_POSITION_LIMITS[className] ?? null;
+}
+
+function stackHorizontalSliceStressForClass(className, variant, index) {
+  // Sparse KHR_10000 partials give geometry selection a real-aspect tail without changing default/v1 stacks.
+  return STACK_POSE_POLICY === "real_aspect_v2"
+    && className === "KHR_10000"
+    && (variant + index) % 6 === 0;
+}
+
+function stackPositionForClass(className, position, variant, index) {
+  if (stackHorizontalSliceStressForClass(className, variant, index)) {
+    return [
+      clampValue(position[0], -0.12, 0.12),
+      (variant + index) % 12 === 0 ? 0.46 : -0.34,
+      position[2],
+    ];
+  }
+  const limits = stackPositionLimitsForClass(className);
+  if (!limits) return position;
+  return [
+    clampValue(position[0], limits.x[0], limits.x[1]),
+    clampValue(position[1], limits.y[0], limits.y[1]),
+    position[2],
+  ];
 }
 
 function stackLayerRanksForClasses(classNames, layerOrder) {
@@ -788,11 +846,11 @@ function variantAssets(variant) {
     const base = baseAssets[index % baseAssets.length];
     const anchor = anchors[index % anchors.length];
     const layer = layerRanks[index];
-    const position = [
+    const position = stackPositionForClass(className, [
       anchor[0] + randomBetween(rng, -0.10, 0.10),
       anchor[1] + randomBetween(rng, -0.10, 0.10),
       0.03 + layer * 0.045,
-    ];
+    ], variant, index);
     const rotationX = base.rotation[0] + randomBetween(rng, -0.05, 0.05);
     const rotationY = base.rotation[1] + randomBetween(rng, -0.05, 0.05);
     const stackZRotation = stackZRotationForClass(className, base.rotation[2], rng);
@@ -811,8 +869,10 @@ function variantAssets(variant) {
       stackPose: {
         policy: STACK_POSE_POLICY,
         exposurePriority: stackExposurePriority(className),
+        horizontalSliceStress: stackHorizontalSliceStressForClass(className, variant, index),
+        positionLimits: stackPositionLimitsForClass(className),
         zRotation: round3(stackZRotation),
-        zAbsRange: STACK_POSE_POLICY === "real_aspect_v1" ? STACK_REAL_ASPECT_Z_ABS_RANGES[className] : null,
+        zAbsRange: STACK_POSE_POLICY === "default" ? null : stackRealAspectZRanges()[className],
       },
       curl: 0.065 + randomBetween(rng, -0.020, 0.030),
       ripple: 0.0,
