@@ -54,6 +54,7 @@ CONDITION_CAPTURE_REQUIREMENTS = {
     "thin_edge_partial_fragments": {"thin_slice_khr_5000", "thin_slice_khr_20000"},
     "front_back_and_old_common_confusion": {"weak_khr_20000", "weak_khr_50000"},
     "repeated_same_denomination": {"same_denomination_fan"},
+    "hard_negatives_and_non_banknote_paper": {"no_note_background", "non_banknote_paper_props"},
 }
 
 BLOCKING_TARGET_STATUSES = {
