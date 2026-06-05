@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 from collections import Counter, defaultdict
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -137,6 +139,23 @@ def read_optional_json(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise SystemExit(f"{repo_path(resolved)}: expected JSON object")
     return data
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def file_fingerprint(path: Path) -> dict[str, Any]:
+    resolved = resolve(path)
+    row: dict[str, Any] = {"path": repo_path(resolved), "exists": resolved.exists()}
+    if resolved.exists() and resolved.is_file():
+        row["sha256"] = file_sha256(resolved)
+        row["size_bytes"] = resolved.stat().st_size
+    return row
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
@@ -303,6 +322,12 @@ def package_report(row: dict[str, Any]) -> dict[str, Any]:
             "visible_instances": int(visible_instances.get("total", 0) or 0),
             "scene_modes": summary.get("scene_modes", {}),
             "train_views": row.get("train_views", []),
+            "fingerprints": {
+                "recipe_json": file_fingerprint(recipe_path),
+                "qa_summary": file_fingerprint(summary_path),
+                "data_yaml": file_fingerprint(root / "data.yaml"),
+                "manifest": file_fingerprint(root / "manifest.json"),
+            },
         }
     )
     if rendered_status not in TRAINABLE_PACKAGE_STATUSES:
@@ -535,9 +560,20 @@ def main() -> int:
     ]
 
     report = {
+        "generated_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "targets": repo_path(args.targets),
         "catalog": repo_path(args.catalog),
         "suite": repo_path(args.suite),
+        "input_fingerprints": {
+            "targets": file_fingerprint(args.targets),
+            "catalog": file_fingerprint(args.catalog),
+            "suite": file_fingerprint(args.suite),
+            "sources": file_fingerprint(args.sources),
+            "quality": file_fingerprint(args.quality),
+            "capture_inventory": file_fingerprint(args.capture_inventory),
+            "capture_requirements": file_fingerprint(args.capture_requirements),
+            "real_dataset_candidates": file_fingerprint(args.real_dataset_candidates),
+        },
         "check_existing": args.check_existing,
         "required_conditions": len(required_reports),
         "required_with_trainable_candidate": len(trainable_required),

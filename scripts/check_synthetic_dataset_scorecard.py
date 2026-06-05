@@ -113,6 +113,114 @@ def read_comparison_jsons(paths: list[Path]) -> list[dict[str, Any]]:
     return comparisons
 
 
+def verify_fingerprint_row(row: dict[str, Any], *, label: str, required: bool = True) -> list[str]:
+    failures: list[str] = []
+    if not isinstance(row, dict):
+        return [f"{label} fingerprint row is malformed"]
+    path_text = str(row.get("path", "")).strip()
+    if not path_text:
+        return [f"{label} fingerprint row is missing path"]
+    exists = bool(row.get("exists"))
+    path = resolve(Path(path_text))
+    if required and not exists:
+        failures.append(f"{label} was missing when the report was generated: {path_text}")
+    if not path.exists():
+        if exists or required:
+            failures.append(f"{label} path is missing: {path_text}")
+        return failures
+    if not path.is_file():
+        failures.append(f"{label} path is not a file: {path_text}")
+        return failures
+    expected = str(row.get("sha256", "")).strip()
+    if not expected:
+        failures.append(f"{label} is missing sha256; regenerate the report with the current script")
+        return failures
+    actual = file_sha256(path)
+    if actual != expected:
+        failures.append(f"{label} fingerprint is stale: {path_text}")
+    return failures
+
+
+def readiness_freshness_failures(readiness: dict[str, Any]) -> list[str]:
+    failures: list[str] = []
+    if not str(readiness.get("generated_at_utc", "")).strip():
+        failures.append("readiness report is missing generated_at_utc; regenerate it with the current script")
+    input_fingerprints = readiness.get("input_fingerprints", {})
+    if not isinstance(input_fingerprints, dict) or not input_fingerprints:
+        return failures + ["readiness report is missing input_fingerprints; regenerate it with the current script"]
+
+    required_inputs = [
+        "targets",
+        "catalog",
+        "suite",
+        "sources",
+        "quality",
+        "capture_inventory",
+        "capture_requirements",
+    ]
+    for key in required_inputs:
+        failures.extend(verify_fingerprint_row(input_fingerprints.get(key, {}), label=f"readiness input {key}"))
+    real_dataset_candidates = readiness.get("real_dataset_candidates", {})
+    real_candidates_loaded = isinstance(real_dataset_candidates, dict) and bool(real_dataset_candidates.get("loaded"))
+    failures.extend(
+        verify_fingerprint_row(
+            input_fingerprints.get("real_dataset_candidates", {}),
+            label="readiness input real_dataset_candidates",
+            required=real_candidates_loaded,
+        )
+    )
+
+    if bool(readiness.get("check_existing")):
+        reports = readiness.get("suite_package_reports", {})
+        if not isinstance(reports, dict):
+            failures.append("readiness suite_package_reports is malformed")
+        else:
+            for recipe_id, report in sorted(reports.items()):
+                if not isinstance(report, dict):
+                    failures.append(f"readiness package report is malformed: {recipe_id}")
+                    continue
+                if not report.get("exists"):
+                    continue
+                fingerprints = report.get("fingerprints", {})
+                if not isinstance(fingerprints, dict) or not fingerprints:
+                    failures.append(f"{recipe_id}: package report is missing fingerprints; regenerate readiness")
+                    continue
+                for key in ["recipe_json", "qa_summary", "data_yaml", "manifest"]:
+                    failures.extend(
+                        verify_fingerprint_row(
+                            fingerprints.get(key, {}),
+                            label=f"readiness package {recipe_id} {key}",
+                        )
+                    )
+    return failures
+
+
+def readiness_freshness_axis(readiness: dict[str, Any]) -> dict[str, Any]:
+    failures = readiness_freshness_failures(readiness)
+    status = "pass" if not failures else "blocked"
+    input_fingerprints = readiness.get("input_fingerprints", {})
+    if not isinstance(input_fingerprints, dict):
+        input_fingerprints = {}
+    package_reports = readiness.get("suite_package_reports", {})
+    if not isinstance(package_reports, dict):
+        package_reports = {}
+    return axis(
+        "readiness_freshness",
+        status,
+        "Readiness inputs and checked package metadata are fresh."
+        if status == "pass"
+        else "Readiness input/package fingerprints are stale or missing.",
+        evidence={
+            "generated_at_utc": readiness.get("generated_at_utc", ""),
+            "input_fingerprints": input_fingerprints,
+            "check_existing": bool(readiness.get("check_existing")),
+            "package_report_count": len(package_reports),
+        },
+        blockers=failures,
+        next_action="" if status == "pass" else "Regenerate synthetic pipeline readiness with the current script and --check-existing.",
+    )
+
+
 def axis(
     name: str,
     status: str,
@@ -684,6 +792,7 @@ def build_scorecard(
     ]
 
     axes: list[dict[str, Any]] = []
+    axes.append(readiness_freshness_axis(readiness))
     axes.append(
         axis(
             "target_condition_coverage",
