@@ -95,6 +95,12 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Optional comma/space-separated class sequence for generic clean/stack/fan sampling.",
     )
+    parser.add_argument(
+        "--note-condition-policy",
+        choices=["mixed", "pristine_only", "heavy_wear", "wet_stress"],
+        default="mixed",
+        help="Per-note condition distribution for dirt/crinkle/wetness rendering.",
+    )
     parser.add_argument("--recipe-name", default="", help="Human-readable recipe name to write into recipe.json.")
     parser.add_argument(
         "--artifact-status",
@@ -238,6 +244,8 @@ def render_variant(variant: int, out_dir: Path, scene_mode: str, background_dir:
     ]
     if args.class_sequence.strip():
         cmd.extend(["--class-sequence", args.class_sequence])
+    if args.note_condition_policy != "mixed":
+        cmd.extend(["--note-condition-policy", args.note_condition_policy])
     if background_dir is not None:
         cmd.extend(["--background-dir", str(background_dir)])
     if args.environment_dir is not None:
@@ -1476,6 +1484,7 @@ def write_recipe_metadata(
             "height": args.height,
             "visual_scale": args.visual_scale,
             "browser_executable": rel(args.browser_executable) if args.browser_executable else "",
+            "note_condition_policy": args.note_condition_policy,
         },
         "asset_side_policy": args.asset_side_policy,
         "camera_profile": args.camera_profile,

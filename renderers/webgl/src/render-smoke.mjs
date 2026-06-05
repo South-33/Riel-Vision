@@ -27,6 +27,7 @@ const ENVIRONMENT_DIR = argValue("--environment-dir", "");
 const ASSET_SIDE_POLICY = argValue("--asset-side-policy", "any");
 const CAMERA_PROFILE = argValue("--camera-profile", "generic_phone_jitter");
 const CLASS_SEQUENCE_RAW = argValue("--class-sequence", "");
+const NOTE_CONDITION_POLICY = argValue("--note-condition-policy", "mixed");
 const BROWSER_EXECUTABLE = argValue("--browser-executable", process.env.CASHSNAP_WEBGL_BROWSER || EDGE);
 const WIDTH = Number.parseInt(argValue("--width", "1440"), 10);
 const HEIGHT = Number.parseInt(argValue("--height", "1080"), 10);
@@ -125,6 +126,10 @@ if (![
   throw new Error("--camera-profile must be one of: generic_phone_jitter, phone_auto, iphone_8_like, iphone_12_wide_like, budget_android_wide_like, browser_upload_resized, phone_closeup_clean_like, phone_top_down_like, phone_oblique_30_like, phone_oblique_45_like, phone_low_front_like");
 }
 
+if (!["mixed", "pristine_only", "heavy_wear", "wet_stress"].includes(NOTE_CONDITION_POLICY)) {
+  throw new Error("--note-condition-policy must be one of: mixed, pristine_only, heavy_wear, wet_stress");
+}
+
 const effectiveSceneMode = SCENE_MODE === "auto" ? (VARIANT >= 100 ? "fan" : "stack") : SCENE_MODE;
 
 function mulberry32(seed) {
@@ -200,20 +205,36 @@ function noteConditionFor(asset, variant, index) {
   const seed = 26056503 + variant * 1009 + index * 9173 + (asset.classIndex ?? 0) * 137;
   const rng = mulberry32(seed);
   const cleanScene = Boolean(asset.clean || asset.cleanSingle || effectiveSceneMode === "clean" || effectiveSceneMode === "clean_single");
-  const bucket = rng();
-  let dirtiness = bucket < 0.18
-    ? randomBetween(rng, 0.00, 0.12)
-    : bucket < 0.74
-      ? randomBetween(rng, 0.12, 0.58)
-      : randomBetween(rng, 0.58, 1.00);
-  let crinkle = Math.pow(rng(), 1.25);
-  if (rng() < 0.18) crinkle = randomBetween(rng, 0.0, 0.16);
-  if (cleanScene) {
-    dirtiness *= 0.45;
-    crinkle *= 0.42;
+  let dirtiness = 0;
+  let crinkle = 0;
+  let wetness = 0;
+  if (NOTE_CONDITION_POLICY === "pristine_only") {
+    dirtiness = randomBetween(rng, 0.00, 0.08);
+    crinkle = randomBetween(rng, 0.00, 0.14);
+  } else if (NOTE_CONDITION_POLICY === "heavy_wear") {
+    dirtiness = randomBetween(rng, 0.55, 1.00);
+    crinkle = randomBetween(rng, 0.34, 1.00);
+    wetness = rng() < 0.22 ? randomBetween(rng, 0.10, 0.52) : 0.0;
+  } else if (NOTE_CONDITION_POLICY === "wet_stress") {
+    dirtiness = randomBetween(rng, 0.18, 0.82);
+    crinkle = randomBetween(rng, 0.10, 0.72);
+    wetness = randomBetween(rng, 0.32, 0.90);
+  } else {
+    const bucket = rng();
+    dirtiness = bucket < 0.18
+      ? randomBetween(rng, 0.00, 0.12)
+      : bucket < 0.74
+        ? randomBetween(rng, 0.12, 0.58)
+        : randomBetween(rng, 0.58, 1.00);
+    crinkle = Math.pow(rng(), 1.25);
+    if (rng() < 0.18) crinkle = randomBetween(rng, 0.0, 0.16);
+    if (cleanScene) {
+      dirtiness *= 0.45;
+      crinkle *= 0.42;
+    }
+    const wetChance = cleanScene ? 0.06 : 0.18;
+    wetness = rng() < wetChance ? randomBetween(rng, cleanScene ? 0.06 : 0.12, cleanScene ? 0.28 : 0.78) : 0.0;
   }
-  const wetChance = cleanScene ? 0.06 : 0.18;
-  const wetness = rng() < wetChance ? randomBetween(rng, cleanScene ? 0.06 : 0.12, cleanScene ? 0.28 : 0.78) : 0.0;
   const edgeWear = clamp(dirtiness * randomBetween(rng, 0.40, 1.10) + crinkle * 0.20, 0, 1);
   const creaseCount = Math.max(0, Math.round(crinkle * randomBetween(rng, 1.0, 5.0)));
   const stainCount = Math.max(0, Math.round(dirtiness * randomBetween(rng, 1.0, 4.5) + wetness * 3.0));
@@ -227,6 +248,7 @@ function noteConditionFor(asset, variant, index) {
         : "circulated";
   return {
     profile,
+    policy: NOTE_CONDITION_POLICY,
     seed,
     dirtiness: round3(dirtiness),
     crinkle: round3(crinkle),
@@ -448,6 +470,7 @@ function sceneConfig(variant, mode, backgroundPath, environmentPath) {
   const cleanSingle = mode === "clean_single";
   const environmentExtension = environmentPath ? path.extname(environmentPath).toLowerCase() : "";
   return {
+    noteConditionPolicy: NOTE_CONDITION_POLICY,
     surface: {
       ...surface,
       base: hexToNumber(surface.base),

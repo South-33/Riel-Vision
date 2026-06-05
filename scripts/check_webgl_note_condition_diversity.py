@@ -85,6 +85,7 @@ def main() -> int:
 
     total_notes = 0
     missing_conditions = 0
+    policies: Counter[str] = Counter()
     profiles: Counter[str] = Counter()
     values: dict[str, list[float]] = {field: [] for field in CONDITION_FIELDS}
 
@@ -92,6 +93,9 @@ def main() -> int:
         require(isinstance(row, dict), "manifest rows must be objects")
         meta = read_json(source_metadata_path(dataset_root, row))
         require(isinstance(meta, dict), f"{row.get('source_metadata')}: metadata must be an object")
+        scene_config = meta.get("sceneConfig", {})
+        require(isinstance(scene_config, dict), f"{row.get('source_metadata')}: sceneConfig must be an object")
+        policies[str(scene_config.get("noteConditionPolicy", "mixed"))] += 1
         assets = meta.get("assets", [])
         require(isinstance(assets, list), f"{row.get('source_metadata')}: metadata.assets must be a list")
         for asset in assets:
@@ -123,6 +127,7 @@ def main() -> int:
     dirty_notes = sum(1 for value in values["dirtiness"] if value >= 0.55)
     pristine_notes = int(profiles.get("pristine", 0))
     wet_notes = sum(1 for value in values["wetness"] if value >= 0.10)
+    policy = next(iter(policies)) if len(policies) == 1 else "mixed"
     stats = {
         "dirtiness_range": numeric_range(values["dirtiness"]),
         "crinkle_range": numeric_range(values["crinkle"]),
@@ -130,13 +135,46 @@ def main() -> int:
         "edge_wear_range": numeric_range(values["edgeWear"]),
     }
 
-    min_profiles = int(threshold(args.min_profiles, auto_unique_threshold(total_notes)))
-    min_dirtiness_range = float(threshold(args.min_dirtiness_range, auto_range_threshold(total_notes, 0.20, 0.45)))
-    min_crinkle_range = float(threshold(args.min_crinkle_range, auto_range_threshold(total_notes, 0.20, 0.40)))
-    min_wetness_range = float(threshold(args.min_wetness_range, 0.10 if total_notes >= 16 else 0.0))
-    min_dirty_notes = int(threshold(args.min_dirty_notes, 1 if total_notes >= 8 else 0))
-    min_pristine_notes = int(threshold(args.min_pristine_notes, 1 if total_notes >= 16 else 0))
-    min_wet_notes = int(threshold(args.min_wet_notes, 1 if total_notes >= 16 else 0))
+    if policy == "pristine_only":
+        default_min_profiles = 1
+        default_min_dirtiness_range = 0.0
+        default_min_crinkle_range = 0.0
+        default_min_wetness_range = 0.0
+        default_min_dirty_notes = 0
+        default_min_pristine_notes = total_notes
+        default_min_wet_notes = 0
+    elif policy == "heavy_wear":
+        default_min_profiles = 1
+        default_min_dirtiness_range = auto_range_threshold(total_notes, 0.12, 0.25)
+        default_min_crinkle_range = auto_range_threshold(total_notes, 0.16, 0.35)
+        default_min_wetness_range = 0.0
+        default_min_dirty_notes = max(1, int(total_notes * 0.70))
+        default_min_pristine_notes = 0
+        default_min_wet_notes = 0
+    elif policy == "wet_stress":
+        default_min_profiles = 1
+        default_min_dirtiness_range = auto_range_threshold(total_notes, 0.16, 0.30)
+        default_min_crinkle_range = auto_range_threshold(total_notes, 0.16, 0.30)
+        default_min_wetness_range = auto_range_threshold(total_notes, 0.18, 0.35)
+        default_min_dirty_notes = 0
+        default_min_pristine_notes = 0
+        default_min_wet_notes = max(1, int(total_notes * 0.85))
+    else:
+        default_min_profiles = auto_unique_threshold(total_notes)
+        default_min_dirtiness_range = auto_range_threshold(total_notes, 0.20, 0.45)
+        default_min_crinkle_range = auto_range_threshold(total_notes, 0.20, 0.40)
+        default_min_wetness_range = 0.10 if total_notes >= 16 else 0.0
+        default_min_dirty_notes = 1 if total_notes >= 8 else 0
+        default_min_pristine_notes = 1 if total_notes >= 16 else 0
+        default_min_wet_notes = 1 if total_notes >= 16 else 0
+
+    min_profiles = int(threshold(args.min_profiles, default_min_profiles))
+    min_dirtiness_range = float(threshold(args.min_dirtiness_range, default_min_dirtiness_range))
+    min_crinkle_range = float(threshold(args.min_crinkle_range, default_min_crinkle_range))
+    min_wetness_range = float(threshold(args.min_wetness_range, default_min_wetness_range))
+    min_dirty_notes = int(threshold(args.min_dirty_notes, default_min_dirty_notes))
+    min_pristine_notes = int(threshold(args.min_pristine_notes, default_min_pristine_notes))
+    min_wet_notes = int(threshold(args.min_wet_notes, default_min_wet_notes))
 
     require(profile_count >= min_profiles, f"expected at least {min_profiles} condition profiles, got {profile_count}: {dict(profiles)}")
     require(stats["dirtiness_range"] >= min_dirtiness_range, f"dirtiness range {stats['dirtiness_range']:.4f} below {min_dirtiness_range:.4f}")
@@ -148,7 +186,7 @@ def main() -> int:
 
     print(
         "ok: WebGL note condition diversity passed "
-        f"({total_notes} notes, profiles={dict(sorted(profiles.items()))}, dirty={dirty_notes}, "
+        f"({total_notes} notes, policy={policy}, profiles={dict(sorted(profiles.items()))}, dirty={dirty_notes}, "
         f"pristine={pristine_notes}, wet={wet_notes}, dirtiness_range={stats['dirtiness_range']:.2f}, "
         f"crinkle_range={stats['crinkle_range']:.2f}, wetness_range={stats['wetness_range']:.2f})"
     )

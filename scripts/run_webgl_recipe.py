@@ -41,6 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--asset-side-policy", default="", help="Override catalog asset-side sampling policy.")
     parser.add_argument("--camera-profile", default="", help="Override catalog WebGL camera/FOV/framing profile.")
     parser.add_argument("--class-sequence", default="", help="Override catalog class sequence for supported scene modes.")
+    parser.add_argument("--note-condition-policy", default="", help="Override catalog per-note dirt/crinkle/wetness policy.")
     parser.add_argument("--artifact-status", choices=["smoke", "diagnostic", "trainable-candidate"], default="")
     parser.add_argument("--background-dir", type=Path, default=None)
     parser.add_argument("--environment-dir", type=Path, default=None, help="Optional equirectangular environment map directory for visual lighting/reflections.")
@@ -155,6 +156,9 @@ def main() -> int:
     asset_side_policy = choose_asset_side_policy(recipe, args.asset_side_policy)
     camera_profile = choose_camera_profile(recipe, args.camera_profile)
     class_sequence = args.class_sequence.strip() or normalize_class_sequence(recipe.get("class_sequence", ""))
+    note_condition_policy = args.note_condition_policy.strip() or str(recipe.get("note_condition_policy", "mixed")).strip() or "mixed"
+    if note_condition_policy not in {"mixed", "pristine_only", "heavy_wear", "wet_stress"}:
+        raise SystemExit(f"unsupported note_condition_policy: {note_condition_policy}")
     count = int(args.count if args.count is not None else recipe.get("render_pool_count", 4))
     if count < 1:
         raise SystemExit("--count must be positive")
@@ -250,6 +254,8 @@ def main() -> int:
     ]
     if class_sequence:
         cmd.extend(["--class-sequence", class_sequence])
+    if note_condition_policy != "mixed":
+        cmd.extend(["--note-condition-policy", note_condition_policy])
     if balanced_subset_count > 0:
         cmd.extend(["--balanced-subset-count", str(balanced_subset_count)])
         if balanced_subset_classes:
