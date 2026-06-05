@@ -83,6 +83,17 @@ BLOCKING_TARGET_STATUSES = {
 }
 
 USABLE_RIGHTS = {"own_photo", "rights_clear", "public_domain", "cc0"}
+DERIVED_CAPTURE_ARTIFACT_TOKENS = {
+    "annotated",
+    "bpmn",
+    "contact_sheet",
+    "diagram",
+    "overlay",
+    "prediction",
+    "preview",
+    "screenshot",
+    "synthetic",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -223,12 +234,30 @@ def scoreable_real_images_by_role(source_rows: list[dict[str, str]], scoreable_i
     return {role: sorted(image_ids) for role, image_ids in sorted(role_images.items())}
 
 
+def derived_capture_tokens(local_path: str) -> list[str]:
+    haystack = local_path.replace("\\", "/").lower()
+    return sorted(token for token in DERIVED_CAPTURE_ARTIFACT_TOKENS if token in haystack)
+
+
+def capture_inventory_issues(rows: list[dict[str, str]]) -> list[str]:
+    issues: list[str] = []
+    for row in rows:
+        image_id = row.get("image_id", "").strip() or "<missing image_id>"
+        local_path = row.get("local_path", "").strip()
+        tokens = derived_capture_tokens(local_path)
+        if tokens:
+            issues.append(f"{image_id}: likely derived/non-raw capture artifact ({','.join(tokens)})")
+    return issues
+
+
 def usable_capture_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     usable: list[dict[str, str]] = []
     for row in rows:
         if row.get("rights_status", "").strip().lower() not in USABLE_RIGHTS:
             continue
         local_path = row.get("local_path", "").strip()
+        if derived_capture_tokens(local_path):
+            continue
         if not local_path or not resolve(Path(local_path)).exists():
             continue
         usable.append(row)
@@ -511,6 +540,7 @@ def main() -> int:
     promoted_roles = promoted_real_roles(source_rows)
     scoreable_images = scoreable_real_images(quality_rows)
     scoreable_role_images = scoreable_real_images_by_role(source_rows, scoreable_images)
+    capture_issues = capture_inventory_issues(capture_inventory)
     usable_captures = usable_capture_rows(capture_inventory)
 
     condition_reports = [
@@ -586,6 +616,7 @@ def main() -> int:
         "scoreable_real_images_by_role": scoreable_role_images,
         "promoted_real_role_counts": dict(sorted(promoted_roles.items())),
         "usable_capture_images": len(usable_captures),
+        "capture_inventory_issues": capture_issues,
         "real_dataset_candidates": {
             "path": repo_path(args.real_dataset_candidates),
             "loaded": bool(real_dataset_candidates),

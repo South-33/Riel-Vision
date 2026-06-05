@@ -1243,6 +1243,7 @@ def build_scorecard(
     real_ready = int(readiness.get("required_with_real_role_labels", 0) or 0)
     real_total = int(readiness.get("required_real_role_conditions", 0) or 0)
     usable_captures = int(readiness.get("usable_capture_images", 0) or 0)
+    capture_inventory_issues = [str(item) for item in readiness.get("capture_inventory_issues", [])]
     blocked_conditions = [str(item) for item in readiness.get("blocked_required_conditions", [])]
     missing_trainable_conditions = [
         condition_id
@@ -1292,8 +1293,13 @@ def build_scorecard(
                 "promoted_real_role_counts": readiness.get("promoted_real_role_counts", {}),
                 "scoreable_real_images": readiness.get("scoreable_real_images", []),
                 "usable_capture_images": usable_captures,
+                "capture_inventory_issues": capture_inventory_issues,
             },
-            blockers=[] if real_total and real_ready == real_total and usable_captures > 0 else blocked_conditions,
+            blockers=(
+                []
+                if real_total and real_ready == real_total and usable_captures > 0 and not capture_inventory_issues
+                else [*blocked_conditions, *capture_inventory_issues]
+            ),
             next_action="Promote reviewed real stress labels or register usable captures before claiming transfer proof.",
         )
     )
