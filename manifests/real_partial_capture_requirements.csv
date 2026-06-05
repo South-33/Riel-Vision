@@ -2,6 +2,7 @@ requirement_id,description,min_images,match_column,match_value,required,priority
 single_khr,"Single current KHR notes, front/back mix",5,scene_type,single_khr,yes,3,"Normal table/background; useful for sanity and class balance."
 simple_overlap,"Simple overlapping KHR notes with visible denomination evidence",5,scene_type,simple_overlap,yes,2,"2-4 notes, denomination numerals or distinctive design visible."
 hand_fan,"Hand-held fan photos",5,scene_type,hand_fan,yes,1,"6-15 notes with at least some human-identifiable visible slices."
+same_denomination_fan,"Hand-held fan photos containing repeated same-denomination notes",3,scene_type,same_denomination_fan,yes,1,"Targets same-class counting/fusion; include at least 3 notes of one denomination where separate physical notes are human-countable."
 hand_occlusion,"Finger or hand occlusion",3,scene_type,hand_occlusion,yes,2,"Fingers can cover notes, but denomination evidence must remain visible."
 partial_off_frame,"Notes clipped by the image border",3,scene_type,partial_off_frame,yes,2,"Tests half/quarter/off-frame behavior."
 thin_slice_khr_5000,"Thin/edge partial KHR_5000 slices, front/back mix",3,scene_type,thin_slice_khr_5000,yes,1,"Targets high-confidence KHR_5000 -> KHR_10000 misses from the Roboflow old/common failure pack."
