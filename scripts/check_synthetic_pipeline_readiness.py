@@ -25,6 +25,7 @@ DEFAULT_SOURCES = ROOT / "manifests" / "real_fan_benchmark_sources.csv"
 DEFAULT_QUALITY = ROOT / "manifests" / "real_fan_benchmark_label_quality.csv"
 DEFAULT_CAPTURE_INVENTORY = ROOT / "manifests" / "real_partial_capture_inventory.csv"
 DEFAULT_CAPTURE_REQUIREMENTS = ROOT / "manifests" / "real_partial_capture_requirements.csv"
+DEFAULT_REAL_DATASET_CANDIDATES = ROOT / "runs" / "cashsnap" / "real_dataset_stress_candidates_latest.json"
 
 RECIPE_STATUS_RANK = {
     "rejected_probe": -1,
@@ -57,6 +58,17 @@ CONDITION_CAPTURE_REQUIREMENTS = {
     "hard_negatives_and_non_banknote_paper": {"no_note_background", "non_banknote_paper_props"},
 }
 
+CONDITION_REAL_DATASET_CANDIDATES = {
+    "loose_counter_stack_overlap": {"simple_overlap", "khr_5000_face_number_overlap"},
+    "dense_shop_overlap": {"simple_overlap", "khr_5000_face_number_overlap"},
+    "handheld_fan": {"hand_fan"},
+    "finger_or_hand_split_occlusion": set(),
+    "thin_edge_partial_fragments": {"thin_slice_khr_5000", "thin_slice_khr_20000", "partial_off_frame"},
+    "front_back_and_old_common_confusion": {"weak_khr_20000", "weak_khr_50000"},
+    "repeated_same_denomination": {"same_denomination_fan"},
+    "hard_negatives_and_non_banknote_paper": set(),
+}
+
 BLOCKING_TARGET_STATUSES = {
     "not_solved",
     "renderer_smoke_only",
@@ -77,6 +89,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--quality", type=Path, default=DEFAULT_QUALITY)
     parser.add_argument("--capture-inventory", type=Path, default=DEFAULT_CAPTURE_INVENTORY)
     parser.add_argument("--capture-requirements", type=Path, default=DEFAULT_CAPTURE_REQUIREMENTS)
+    parser.add_argument(
+        "--real-dataset-candidates",
+        type=Path,
+        default=DEFAULT_REAL_DATASET_CANDIDATES,
+        help="Optional stress-candidate summary from mine_real_dataset_stress_candidates.py.",
+    )
     parser.add_argument("--json-out", type=Path, default=None)
     parser.add_argument(
         "--check-existing",
@@ -102,6 +120,16 @@ def read_json(path: Path) -> dict[str, Any]:
     resolved = resolve(path)
     if not resolved.exists():
         raise SystemExit(f"missing JSON file: {repo_path(resolved)}")
+    data = json.loads(resolved.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise SystemExit(f"{repo_path(resolved)}: expected JSON object")
+    return data
+
+
+def read_optional_json(path: Path) -> dict[str, Any]:
+    resolved = resolve(path)
+    if not resolved.exists():
+        return {}
     data = json.loads(resolved.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise SystemExit(f"{repo_path(resolved)}: expected JSON object")
@@ -201,6 +229,29 @@ def capture_requirement_reports(
     return reports
 
 
+def real_dataset_candidate_reports(condition_id: str, candidate_summary: dict[str, Any]) -> list[dict[str, Any]]:
+    wanted = CONDITION_REAL_DATASET_CANDIDATES.get(condition_id, set())
+    counts = candidate_summary.get("scene_candidate_counts", {})
+    unique_counts = candidate_summary.get("scene_unique_origin_counts", {})
+    if not isinstance(counts, dict) or not isinstance(unique_counts, dict):
+        return []
+    reports: list[dict[str, Any]] = []
+    for scene_type in sorted(wanted):
+        count = int(counts.get(scene_type, 0) or 0)
+        unique_origins = int(unique_counts.get(scene_type, 0) or 0)
+        if count <= 0 and unique_origins <= 0:
+            continue
+        reports.append(
+            {
+                "scene_type": scene_type,
+                "candidate_count": count,
+                "unique_origin_count": unique_origins,
+                "status": "candidate_needs_visual_review",
+            }
+        )
+    return reports
+
+
 def package_report(row: dict[str, Any]) -> dict[str, Any]:
     root = resolve(Path(str(row.get("out_root", ""))))
     report: dict[str, Any] = {
@@ -264,6 +315,7 @@ def condition_state(
     scoreable_images: set[str],
     requirement_rows: list[dict[str, str]],
     usable_captures: list[dict[str, str]],
+    real_dataset_candidates: dict[str, Any],
     check_existing: bool,
 ) -> dict[str, Any]:
     condition_id = str(target["id"])
@@ -304,6 +356,16 @@ def condition_state(
     if missing_capture:
         blockers.append(f"capture inventory gaps: {', '.join(missing_capture)}")
 
+    candidate_reports = real_dataset_candidate_reports(condition_id, real_dataset_candidates)
+    if candidate_reports:
+        notes.append(
+            "real dataset review candidates: "
+            + ", ".join(
+                f"{row['scene_type']} {row['candidate_count']} candidates/{row['unique_origin_count']} origins"
+                for row in candidate_reports
+            )
+        )
+
     if scoreable_images:
         notes.append(f"{len(scoreable_images)} image(s) have scoreable draft/promoted box quality rows")
 
@@ -334,6 +396,7 @@ def condition_state(
         "required_real_roles": sorted(required_roles),
         "missing_real_roles": missing_roles,
         "capture_requirements": capture_reports,
+        "real_dataset_review_candidates": candidate_reports,
         "state": state,
         "blockers": blockers,
         "notes": notes,
@@ -349,6 +412,7 @@ def main() -> int:
     quality_rows = read_csv(args.quality)
     capture_inventory = read_csv(args.capture_inventory)
     capture_requirements = read_csv(args.capture_requirements)
+    real_dataset_candidates = read_optional_json(args.real_dataset_candidates)
 
     target_rows = targets.get("conditions", [])
     catalog_rows = catalog.get("recipes", [])
@@ -395,6 +459,7 @@ def main() -> int:
             scoreable_images=scoreable_images,
             requirement_rows=capture_requirements,
             usable_captures=usable_captures,
+            real_dataset_candidates=real_dataset_candidates,
             check_existing=args.check_existing,
         )
         for row in target_rows
@@ -419,6 +484,12 @@ def main() -> int:
         "scoreable_real_images": sorted(scoreable_images),
         "promoted_real_role_counts": dict(sorted(promoted_roles.items())),
         "usable_capture_images": len(usable_captures),
+        "real_dataset_candidates": {
+            "path": repo_path(args.real_dataset_candidates),
+            "loaded": bool(real_dataset_candidates),
+            "scene_candidate_counts": real_dataset_candidates.get("scene_candidate_counts", {}),
+            "scene_unique_origin_counts": real_dataset_candidates.get("scene_unique_origin_counts", {}),
+        },
         "suite_package_reports": package_reports,
         "ready_for_synthetic_scale": not blocked_required,
         "blocked_required_conditions": [row["condition_id"] for row in blocked_required],
@@ -451,6 +522,8 @@ def main() -> int:
             print(f"  - {blocker}")
         if len(row["blockers"]) > 4:
             print(f"  - ... {len(row['blockers']) - 4} more")
+        for note in row["notes"][:2]:
+            print(f"  note: {note}")
 
     if args.json_out is not None:
         print(f"wrote_json={repo_path(args.json_out)}")

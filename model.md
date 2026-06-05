@@ -33,7 +33,21 @@ The best-supported path right now is a scoreable P1 transfer test:
 3. Probe fragment-to-physical-note fusion once the evaluation set can expose whether fragment evidence helps or just overcounts.
 4. Promote synthetic changes when they improve the real scoreboard without materially regressing clean/base validation or browser deploy guards.
 
-Current evidence gap: P1 transfer has 0 promoted real fan/overlap stress labels. Public/raw candidates are useful diagnostics, but not scoreable substitutes.
+Current evidence gap: P1 transfer has 0 promoted real fan/overlap stress labels. Existing `cashsnap_v1` real labels now mine into useful overlap/thin/weak-class review queues, but candidate queues are not scoreable proof until visually promoted.
+
+## Dataset Perfection Rubric
+
+Source: `docs/research/What Makes a Dataset Perfect for Synthetic Data Pipelines.pdf`.
+
+For CashSnap, "perfect synth data" means operationally fit-for-purpose, not absolute realism. Keep a real anchor and protected real holdout, use synthetic generation to fill named gaps, and promote only when real-holdout utility improves without breaking clean/base, rare-class, browser, or governance guardrails.
+
+- Coverage beats raw size. Maintain a named edge-case inventory for overlap, dense fan, hand occlusion, thin/off-frame slices, same-denomination repeats, weak denominations, realistic backgrounds, and hard negatives; "not observed" means "not audited."
+- Label trust beats realism theater. For detection, visible-region boxes/masks, missing/spurious/wrong-class labels, duplicate boxes, ignored/crowd regions, and fragment-vs-physical-count semantics are higher ROI than prettier pixels.
+- Evaluate as a layered scorecard: real-holdout utility first (`mAP50-95`, per-class AP, AP_small/partial-slice recall, FP/image, calibration, browser count error), then fidelity/domain gap, diversity/coverage, slice fairness, provenance, and privacy/memorization checks if data is released or sensitive.
+- Optimize content and context gaps, not just the appearance gap. Structured, context-aware scenes with realistic co-occurrence, occlusion, backgrounds, hard negatives, and rare-class support are more valuable than naive randomization or photorealistic but distributionally wrong scenes.
+- Treat hybrid real+synthetic as the default. Synthetic-only or synthetic-recursive loops risk tail collapse; after every major synthesis or retraining cycle, re-audit slices against fresh or protected real anchors.
+- Blank labels are not hard negatives until visually verified no banknotes are present. The mined `cashsnap_v1` blank-label queue contains unlabeled/out-of-scope banknotes, so it must stay `blank_label_or_unlabeled`, not `no_note_background`.
+- Governance is part of dataset quality: preserve asset provenance, licenses, annotation rules, recipe metadata, change logs, scorecards, and intended/prohibited use notes for every promoted dataset.
 
 ## Synthetic Pipeline State
 
@@ -64,7 +78,9 @@ Done and trusted:
 - WebGL environment maps are review-gated: packaged renders with `--environment-dir` must pass `check_webgl_environment_banks.py` against the environment-bank registry, so unregistered or planned-only HDRI/LDR banks cannot slip into trainable-candidate data.
 - `download_polyhaven_environment_bank.py` can reproduce the planned Poly Haven HDRI proof bank with a unique API User-Agent, md5/size verification, per-asset source/license/credit metadata, and a standalone proof-only config under ignored `data/environment_maps/`.
 - `check_webgl_environment_review.py` verifies that an environment-bank review render covered every asset listed in the bank config and still has valid batch count metadata.
-- `check_synthetic_pipeline_readiness.py` is the mission-level scale audit: it joins target-matrix conditions, recipe catalog rows, the active trainable-candidate suite, rendered package metadata, real benchmark roles, and real capture inventory so synthetic scale decisions fail on explicit condition/validation gaps instead of vibes.
+- `mine_real_dataset_stress_candidates.py` turns existing real YOLO data into review queues and contact sheets for partial/stress slices; `check_synthetic_pipeline_readiness.py` reports those candidates as non-unblocking hints so real data already in the repo is used without silently promoting heuristics.
+- `check_synthetic_pipeline_readiness.py` is the mission-level scale audit: it joins target-matrix conditions, recipe catalog rows, the active trainable-candidate suite, rendered package metadata, real benchmark roles, real capture inventory, and mined real-dataset candidate hints so synthetic scale decisions fail on explicit condition/validation gaps instead of vibes.
+- `check_synthetic_dataset_scorecard.py` turns the dataset-perfection rubric into a thin executable summary over readiness/domain-gap artifacts. Current scorecard is blocked: synthetic coverage, package trust, and accepted-blend domain gap pass; real anchor/holdout, hard negatives, and real utility are blocked; edge-case inventory and governance need review.
 - `audit_yolo_domain_gap.py` now has opt-in domain-gap gates for real-vs-synthetic image statistics, box geometry, and synthetic dose ratios; `build_webgl_accepted_blend_config.py` runs the `accepted_blend_v1` preset by default after building the accepted blend so bad blends fail before training spend.
 - `build_webgl_accepted_blend_variant_configs.py` builds leave-one-out accepted-blend configs/lists and annotates each with domain-gate pass/fail so interaction probes are reproducible and not hand-edited; all four whole-recipe removals are now tested and rejected as the fix for the accepted blend's rare-class edge.
 - `build_webgl_staged_rare_dose_configs.py` builds accepted-blend + rare-support staged dose configs/lists, supports `--stem-prefix` so alternate dose roots do not overwrite each other, and can write matched row-count controls with `--write-row-count-controls`. `--control-source class --control-class <name>` duplicates existing same-class base rows so probes can separate row-count, class-exposure, and synthetic-visual effects. Fan and stack dose 1/2 pass the accepted-blend domain-gap preset; dose 4/8/16 are written for audit context but are domain-flagged before training.
@@ -75,7 +91,7 @@ Done and trusted:
 
 Still missing:
 
-- Scoreable real fan/overlap labels for P1 transfer.
+- Scoreable promoted real fan/overlap labels for P1 transfer; mined `cashsnap_v1` candidates need visual promotion before they count.
 - Scoreable real repeated-denomination fan labels for same-class counting/fusion transfer.
 - Real-derived camera/postprocess profiles from CashSnap captures and EXIF.
 - Accepted HDRI/equirectangular environment-map bank for realistic lighting/reflection variation; WebGL can load and gate environment maps, but the default registry is still planned-only with no reviewed CC0 asset bank accepted yet.
@@ -120,6 +136,8 @@ Current useful checks:
 
 - P1 readiness: `rl python scripts\check_webgl_p1_readiness.py --smoke-mix configs\cashsnap_webgl_trainable_candidates_mix.yaml`
 - Mission-level synthetic scale readiness: `rl python scripts\check_synthetic_pipeline_readiness.py --check-existing --json-out runs\cashsnap\synthetic_pipeline_readiness_latest.json`
+- Real dataset stress-candidate mining: `rl python scripts\mine_real_dataset_stress_candidates.py --data data\cashsnap_v1\data.yaml`
+- Dataset-perfection scorecard: `rl python scripts\check_synthetic_dataset_scorecard.py --readiness runs\cashsnap\synthetic_pipeline_readiness_latest.json --domain-gap runs\cashsnap\domain_gap_accepted_nowarmup_train.json`
 - Accepted-blend domain gap gate: `rl python scripts\audit_yolo_domain_gap.py --data configs\cashsnap_v1_plus_webgl_accepted_nowarmup_probe.yaml --split train --json-out runs\cashsnap\domain_gap_accepted_nowarmup_train.json --gate-preset accepted_blend_v1 --fail-on-gap`
 - Accepted-blend leave-one-out variants: `rl python scripts\build_webgl_accepted_blend_variant_configs.py`
 - Staged rare-support dose configs: `rl python scripts\build_webgl_staged_rare_dose_configs.py`
@@ -188,6 +206,9 @@ Keep this table curated. Add rows only for results that change what a future age
 | 2026-06-05 | validation | keep | Real capture requirements now include explicit `same_denomination_fan` scenes. `check_synthetic_pipeline_readiness.py` maps `repeated_same_denomination` to that bucket instead of generic `hand_fan`, so same-class count/fusion validation cannot be accidentally satisfied by ordinary fan photos. |
 | 2026-06-05 | validation | keep | Hard-negative validation now has explicit real capture requirements: `no_note_background` and `non_banknote_paper_props`, and `check_synthetic_pipeline_readiness.py` maps `hard_negatives_and_non_banknote_paper` to those buckets. This turns background QA from a vague blocker into countable capture inventory gaps. |
 | 2026-06-05 | validation | keep | `check_capture_requirements.py --shot-list-out runs/cashsnap/real_capture_shot_list_latest.md` writes a prioritized Markdown capture list with exact drop folders and registration commands. Latest shot list shows 0 usable captures and makes the P1 unblock set explicit: hand fan, KHR_5000 face/number overlap, no-note backgrounds, non-banknote paper props, same-denomination fan, thin-slice KHR_20000/KHR_5000, and weak KHR_20000 coverage. |
+| 2026-06-05 | validation | keep | `mine_real_dataset_stress_candidates.py --data data\cashsnap_v1\data.yaml` found real review queues already inside `cashsnap_v1`: simple overlap `80` candidates / `39` origins, KHR_5000 overlap `8` / `4`, thin KHR_5000 `186` / `137`, thin KHR_20000 `27` / `27`, weak KHR_20000 `52` / `50`, weak KHR_50000 `60` / `58`, and same-denomination fan only `5` / `3`. Blank-label images are deliberately named `blank_label_or_unlabeled`, not no-note hard negatives, because review sheets show unlabeled/out-of-scope banknotes. |
+| 2026-06-05 | strategy | keep | Deep-research PDF distilled into the `Dataset Perfection Rubric`: for CashSnap, perfect synthetic data means real-anchor + protected real-holdout utility, named edge-case coverage, trustworthy visible labels/count semantics, structured content/context variation, hard negatives, provenance, and repeat scorecard audits; do not equate realism, raw scale, or blank labels with proof. |
+| 2026-06-05 | gates | keep | `check_synthetic_dataset_scorecard.py` now summarizes the PDF rubric over existing artifacts. Latest scorecard is `blocked` with `3` pass / `2` review / `3` blocked axes: pass for target-condition synthetic coverage, package label trust, and accepted-blend domain gap; blocked for real anchor/holdout, hard negatives, and real utility; review for mined edge-case inventory and release-grade governance/provenance. |
 | 2026-06-05 | synthetic | keep | `build_webgl_accepted_blend_config.py` now runs `audit_yolo_domain_gap.py --gate-preset accepted_blend_v1 --fail-on-gap` after writing the accepted blend and annotates `cashsnap_domain_gap_gate` on success. The current accepted blend was rebuilt and passed, so future accepted-blend generation cannot skip the domain/dose guard by accident. |
 | 2026-06-05 | evaluation | note | Existing recipe-isolated per-class metrics do not identify one bad selected recipe for the accepted-blend `KHR_2000` failure: `clean_base`, `thin_edge`, `hard_negative`, and `back_side` each improve `KHR_2000` versus matched real-only individually. Treat the blend failure as an interaction/dose problem; whole-recipe deletion is now tested, so the next bounded model probe should be staged-dose or class-shaped accepted blends. |
 | 2026-06-05 | evaluation | keep | `build_webgl_accepted_blend_variant_configs.py` generated four leave-one-out accepted-blend configs under `configs/webgl_blend_variants/` with train lists under `configs/generated_lists/webgl_blend_variants/`; all passed YOLO dataset checks. Domain-gate status is a training priority signal: minus `hard_negative` passes, while minus `clean_base`, minus `thin_edge`, and minus `back_side` are valid but domain-flagged. |
