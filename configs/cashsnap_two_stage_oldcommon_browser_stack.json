@@ -3,7 +3,7 @@
   "status": "diagnostic_not_production",
   "detector": {
     "format": "onnx",
-    "path": "runs/cashsnap/yolo26n_legacy_clean_plus_realcutout_low_skin_ft_e6_i416_b8/weights/best.onnx",
+    "path": "runs/cashsnap/yolo26n_cashsnap_current_thin_legacy_clean_v1_e20_i416_b8/weights/best.onnx",
     "input_size": 416,
     "classes": [
       "USD_1",
