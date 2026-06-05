@@ -57,6 +57,7 @@ DEFAULT_SCENES = [
     "thin_slice_khr_20000",
     "weak_khr_20000",
     "weak_khr_50000",
+    "mixed_usd_khr_rare_common",
 ]
 
 ROLE_BY_SCENE = {
@@ -67,6 +68,7 @@ ROLE_BY_SCENE = {
     "thin_slice_khr_20000": "thin_edge_stress",
     "weak_khr_20000": "weak_class_stress",
     "weak_khr_50000": "weak_class_stress",
+    "mixed_usd_khr_rare_common": "mixed_rare_common_cross_currency_stress",
 }
 
 PRIORITY_BY_SCENE = {
@@ -77,6 +79,7 @@ PRIORITY_BY_SCENE = {
     "thin_slice_khr_20000": 2,
     "weak_khr_20000": 3,
     "weak_khr_50000": 3,
+    "mixed_usd_khr_rare_common": 1,
 }
 
 

@@ -40,8 +40,11 @@ SCENE_TYPES = [
     "weak_khr_20000",
     "weak_khr_50000",
     "mixed_usd_khr",
+    "mixed_usd_khr_rare_common",
     "blank_label_or_unlabeled",
 ]
+
+COMMON_KHR_CLASSES = {"KHR_500", "KHR_1000", "KHR_2000", "KHR_5000", "KHR_10000"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -269,6 +272,15 @@ def infer_scene_scores(metrics: dict[str, Any]) -> dict[str, float]:
         scores["weak_khr_50000"] = 1.0 + box_count * 0.1 + edge_count * 0.2
     if khr_count > 0 and usd_count > 0:
         scores["mixed_usd_khr"] = 1.0 + min(khr_count, usd_count) * 0.5 + box_count * 0.1
+    if usd_count > 0 and "KHR_50000" in classes and classes.intersection(COMMON_KHR_CLASSES):
+        common_count = sum(1 for class_name in COMMON_KHR_CLASSES if class_name in classes)
+        scores["mixed_usd_khr_rare_common"] = (
+            2.0
+            + min(usd_count, khr_count) * 0.5
+            + common_count * 0.6
+            + overlaps * 0.4
+            + box_count * 0.1
+        )
     return scores
 
 

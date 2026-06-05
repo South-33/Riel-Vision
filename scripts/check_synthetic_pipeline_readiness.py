@@ -66,7 +66,7 @@ CONDITION_REAL_DATASET_CANDIDATES = {
     "finger_or_hand_split_occlusion": set(),
     "thin_edge_partial_fragments": {"thin_slice_khr_5000", "thin_slice_khr_20000", "partial_off_frame"},
     "front_back_and_old_common_confusion": {"weak_khr_20000", "weak_khr_50000"},
-    "mixed_rare_common_cross_currency_stack": set(),
+    "mixed_rare_common_cross_currency_stack": {"mixed_usd_khr_rare_common"},
     "repeated_same_denomination": {"same_denomination_fan"},
     "hard_negatives_and_non_banknote_paper": set(),
 }
