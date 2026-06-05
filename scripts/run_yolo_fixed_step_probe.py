@@ -4,12 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import math
+import os
 import re
 import subprocess
 import sys
+import time
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -172,6 +176,53 @@ def run(command: list[str], dry_run: bool) -> None:
         subprocess.run(command, cwd=ROOT, check=True)
 
 
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def file_sha256_if_exists(path: Path) -> str | None:
+    return file_sha256(path) if path.exists() else None
+
+
+@contextlib.contextmanager
+def output_lock(project: Path, name: str, dry_run: bool) -> Iterator[None]:
+    if dry_run:
+        yield
+        return
+
+    lock_dir = project / ".locks"
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = lock_dir / f"{slug(name)}.lock"
+    payload = {
+        "name": name,
+        "pid": os.getpid(),
+        "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    try:
+        fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError as exc:
+        try:
+            holder = lock_path.read_text(encoding="utf-8").strip()
+        except OSError:
+            holder = ""
+        detail = f" holder={holder}" if holder else ""
+        raise RuntimeError(f"output lock already exists: {repo_rel(lock_path)}.{detail}") from exc
+
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True) + "\n")
+        yield
+    finally:
+        try:
+            lock_path.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def train_name(label: str, args: argparse.Namespace, steps: int) -> str:
     amp_tag = "amp" if args.amp else "noamp"
     warmup_tag = "nowarmup" if float(args.warmup_epochs) == 0.0 else f"warmup{args.warmup_epochs:g}"
@@ -188,10 +239,81 @@ def test_name(label: str, args: argparse.Namespace, steps: int) -> str:
     return f"fixed_step_{label}_test_i{args.imgsz}_b{steps}{seed_tag}"
 
 
+def run_settings(args: argparse.Namespace, steps: int) -> dict[str, Any]:
+    return {
+        "epochs": args.epochs,
+        "imgsz": args.imgsz,
+        "batch": args.batch,
+        "workers": args.workers,
+        "optimizer": args.optimizer,
+        "lr0": args.lr0,
+        "lrf": args.lrf,
+        "warmup_epochs": args.warmup_epochs,
+        "warmup_bias_lr": args.warmup_bias_lr if args.warmup_bias_lr is not None else args.lr0,
+        "warmup_momentum": args.warmup_momentum,
+        "seed": args.seed,
+        "max_train_batches": steps,
+        "amp": args.amp,
+    }
+
+
+def train_manifest(label: str, data_yaml: Path, args: argparse.Namespace, steps: int) -> dict[str, Any]:
+    return {
+        "kind": "train",
+        "label": label,
+        "run_name": train_name(label, args, steps),
+        "data": repo_rel(data_yaml),
+        "train_rows": train_row_summary(data_yaml),
+        "source_model": repo_rel(args.model),
+        "source_model_sha256": file_sha256(args.model),
+        "settings": run_settings(args, steps),
+    }
+
+
+def eval_manifest(label: str, weights: Path, data_yaml: Path, args: argparse.Namespace, steps: int) -> dict[str, Any]:
+    return {
+        "kind": "eval",
+        "label": label,
+        "run_name": test_name(label, args, steps),
+        "data": repo_rel(data_yaml),
+        "weights": repo_rel(weights),
+        "weights_sha256": file_sha256_if_exists(weights),
+        "settings": {
+            "imgsz": args.imgsz,
+            "batch": args.batch,
+            "workers": args.workers,
+            "device": str(args.device),
+            "seed": args.seed,
+            "max_train_batches": steps,
+        },
+    }
+
+
+def manifest_path(run_dir: Path, kind: str) -> Path:
+    return run_dir / f"fixed_step_probe_{kind}.json"
+
+
+def check_reuse_manifest(path: Path, expected: dict[str, Any]) -> None:
+    if not path.exists():
+        print(f"reuse_without_manifest={repo_rel(path)}", flush=True)
+        return
+    actual = read_json(path)
+    mismatches = []
+    for key, expected_value in expected.items():
+        if actual.get(key) != expected_value:
+            mismatches.append(key)
+    if mismatches:
+        raise RuntimeError(f"reuse manifest mismatch for {repo_rel(path)}: {', '.join(mismatches)}")
+
+
 def train_if_needed(label: str, data_yaml: Path, args: argparse.Namespace, steps: int) -> Path:
     run_name = train_name(label, args, steps)
-    best = args.project / run_name / "weights" / "best.pt"
+    run_dir = args.project / run_name
+    best = run_dir / "weights" / "best.pt"
+    manifest = train_manifest(label, data_yaml, args, steps)
+    manifest_out = manifest_path(run_dir, "train")
     if args.reuse_existing and best.exists():
+        check_reuse_manifest(manifest_out, manifest)
         print(f"reuse_train={repo_rel(best)}", flush=True)
         return best
 
@@ -241,14 +363,23 @@ def train_if_needed(label: str, data_yaml: Path, args: argparse.Namespace, steps
     ]
     if not args.amp:
         command.append("--no-amp")
-    run(command, args.dry_run)
+    with output_lock(args.project, run_name, args.dry_run):
+        run(command, args.dry_run)
+        if not args.dry_run:
+            if not best.exists():
+                raise FileNotFoundError(f"expected trained weights were not written: {best}")
+            write_json(manifest_out, manifest)
     return best
 
 
 def eval_if_needed(label: str, weights: Path, data_yaml: Path, args: argparse.Namespace, steps: int) -> Path:
     run_name = test_name(label, args, steps)
-    metrics = args.project / run_name / "metrics.json"
+    run_dir = args.project / run_name
+    metrics = run_dir / "metrics.json"
+    manifest = eval_manifest(label, weights, data_yaml, args, steps)
+    manifest_out = manifest_path(run_dir, "eval")
     if args.reuse_existing and metrics.exists():
+        check_reuse_manifest(manifest_out, manifest)
         print(f"reuse_test={repo_rel(metrics)}", flush=True)
         return metrics
 
@@ -294,7 +425,13 @@ def eval_if_needed(label: str, weights: Path, data_yaml: Path, args: argparse.Na
         "--metrics-json",
         repo_rel(metrics),
     ]
-    run(command, args.dry_run)
+    with output_lock(args.project, run_name, args.dry_run):
+        run(command, args.dry_run)
+        if not args.dry_run:
+            if not metrics.exists():
+                raise FileNotFoundError(f"expected eval metrics were not written: {metrics}")
+            manifest["weights_sha256"] = file_sha256(weights)
+            write_json(manifest_out, manifest)
     return metrics
 
 
