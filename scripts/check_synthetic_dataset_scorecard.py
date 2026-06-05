@@ -231,6 +231,8 @@ def build_scorecard(readiness: dict[str, Any], domain_gap: dict[str, Any], mined
                     "selected_total": mined_review_total,
                     "selected_by_scene": mined_review_scenes,
                     "review_index": mined_review.get("review_index", ""),
+                    "quality_template_out": mined_review.get("quality_template_out", ""),
+                    "quality_template_rows": mined_review.get("quality_template_rows", 0),
                     "policy": mined_review.get("policy", {}),
                 },
             },

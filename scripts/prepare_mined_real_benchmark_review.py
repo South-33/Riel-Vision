@@ -31,6 +31,23 @@ DEFAULT_LABEL_DIR = ROOT / "data" / "real_fan_benchmark" / "mined_cashsnap_v1" /
 DEFAULT_PREVIEW_DIR = ROOT / "data" / "real_fan_benchmark" / "mined_cashsnap_v1" / "previews"
 DEFAULT_REVIEW_INDEX = ROOT / "data" / "real_fan_benchmark" / "mined_cashsnap_v1" / "review_index.html"
 DEFAULT_SUMMARY_OUT = ROOT / "runs" / "cashsnap" / "mined_real_benchmark_review_latest.json"
+DEFAULT_QUALITY_TEMPLATE_OUT = ROOT / "runs" / "cashsnap" / "mined_real_benchmark_review_quality_template_latest.csv"
+
+CLASS_NAMES = [
+    "USD_1",
+    "USD_5",
+    "USD_10",
+    "USD_20",
+    "USD_50",
+    "USD_100",
+    "KHR_500",
+    "KHR_1000",
+    "KHR_2000",
+    "KHR_5000",
+    "KHR_10000",
+    "KHR_20000",
+    "KHR_50000",
+]
 
 DEFAULT_SCENES = [
     "khr_5000_face_number_overlap",
@@ -73,6 +90,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--preview-dir", type=Path, default=DEFAULT_PREVIEW_DIR)
     parser.add_argument("--review-index-out", type=Path, default=DEFAULT_REVIEW_INDEX)
     parser.add_argument("--summary-out", type=Path, default=DEFAULT_SUMMARY_OUT)
+    parser.add_argument("--quality-template-out", type=Path, default=DEFAULT_QUALITY_TEMPLATE_OUT)
     parser.add_argument("--scene", action="append", dest="scenes", help="Scene type to include; repeatable.")
     parser.add_argument("--max-per-scene", type=int, default=3)
     parser.add_argument(
@@ -240,6 +258,50 @@ def render_preview(image: Path, labels: Path, out: Path) -> None:
     )
 
 
+def label_class_ids(path: Path) -> list[int]:
+    class_ids: list[int] = []
+    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) != 5:
+            raise SystemExit(f"{repo_path(path)}:{line_number}: expected 5 YOLO detect fields, got {len(parts)}")
+        try:
+            class_id = int(parts[0])
+        except ValueError as exc:
+            raise SystemExit(f"{repo_path(path)}:{line_number}: invalid class id {parts[0]!r}") from exc
+        if not 0 <= class_id < len(CLASS_NAMES):
+            raise SystemExit(f"{repo_path(path)}:{line_number}: class {class_id} outside 0..{len(CLASS_NAMES) - 1}")
+        class_ids.append(class_id)
+    return class_ids
+
+
+def quality_template_rows(selected: list[dict[str, str]], draft_dir: Path) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    row_by_id = {row["review_image_id"]: row for row in selected}
+    for image_id in sorted(row_by_id):
+        source = row_by_id[image_id]
+        label_path = draft_dir / f"{image_id}.txt"
+        for label_index, class_id in enumerate(label_class_ids(label_path)):
+            rows.append(
+                {
+                    "image_id": image_id,
+                    "label_path": repo_path(label_path),
+                    "label_index": str(label_index),
+                    "class_name": CLASS_NAMES[class_id],
+                    "quality": "needs_review",
+                    "count_for_score": "review",
+                    "evidence": "",
+                    "notes": (
+                        f"Scene={source.get('scene_type', '')}; source_split={source.get('split', '')}; "
+                        "set quality to clear/partial_clear/reject after checking visible denomination evidence and visible-region box tightness."
+                    ),
+                }
+            )
+    return rows
+
+
 def prune_stale_outputs(selected_ids: set[str], draft_dir: Path, preview_dir: Path) -> None:
     for label_path in draft_dir.glob("cashsnapv1_*.txt"):
         if label_path.stem not in selected_ids:
@@ -398,6 +460,12 @@ def main() -> int:
             render_preview(resolve(Path(row["image"])), draft_label, preview_dir / f"{image_id}.jpg")
 
     write_review_index(args.review_index_out, selected, draft_dir, preview_dir)
+    quality_rows = quality_template_rows(selected, draft_dir)
+    write_csv(
+        args.quality_template_out,
+        ["image_id", "label_path", "label_index", "class_name", "quality", "count_for_score", "evidence", "notes"],
+        quality_rows,
+    )
     if not args.skip_check:
         run_benchmark_check(args)
 
@@ -410,7 +478,9 @@ def main() -> int:
         "label_dir": repo_path(args.label_dir),
         "preview_dir": repo_path(args.preview_dir),
         "review_index": repo_path(args.review_index_out),
+        "quality_template_out": repo_path(args.quality_template_out),
         "selected_total": len(selected),
+        "quality_template_rows": len(quality_rows),
         "selected_by_scene": dict(sorted(counts.items())),
         "policy": {
             "promotion_status": "diagnostic_review_only",
@@ -427,6 +497,7 @@ def main() -> int:
     print(f"sources={repo_path(args.sources_out)}")
     print(f"tasks={repo_path(args.tasks_out)}")
     print(f"review_index={repo_path(args.review_index_out)}")
+    print(f"quality_template={repo_path(args.quality_template_out)}")
     print(f"summary={repo_path(args.summary_out)}")
     return 0
 
