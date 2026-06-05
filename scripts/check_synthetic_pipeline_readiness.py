@@ -192,6 +192,18 @@ def scoreable_real_images(quality_rows: list[dict[str, str]]) -> set[str]:
     return {image_id for image_id in image_ids if image_id}
 
 
+def scoreable_real_images_by_role(source_rows: list[dict[str, str]], scoreable_images: set[str]) -> dict[str, list[str]]:
+    role_images: dict[str, set[str]] = defaultdict(set)
+    for row in source_rows:
+        image_id = row.get("image_id", "").strip()
+        if image_id not in scoreable_images:
+            continue
+        role = row.get("benchmark_role", "").strip()
+        if role:
+            role_images[role].add(image_id)
+    return {role: sorted(image_ids) for role, image_ids in sorted(role_images.items())}
+
+
 def usable_capture_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     usable: list[dict[str, str]] = []
     for row in rows:
@@ -242,14 +254,14 @@ def real_dataset_candidate_reports(condition_id: str, candidate_summary: dict[st
     for scene_type in sorted(wanted):
         count = int(counts.get(scene_type, 0) or 0)
         unique_origins = int(unique_counts.get(scene_type, 0) or 0)
-        if count <= 0 and unique_origins <= 0:
-            continue
         reports.append(
             {
                 "scene_type": scene_type,
                 "candidate_count": count,
                 "unique_origin_count": unique_origins,
-                "status": "candidate_needs_visual_review",
+                "status": "candidate_needs_visual_review"
+                if count > 0 or unique_origins > 0
+                else "missing_candidate_hint",
             }
         )
     return reports
@@ -316,6 +328,7 @@ def condition_state(
     package_reports: dict[str, dict[str, Any]],
     promoted_roles: Counter[str],
     scoreable_images: set[str],
+    scoreable_images_by_role: dict[str, list[str]],
     requirement_rows: list[dict[str, str]],
     usable_captures: list[dict[str, str]],
     real_dataset_candidates: dict[str, Any],
@@ -360,17 +373,39 @@ def condition_state(
         blockers.append(f"capture inventory gaps: {', '.join(missing_capture)}")
 
     candidate_reports = real_dataset_candidate_reports(condition_id, real_dataset_candidates)
-    if candidate_reports:
+    positive_candidate_reports = [
+        row for row in candidate_reports if int(row["candidate_count"] or 0) > 0 or int(row["unique_origin_count"] or 0) > 0
+    ]
+    missing_candidate_reports = [
+        row for row in candidate_reports if int(row["candidate_count"] or 0) <= 0 and int(row["unique_origin_count"] or 0) <= 0
+    ]
+    if positive_candidate_reports:
         notes.append(
             "real dataset review candidates: "
             + ", ".join(
                 f"{row['scene_type']} {row['candidate_count']} candidates/{row['unique_origin_count']} origins"
-                for row in candidate_reports
+                for row in positive_candidate_reports
             )
         )
+    if missing_candidate_reports:
+        notes.append(
+            "missing real dataset candidate hints: "
+            + ", ".join(str(row["scene_type"]) for row in missing_candidate_reports)
+        )
 
-    if scoreable_images:
-        notes.append(f"{len(scoreable_images)} image(s) have scoreable draft/promoted box quality rows")
+    scoreable_role_images = sorted(
+        {
+            image_id
+            for role in required_roles
+            for image_id in scoreable_images_by_role.get(role, [])
+            if image_id in scoreable_images
+        }
+    )
+    if scoreable_role_images:
+        notes.append(
+            f"{len(scoreable_role_images)} scoreable real image(s) for required roles: "
+            + ", ".join(scoreable_role_images[:3])
+        )
 
     if any(str(row.get("artifact_status", "")) == "promoted" for row in recipes):
         state = "promoted"
@@ -450,6 +485,7 @@ def main() -> int:
 
     promoted_roles = promoted_real_roles(source_rows)
     scoreable_images = scoreable_real_images(quality_rows)
+    scoreable_role_images = scoreable_real_images_by_role(source_rows, scoreable_images)
     usable_captures = usable_capture_rows(capture_inventory)
 
     condition_reports = [
@@ -460,6 +496,7 @@ def main() -> int:
             package_reports=package_reports,
             promoted_roles=promoted_roles,
             scoreable_images=scoreable_images,
+            scoreable_images_by_role=scoreable_role_images,
             requirement_rows=capture_requirements,
             usable_captures=usable_captures,
             real_dataset_candidates=real_dataset_candidates,
@@ -474,6 +511,28 @@ def main() -> int:
     trainable_required = [row for row in required_reports if row["active_suite_recipe_ids"]]
     real_role_required = [row for row in required_reports if row["required_real_roles"]]
     real_role_ready = [row for row in real_role_required if not row["missing_real_roles"]]
+    candidate_mapped_required = [row for row in required_reports if row["real_dataset_review_candidates"]]
+    candidate_hint_ready = [
+        row
+        for row in candidate_mapped_required
+        if any(
+            int(candidate.get("candidate_count", 0) or 0) > 0
+            or int(candidate.get("unique_origin_count", 0) or 0) > 0
+            for candidate in row["real_dataset_review_candidates"]
+        )
+    ]
+    candidate_hint_gaps = [
+        {
+            "condition_id": row["condition_id"],
+            "scene_type": candidate["scene_type"],
+            "candidate_count": candidate["candidate_count"],
+            "unique_origin_count": candidate["unique_origin_count"],
+        }
+        for row in candidate_mapped_required
+        for candidate in row["real_dataset_review_candidates"]
+        if int(candidate.get("candidate_count", 0) or 0) <= 0
+        and int(candidate.get("unique_origin_count", 0) or 0) <= 0
+    ]
 
     report = {
         "targets": repo_path(args.targets),
@@ -484,7 +543,11 @@ def main() -> int:
         "required_with_trainable_candidate": len(trainable_required),
         "required_with_real_role_labels": len(real_role_ready),
         "required_real_role_conditions": len(real_role_required),
+        "required_real_dataset_candidate_rule_conditions": len(candidate_mapped_required),
+        "required_with_real_dataset_candidate_hints": len(candidate_hint_ready),
+        "real_dataset_candidate_hint_gaps": candidate_hint_gaps,
         "scoreable_real_images": sorted(scoreable_images),
+        "scoreable_real_images_by_role": scoreable_role_images,
         "promoted_real_role_counts": dict(sorted(promoted_roles.items())),
         "usable_capture_images": len(usable_captures),
         "real_dataset_candidates": {
@@ -510,6 +573,7 @@ def main() -> int:
         f"required={len(required_reports)} "
         f"trainable={len(trainable_required)} "
         f"real_role_ready={len(real_role_ready)}/{len(real_role_required)} "
+        f"candidate_hints={len(candidate_hint_ready)}/{len(candidate_mapped_required)} "
         f"usable_captures={len(usable_captures)}"
     )
     for row in required_reports:

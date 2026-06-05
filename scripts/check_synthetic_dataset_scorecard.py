@@ -201,13 +201,43 @@ def candidate_totals(readiness: dict[str, Any]) -> dict[str, int]:
     return {str(key): int(value or 0) for key, value in counts.items()}
 
 
-def review_candidate_condition_count(readiness: dict[str, Any]) -> int:
-    total = 0
-    for condition in conditions_by_id(readiness).values():
+def candidate_report_has_hits(row: dict[str, Any]) -> bool:
+    return int(row.get("candidate_count", 0) or 0) > 0 or int(row.get("unique_origin_count", 0) or 0) > 0
+
+
+def required_candidate_inventory(readiness: dict[str, Any]) -> dict[str, Any]:
+    mapped_condition_ids: list[str] = []
+    hit_condition_ids: list[str] = []
+    missing_scene_hints: list[dict[str, Any]] = []
+    for condition_id, condition in sorted(conditions_by_id(readiness).items()):
+        if not bool(condition.get("required_for_v1")):
+            continue
         rows = condition.get("real_dataset_review_candidates", [])
-        if isinstance(rows, list) and rows:
-            total += 1
-    return total
+        if not isinstance(rows, list) or not rows:
+            continue
+        mapped_condition_ids.append(condition_id)
+        has_any_hit = False
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if candidate_report_has_hits(row):
+                has_any_hit = True
+            else:
+                missing_scene_hints.append(
+                    {
+                        "condition_id": condition_id,
+                        "scene_type": row.get("scene_type", ""),
+                        "candidate_count": int(row.get("candidate_count", 0) or 0),
+                        "unique_origin_count": int(row.get("unique_origin_count", 0) or 0),
+                    }
+                )
+        if has_any_hit:
+            hit_condition_ids.append(condition_id)
+    return {
+        "mapped_condition_ids": mapped_condition_ids,
+        "hit_condition_ids": hit_condition_ids,
+        "missing_scene_hints": missing_scene_hints,
+    }
 
 
 def domain_gap_axis(
@@ -445,12 +475,20 @@ def build_scorecard(
     )
 
     candidates = candidate_totals(readiness)
-    candidate_condition_count = review_candidate_condition_count(readiness)
+    candidate_inventory = required_candidate_inventory(readiness)
+    candidate_condition_count = len(candidate_inventory["hit_condition_ids"])
+    candidate_mapped_condition_count = len(candidate_inventory["mapped_condition_ids"])
+    missing_candidate_hints = candidate_inventory["missing_scene_hints"]
     mined_review_total = int(mined_review.get("selected_total", 0) or 0)
     mined_review_scenes = mined_review.get("selected_by_scene", {})
     if not isinstance(mined_review_scenes, dict):
         mined_review_scenes = {}
-    edge_summary = f"Mined real-dataset review candidates exist for {candidate_condition_count} required condition(s)."
+    edge_summary = (
+        f"Mined real-dataset review candidates exist for {candidate_condition_count}/{candidate_mapped_condition_count} "
+        "candidate-mapped required condition(s)."
+    )
+    if missing_candidate_hints:
+        edge_summary += f" Missing candidate hints for {len(missing_candidate_hints)} required scene slice(s)."
     if mined_review_total:
         edge_summary += f" A draft-only review package has {mined_review_total} selected candidate(s)."
     mined_quality_summary: dict[str, Any] = {}
@@ -474,10 +512,13 @@ def build_scorecard(
     axes.append(
         axis(
             "edge_case_inventory",
-            "review" if candidate_condition_count else "blocked",
+            "blocked" if missing_candidate_hints or not candidate_condition_count else "review",
             edge_summary,
             evidence={
                 "unique_origin_counts": candidates,
+                "candidate_mapped_required_conditions": candidate_inventory["mapped_condition_ids"],
+                "candidate_hit_required_conditions": candidate_inventory["hit_condition_ids"],
+                "missing_candidate_hints": missing_candidate_hints,
                 "mined_review_package": {
                     "selected_total": mined_review_total,
                     "selected_by_scene": mined_review_scenes,
@@ -488,7 +529,12 @@ def build_scorecard(
                 },
                 "mined_review_quality": mined_quality_summary,
             },
-            blockers=[] if candidate_condition_count else ["no mined real-dataset candidate hints were loaded"],
+            blockers=[
+                f"{row['condition_id']}: {row['scene_type']} {row['candidate_count']} candidates/{row['unique_origin_count']} origins"
+                for row in missing_candidate_hints
+            ]
+            if missing_candidate_hints
+            else ([] if candidate_condition_count else ["no mined real-dataset candidate hints were loaded"]),
             next_action="Visually audit the mined review package, add per-box quality rows only for protected/use-safe labels, and keep true fan/hand/hard-negative gaps separate.",
         )
     )
