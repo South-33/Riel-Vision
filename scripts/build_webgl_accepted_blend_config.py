@@ -19,6 +19,7 @@ DEFAULT_SUITE = ROOT / "configs" / "synthetic_recipes" / "cashsnap_webgl_trainab
 DEFAULT_SUMMARY = ROOT / "runs" / "cashsnap" / "webgl_ablation_nowarmup_i416_summary.json"
 DEFAULT_OUT = ROOT / "configs" / "cashsnap_v1_plus_webgl_accepted_nowarmup_probe.yaml"
 DEFAULT_TRAIN_LIST = ROOT / "configs" / "generated_lists" / "cashsnap_v1_plus_webgl_accepted_nowarmup_probe_train.txt"
+DEFAULT_DOMAIN_GAP_JSON = ROOT / "runs" / "cashsnap" / "domain_gap_accepted_nowarmup_train.json"
 PRESERVED_OUTPUT_KEYS = ("cashsnap_webgl_blend_gate",)
 
 
@@ -33,6 +34,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--per-class", type=int, default=24)
     parser.add_argument("--backgrounds", type=int, default=24)
     parser.add_argument("--max-per-class-drop-vs-real-only", type=float, default=0.05)
+    parser.add_argument(
+        "--domain-gap-preset",
+        default="accepted_blend_v1",
+        help="audit_yolo_domain_gap.py gate preset to run after building the blend. Empty string disables it.",
+    )
+    parser.add_argument("--domain-gap-json-out", type=Path, default=DEFAULT_DOMAIN_GAP_JSON)
+    parser.add_argument("--skip-domain-gap-gate", action="store_true")
     parser.add_argument("--allow-real-only-failures", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
@@ -178,6 +186,24 @@ def build_command(args: argparse.Namespace, prefixes: list[str]) -> list[str]:
     return command
 
 
+def domain_gap_command(args: argparse.Namespace) -> list[str]:
+    if args.skip_domain_gap_gate or not str(args.domain_gap_preset).strip():
+        return []
+    return [
+        sys.executable,
+        "scripts/audit_yolo_domain_gap.py",
+        "--data",
+        repo_rel(args.out),
+        "--split",
+        "train",
+        "--json-out",
+        repo_rel(args.domain_gap_json_out),
+        "--gate-preset",
+        str(args.domain_gap_preset),
+        "--fail-on-gap",
+    ]
+
+
 def annotate_output(
     args: argparse.Namespace,
     selected: list[str],
@@ -201,6 +227,20 @@ def annotate_output(
     args.out.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
 
 
+def annotate_domain_gap(args: argparse.Namespace) -> None:
+    if args.skip_domain_gap_gate or not str(args.domain_gap_preset).strip():
+        return
+    config = yaml.safe_load(args.out.read_text(encoding="utf-8"))
+    if not isinstance(config, dict):
+        raise ValueError(f"expected YAML mapping: {args.out}")
+    config["cashsnap_domain_gap_gate"] = {
+        "status": "pass",
+        "preset": str(args.domain_gap_preset),
+        "summary": repo_rel(args.domain_gap_json_out),
+    }
+    args.out.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+
+
 def main() -> int:
     args = parse_args()
     args.data = resolve(args.data)
@@ -209,6 +249,7 @@ def main() -> int:
     args.per_class_summary = resolve(args.per_class_summary) if args.per_class_summary else default_per_class_summary(args.summary)
     args.out = resolve(args.out)
     args.train_list = resolve(args.train_list)
+    args.domain_gap_json_out = resolve(args.domain_gap_json_out)
 
     selected, rejected = select_recipes(
         summary_path=args.summary,
@@ -229,11 +270,17 @@ def main() -> int:
 
     command = build_command(args, prefixes)
     print(" ".join(command), flush=True)
+    gap_command = domain_gap_command(args)
+    if gap_command:
+        print(" ".join(gap_command), flush=True)
     if args.dry_run:
         return 0
 
     subprocess.run(command, cwd=ROOT, check=True)
     annotate_output(args, selected, rejected, prefixes, preserved_metadata)
+    if gap_command:
+        subprocess.run(gap_command, cwd=ROOT, check=True)
+        annotate_domain_gap(args)
     print(f"wrote {repo_rel(args.out)}")
     print(f"wrote {repo_rel(args.train_list)}")
     return 0

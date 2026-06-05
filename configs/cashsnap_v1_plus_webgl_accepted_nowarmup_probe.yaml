@@ -132,3 +132,7 @@ cashsnap_webgl_blend_gate:
   scale_note: Global clean-test transfer is positive, but KHR_2000 is just beyond
     the per-class drop tolerance; scale as a provisional seed only with a KHR_2000/KHR_50000
     guard or staged dose test.
+cashsnap_domain_gap_gate:
+  status: pass
+  preset: accepted_blend_v1
+  summary: runs/cashsnap/domain_gap_accepted_nowarmup_train.json
