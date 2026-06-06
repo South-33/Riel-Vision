@@ -67,6 +67,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--headroom-max-gpu-mem-percent", default="90")
     parser.add_argument("--min-free-ram-gb", default="3")
     parser.add_argument("--preflight-timeout", default="120")
+    parser.add_argument("--render-jobs", type=int, default=1, help="Forwarded WebGL render subprocess concurrency.")
     parser.add_argument("--skip-render", action="store_true")
     parser.add_argument("--skip-yolo-check", action="store_true")
     parser.add_argument("--skip-label-view-check", action="store_true")
@@ -282,6 +283,8 @@ def main() -> int:
         args.min_free_ram_gb,
         "--preflight-timeout",
         args.preflight_timeout,
+        "--render-jobs",
+        str(args.render_jobs),
     ]
     if class_sequence:
         cmd.extend(["--class-sequence", class_sequence])

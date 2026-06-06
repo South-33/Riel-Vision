@@ -129,6 +129,9 @@ matched controls and seed stability.
 - RAM pressure is the main bottleneck. Keep CPU/RAM-heavy jobs bounded with
   modest workers/batches, especially while the laptop is in active use. Browser
   smoke validation is ONNX Runtime Web/WASM and is still CPU-side.
+- WebGL recipe rendering has an opt-in `--render-jobs` knob. Keep default `1`
+  for safest laptop use; try `2` for bounded smoke/probe batches only with
+  headroom caps at or below 95% and a short preflight timeout.
 
 ## Immediate Plan
 
@@ -156,10 +159,10 @@ matched controls and seed stability.
    synthetic-partial proposal gate is the best current diagnostic stack, but it
    still needs real no-note/non-banknote validation and hard-positive partial
    review before promotion.
-8. Improve render throughput before more 500+ image runs:
-   the current batch path launches/checks one WebGL render at a time and took
-   about 50 minutes for 512 images. That is expected from the current harness
-   but too slow for iteration on this laptop.
+8. Use render concurrency carefully before more 500+ image runs:
+   `render_webgl_variant_batch.py` and `run_webgl_recipe.py` support
+   `--render-jobs`; validation/package assembly remains sequential. Keep
+   laptop probes bounded until larger batches prove headroom is stable.
 9. Only revisit fresh-from-`yolo26n.pt` base-first training if the checkpoint
    ablation is not harmful. Do not stage overlap/fan/hand from a weak clean
    stage.

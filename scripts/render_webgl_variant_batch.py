@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import hashlib
 import itertools
 import json
@@ -152,6 +153,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--headroom-max-gpu-mem-percent", default="90", help="GPU memory percent cap passed to run_with_headroom.py.")
     parser.add_argument("--min-free-ram-gb", default="3", help="Free-RAM preflight floor passed to run_with_headroom.py.")
     parser.add_argument("--preflight-timeout", default="120", help="Initial headroom wait timeout in seconds.")
+    parser.add_argument(
+        "--render-jobs",
+        type=int,
+        default=1,
+        help="Number of WebGL render subprocesses to run concurrently. Validation and packaging remain sequential.",
+    )
     parser.add_argument("--skip-render", action="store_true", help="Only recheck/contact-sheet existing outputs.")
     parser.add_argument("--skip-yolo-check", action="store_true", help="Do not run check_yolo_dataset.py on the packaged dataset.")
     parser.add_argument("--skip-label-view-check", action="store_true", help="Do not run check_webgl_label_views.py on packaged label views.")
@@ -196,6 +203,12 @@ def parse_args() -> argparse.Namespace:
 def run(cmd: list[str]) -> None:
     print(" ".join(cmd), flush=True)
     subprocess.run(cmd, cwd=ROOT, check=True)
+
+
+def require_positive_render_jobs(value: int) -> int:
+    if value < 1:
+        raise SystemExit("--render-jobs must be >= 1")
+    return value
 
 
 def check_background_bank(background_dir: Path | None, artifact_status: str, config: Path) -> None:
@@ -1665,17 +1678,36 @@ def main() -> int:
     args = parse_args()
     if args.count < 1:
         raise SystemExit("--count must be positive")
+    render_jobs = require_positive_render_jobs(args.render_jobs)
 
     out_root = args.out_root if args.out_root.is_absolute() else ROOT / args.out_root
     out_root.mkdir(parents=True, exist_ok=True)
     check_background_bank(args.background_dir, args.artifact_status, args.background_bank_config)
     check_environment_bank(args.environment_dir, args.artifact_status, args.environment_bank_config)
-    variant_dirs: list[tuple[int, Path]] = []
+    variant_rows = [
+        (variant, out_root / f"variant_{variant:04d}")
+        for variant in range(args.start_variant, args.start_variant + args.count)
+    ]
+    if not args.skip_render:
+        if render_jobs == 1:
+            for variant, out_dir in variant_rows:
+                render_variant(variant, out_dir, args.scene_mode, args.background_dir, args)
+        else:
+            print(f"parallel_render_jobs={render_jobs}", flush=True)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=render_jobs) as executor:
+                futures = {
+                    executor.submit(render_variant, variant, out_dir, args.scene_mode, args.background_dir, args): variant
+                    for variant, out_dir in variant_rows
+                }
+                for future in concurrent.futures.as_completed(futures):
+                    variant = futures[future]
+                    try:
+                        future.result()
+                    except subprocess.CalledProcessError as exc:
+                        raise SystemExit(f"variant {variant:04d} render failed with exit code {exc.returncode}") from exc
 
-    for variant in range(args.start_variant, args.start_variant + args.count):
-        out_dir = out_root / f"variant_{variant:04d}"
-        if not args.skip_render:
-            render_variant(variant, out_dir, args.scene_mode, args.background_dir, args)
+    variant_dirs: list[tuple[int, Path]] = []
+    for variant, out_dir in variant_rows:
         check_variant(
             out_dir,
             allow_no_occluder=(
