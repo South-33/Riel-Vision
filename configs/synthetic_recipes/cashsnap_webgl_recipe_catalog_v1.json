@@ -177,6 +177,54 @@
       "current_blocker": "Calibrated policy passes the focused KHR_50000 crop dynamic-range gate on a 40-image contiguous diagnostic root (luma_std -0.081, luma_p05 +0.157, luma_p95 -0.131), but that root still fails strict per-class geometry and has no positive model-transfer proof."
     },
     {
+      "id": "webgl_no_hand_real_scale_stack_print_tone_v1",
+      "target_condition_ids": ["clean_single_or_separated_notes", "loose_counter_stack_overlap", "dense_shop_overlap"],
+      "artifact_status": "diagnostic",
+      "scene_modes": ["stack"],
+      "asset_side_policy": "any",
+      "camera_profile": "phone_closeup_clean_like",
+      "stack_pose_policy": "real_aspect_v1",
+      "note_print_tone_policy": "local_dynamic_range_v1",
+      "occluder_policy": "no_hand",
+      "render_pool_count": 40,
+      "diagnostic_gates": {
+        "class_distribution": {
+          "expected_classes": [
+            "USD_1",
+            "USD_5",
+            "USD_10",
+            "USD_20",
+            "USD_50",
+            "USD_100",
+            "KHR_500",
+            "KHR_1000",
+            "KHR_2000",
+            "KHR_5000",
+            "KHR_10000",
+            "KHR_20000",
+            "KHR_50000"
+          ],
+          "min_images": 40,
+          "min_per_class": 12,
+          "max_class_ratio": 1.3
+        },
+        "note_print_tone": {
+          "expected_policy": "local_dynamic_range_v1",
+          "min_notes": 120,
+          "min_mean_contrast": 1.45,
+          "max_mean_contrast": 2.10,
+          "min_contrast_range": 0.20
+        },
+        "occluder_policy": {
+          "expected_policy": "no_hand",
+          "forbid_hand_occluders": true
+        }
+      },
+      "intended_use": "Diagnostic no-hand real-scale stack probe that isolates note-on-note overlap and print tone from synthetic finger occlusion.",
+      "promotion_gate": "Render, geometry-select, and model-probe against matched row/class-mix controls before any trainable-candidate use.",
+      "current_blocker": "No-hand pool40 passes class/print-tone/occluder gates, and selected20 passes strict geometry; still diagnostic because class balance is loose, appearance diversity is close-up narrow, focus crops remain brighter/redder on USD_50/KHR_2000/KHR_50000, and matched model-transfer proof is missing."
+    },
+    {
       "id": "webgl_overlap_stack_v1",
       "target_condition_ids": ["loose_counter_stack_overlap", "dense_shop_overlap"],
       "artifact_status": "smoke_ready",

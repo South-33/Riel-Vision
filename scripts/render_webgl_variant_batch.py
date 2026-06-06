@@ -23,6 +23,7 @@ from webgl_constants import (
     WEBGL_ASSET_SIDE_POLICIES,
     WEBGL_CAMERA_PROFILES,
     WEBGL_NOTE_PRINT_TONE_POLICIES,
+    WEBGL_OCCLUDER_POLICIES,
     WEBGL_STACK_POSE_POLICIES,
 )
 
@@ -123,6 +124,12 @@ def parse_args() -> argparse.Namespace:
         choices=sorted(WEBGL_NOTE_PRINT_TONE_POLICIES),
         default="off",
         help="Optional per-note print dynamic-range treatment before WebGL material rendering.",
+    )
+    parser.add_argument(
+        "--occluder-policy",
+        choices=sorted(WEBGL_OCCLUDER_POLICIES),
+        default="scene_default",
+        help="Control primitive occluders independently from scene geometry.",
     )
     parser.add_argument("--recipe-name", default="", help="Human-readable recipe name to write into recipe.json.")
     parser.add_argument(
@@ -264,6 +271,8 @@ def render_variant(variant: int, out_dir: Path, scene_mode: str, background_dir:
         args.camera_profile,
         "--stack-pose-policy",
         args.stack_pose_policy,
+        "--occluder-policy",
+        args.occluder_policy,
         "--out-dir",
         str(out_dir),
     ]
@@ -1583,6 +1592,7 @@ def write_recipe_metadata(
             "lens_distortion_policy": args.lens_distortion_policy,
             "note_print_tone_policy": args.note_print_tone_policy,
             "stack_pose_policy": args.stack_pose_policy,
+            "occluder_policy": args.occluder_policy,
         },
         "asset_side_policy": args.asset_side_policy,
         "camera_profile": args.camera_profile,
@@ -1668,7 +1678,10 @@ def main() -> int:
             render_variant(variant, out_dir, args.scene_mode, args.background_dir, args)
         check_variant(
             out_dir,
-            allow_no_occluder=args.scene_mode in {"clean", "clean_single", "negative", "qa3"},
+            allow_no_occluder=(
+                args.scene_mode in {"clean", "clean_single", "negative", "qa3"}
+                or args.occluder_policy in {"no_hand", "none"}
+            ),
             allow_no_overlap=args.scene_mode in {"clean", "clean_single", "negative"},
             allow_no_boxes=args.scene_mode == "negative",
         )

@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from webgl_constants import WEBGL_NOTE_PRINT_TONE_POLICIES
+from webgl_constants import WEBGL_NOTE_PRINT_TONE_POLICIES, WEBGL_OCCLUDER_POLICIES
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -172,6 +172,27 @@ def run_note_print_tone_gate(root: Path, gate: dict[str, Any], recipe: dict[str,
     run(cmd)
 
 
+def run_occluder_policy_gate(root: Path, gate: dict[str, Any], recipe: dict[str, Any]) -> None:
+    cmd = [
+        sys.executable,
+        "scripts/check_webgl_occluder_policy.py",
+        "--root",
+        str(root),
+    ]
+    expected_policy = str(gate.get("expected_policy", recipe.get("occluder_policy", ""))).strip()
+    if expected_policy:
+        if expected_policy not in WEBGL_OCCLUDER_POLICIES:
+            raise SystemExit(f"occluder_policy.expected_policy must be one of {sorted(WEBGL_OCCLUDER_POLICIES)}")
+        cmd.extend(["--expected-policy", expected_policy])
+    if gate.get("forbid_hand_occluders"):
+        cmd.append("--forbid-hand-occluders")
+    if gate.get("require_zero_occluders"):
+        cmd.append("--require-zero-occluders")
+    if gate.get("allow_missing_policy"):
+        cmd.append("--allow-missing-policy")
+    run(cmd)
+
+
 def run_hard_negative_diversity_gate(root: Path, gate: dict[str, Any]) -> None:
     cmd = [
         sys.executable,
@@ -315,6 +336,12 @@ def main() -> int:
         if not isinstance(note_print_tone, dict):
             raise SystemExit(f"{args.recipe_id}: note_print_tone gate must be an object")
         run_note_print_tone_gate(root, note_print_tone, recipe)
+
+    occluder_policy = gates.get("occluder_policy")
+    if occluder_policy is not None:
+        if not isinstance(occluder_policy, dict):
+            raise SystemExit(f"{args.recipe_id}: occluder_policy gate must be an object")
+        run_occluder_policy_gate(root, occluder_policy, recipe)
 
     hard_negative_diversity = gates.get("hard_negative_diversity")
     if hard_negative_diversity is not None:

@@ -90,6 +90,7 @@ def source_render_defaults(variant_dirs: list[tuple[int, Path]]) -> dict[str, An
     asset_side_policy_counts: Counter[str] = Counter()
     camera_profile_counts: Counter[str] = Counter()
     note_print_tone_policy_counts: Counter[str] = Counter()
+    occluder_policy_counts: Counter[str] = Counter()
     stack_pose_policy_counts: Counter[str] = Counter()
     for row in metadata_rows:
         if not isinstance(row, dict):
@@ -102,6 +103,7 @@ def source_render_defaults(variant_dirs: list[tuple[int, Path]]) -> dict[str, An
             stack_pose_policy_counts[str(row_asset.get("stackPosePolicy", "default"))] += 1
         if isinstance(row_scene, dict):
             note_print_tone_policy_counts[str(row_scene.get("notePrintTonePolicy", "off"))] += 1
+        occluder_policy_counts[str(row.get("occluderPolicy", "scene_default"))] += 1
         if isinstance(row_camera, dict):
             camera_profile_counts[str(row_camera.get("profileRequested", "phone_closeup_clean_like"))] += 1
 
@@ -126,11 +128,13 @@ def source_render_defaults(variant_dirs: list[tuple[int, Path]]) -> dict[str, An
             note_print_tone_policy_counts,
             str(scene_config.get("notePrintTonePolicy", "off")) if isinstance(scene_config, dict) else "off",
         ),
+        "occluder_policy": selected_policy(occluder_policy_counts, "scene_default"),
         "stack_pose_policy": selected_policy(stack_pose_policy_counts, "default"),
         "source_policy_counts": {
             "asset_side_policy": dict(sorted(asset_side_policy_counts.items())),
             "camera_profile": dict(sorted(camera_profile_counts.items())),
             "note_print_tone_policy": dict(sorted(note_print_tone_policy_counts.items())),
+            "occluder_policy": dict(sorted(occluder_policy_counts.items())),
             "stack_pose_policy": dict(sorted(stack_pose_policy_counts.items())),
         },
     }
@@ -165,6 +169,7 @@ def recipe_args(args: argparse.Namespace, selection: dict[str, Any], variant_dir
         note_condition_policy="mixed",
         lens_distortion_policy="off",
         note_print_tone_policy=render["note_print_tone_policy"],
+        occluder_policy=render["occluder_policy"],
         stack_pose_policy=render["stack_pose_policy"],
         asset_side_policy=render["asset_side_policy"],
         camera_profile=render["camera_profile"],

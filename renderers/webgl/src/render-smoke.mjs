@@ -31,6 +31,7 @@ const CLASS_SEQUENCE_RAW = argValue("--class-sequence", "");
 const NOTE_CONDITION_POLICY = argValue("--note-condition-policy", "mixed");
 const LENS_DISTORTION_POLICY = argValue("--lens-distortion-policy", "off");
 const NOTE_PRINT_TONE_POLICY = argValue("--note-print-tone-policy", "off");
+const OCCLUDER_POLICY = argValue("--occluder-policy", "scene_default");
 const BROWSER_EXECUTABLE = argValue("--browser-executable", process.env.CASHSNAP_WEBGL_BROWSER || EDGE);
 const WIDTH = Number.parseInt(argValue("--width", "1440"), 10);
 const HEIGHT = Number.parseInt(argValue("--height", "1080"), 10);
@@ -143,6 +144,10 @@ if (!["off", "phone_mild"].includes(LENS_DISTORTION_POLICY)) {
 
 if (!["off", "local_dynamic_range_v1"].includes(NOTE_PRINT_TONE_POLICY)) {
   throw new Error("--note-print-tone-policy must be one of: off, local_dynamic_range_v1");
+}
+
+if (!["scene_default", "no_hand", "none"].includes(OCCLUDER_POLICY)) {
+  throw new Error("--occluder-policy must be one of: scene_default, no_hand, none");
 }
 
 const effectiveSceneMode = SCENE_MODE === "auto" ? (VARIANT >= 100 ? "fan" : "stack") : SCENE_MODE;
@@ -1383,8 +1388,18 @@ function fanOccluders(variant) {
   ];
 }
 
+function applyOccluderPolicy(occluders) {
+  if (OCCLUDER_POLICY === "scene_default") return occluders;
+  if (OCCLUDER_POLICY === "none") return [];
+  return occluders.filter((occluder) => {
+    const kind = String(occluder.kind ?? "").toLowerCase();
+    return !kind.includes("finger") && !kind.includes("hand");
+  });
+}
+
 const assets = variantAssets(VARIANT);
-const occluders = variantOccluders(VARIANT);
+const sceneDefaultOccluders = variantOccluders(VARIANT);
+const occluders = applyOccluderPolicy(sceneDefaultOccluders);
 const backgroundFiles = listImageFiles(BACKGROUND_DIR);
 const selectedBackgroundPath = backgroundFiles.length ? backgroundFiles[VARIANT % backgroundFiles.length] : null;
 const environmentFiles = listEnvironmentFiles(ENVIRONMENT_DIR);
@@ -2364,6 +2379,8 @@ async function main() {
         height: HEIGHT,
         visualScale: VISUAL_SCALE,
         minVisiblePixels: MIN_VISIBLE_PIXELS,
+        occluderPolicy: OCCLUDER_POLICY,
+        sceneDefaultOccluderCount: sceneDefaultOccluders.length,
         sceneConfig: config,
         assetSelection: {
           sidePolicy: ASSET_SIDE_POLICY,

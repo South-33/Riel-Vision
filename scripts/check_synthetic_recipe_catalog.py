@@ -12,6 +12,7 @@ from webgl_constants import (
     WEBGL_ASSET_SIDE_POLICIES,
     WEBGL_CAMERA_PROFILES,
     WEBGL_NOTE_PRINT_TONE_POLICIES,
+    WEBGL_OCCLUDER_POLICIES,
     WEBGL_STACK_POSE_POLICIES,
 )
 
@@ -112,6 +113,7 @@ def validate_diagnostic_gates(recipe_id: str, gates: object) -> None:
         "count_stress",
         "note_condition_diversity",
         "note_print_tone",
+        "occluder_policy",
         "hard_negative_diversity",
         "domain_gap",
     }
@@ -212,6 +214,18 @@ def validate_diagnostic_gates(recipe_id: str, gates: object) -> None:
                 )
         if "allow_missing" in note_print_tone:
             require(type(note_print_tone["allow_missing"]) is bool, f"{recipe_id}: note_print_tone.allow_missing must be boolean")
+
+    occluder_policy = gates.get("occluder_policy")
+    if occluder_policy is not None:
+        require(isinstance(occluder_policy, dict), f"{recipe_id}: occluder_policy gate must be an object")
+        expected_policy = str(occluder_policy.get("expected_policy", "")).strip()
+        require(
+            not expected_policy or expected_policy in WEBGL_OCCLUDER_POLICIES,
+            f"{recipe_id}: occluder_policy.expected_policy must be one of {sorted(WEBGL_OCCLUDER_POLICIES)}",
+        )
+        for field in ("forbid_hand_occluders", "require_zero_occluders", "allow_missing_policy"):
+            if field in occluder_policy:
+                require(type(occluder_policy[field]) is bool, f"{recipe_id}: occluder_policy.{field} must be boolean")
 
     hard_negative_diversity = gates.get("hard_negative_diversity")
     if hard_negative_diversity is not None:
@@ -319,6 +333,11 @@ def main() -> int:
         require(
             note_print_tone_policy in WEBGL_NOTE_PRINT_TONE_POLICIES,
             f"{recipe_id}: invalid note_print_tone_policy {note_print_tone_policy!r}",
+        )
+        occluder_policy = str(row.get("occluder_policy", "scene_default"))
+        require(
+            occluder_policy in WEBGL_OCCLUDER_POLICIES,
+            f"{recipe_id}: invalid occluder_policy {occluder_policy!r}",
         )
         validate_diagnostic_gates(recipe_id, row.get("diagnostic_gates"))
         for target_id in target_ids:

@@ -44,6 +44,9 @@ Counterfeit detection and authenticity classification are out of scope.
   `+0.006006` mAP50-95), but still fails the stronger clean checkpoint
   (`0.883801`, delta `-0.041934`). Worst clean-checkpoint drops are
   `KHR_50000=-0.246982` and `KHR_20000=-0.074754`.
+- Older stack selected-geometry roots were confounded by synthetic finger
+  occluders. Treat stack overlap and hand/finger occlusion as separate recipe
+  variables; no-hand stack probes now require explicit occluder-policy gates.
 
 ## North Star
 
@@ -69,14 +72,16 @@ matched controls and seed stability.
 2. Do not promote the 512 clean root. Use its ablation result as signal that
    synthetic exposure can help p24-style scarcity, while `KHR_50000` and
    `KHR_20000` still need a better real/synthetic bridge.
-3. Improve render throughput before more 500+ image runs:
+3. Use no-hand real-scale stack probes to isolate overlap/print-tone transfer
+   before reintroducing hand/finger occlusion.
+4. Improve render throughput before more 500+ image runs:
    the current batch path launches/checks one WebGL render at a time and took
    about 50 minutes for 512 images. That is expected from the current harness
    but too slow for iteration on this laptop.
-4. Only revisit fresh-from-`yolo26n.pt` base-first training if the checkpoint
+5. Only revisit fresh-from-`yolo26n.pt` base-first training if the checkpoint
    ablation is not harmful. Do not stage overlap/fan/hand from a weak clean
    stage.
-5. In parallel, improve the real bridge:
+6. In parallel, improve the real bridge:
    promoted real fan/overlap/hand/no-note labels are still the biggest blocker.
 
 ## Promotion Rules
@@ -155,6 +160,18 @@ New clean-curriculum probe root:
 - Model result: one-epoch clean-checkpoint ablation with seed0 passes the
   matched p24 real-only comparison but rejects versus the clean checkpoint.
 
+No-hand stack diagnostic:
+
+- `data/synthetic/cashsnap_webgl_no_hand_real_scale_stack_print_tone_selected_geometry_v1`
+- Status: diagnostic only. It isolates note-on-note stack overlap from
+  hand/finger occlusion and passes strict geometry after selecting 20 images
+  from a 40-image no-hand pool.
+- Evidence: selected20 has 83 YOLO boxes, occluder policy `no_hand`, zero
+  occluders, local dynamic-range print tone passing, and strict geometry pass.
+- Remaining blockers: class balance is loose, trainable-candidate appearance
+  diversity is too narrow for promotion, focus crops remain brighter/redder on
+  `USD_50`, `KHR_2000`, and `KHR_50000`, and model-transfer proof is missing.
+
 ## Current Models
 
 Default browser detector:
@@ -180,6 +197,8 @@ Rejected latest base clean probe:
 
 - Accepted WebGL blend is not stable across seeds and rejects on mined held-out
   rare/edge diagnostic utility. Worst issue remains `KHR_50000`.
+- Negative model probes from older selected stack roots are not pure no-hand
+  overlap evidence because every stack image had synthetic finger capsules.
 - The 512 clean WebGL root is a useful scarcity-control signal but is not
   promotable. It improves over matched p24 real-only by `+0.006006` mAP50-95
   and fails clean-checkpoint guardrails by `-0.041934`, led by `KHR_50000`.
@@ -236,6 +255,12 @@ Trainable-candidate suite:
 
 ```powershell
 rl python scripts\check_webgl_trainable_candidate_suite.py --check-existing
+```
+
+Occluder policy:
+
+```powershell
+rl python scripts\check_webgl_occluder_policy.py --root <root> --expected-policy no_hand --forbid-hand-occluders
 ```
 
 Current clean-curriculum root checks:

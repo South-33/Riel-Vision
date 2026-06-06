@@ -14,6 +14,7 @@ from webgl_constants import (
     WEBGL_ASSET_SIDE_POLICIES,
     WEBGL_CAMERA_PROFILES,
     WEBGL_NOTE_PRINT_TONE_POLICIES,
+    WEBGL_OCCLUDER_POLICIES,
     WEBGL_STACK_POSE_POLICIES,
 )
 
@@ -50,6 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--note-condition-policy", default="", help="Override catalog per-note dirt/crinkle/wetness policy.")
     parser.add_argument("--lens-distortion-policy", default="", help="Override catalog shared radial lens-warp policy.")
     parser.add_argument("--note-print-tone-policy", default="", help="Override catalog per-note print dynamic-range policy.")
+    parser.add_argument("--occluder-policy", default="", help="Override catalog primitive occluder policy.")
     parser.add_argument("--artifact-status", choices=["smoke", "diagnostic", "trainable-candidate"], default="")
     parser.add_argument("--background-dir", type=Path, default=None)
     parser.add_argument("--environment-dir", type=Path, default=None, help="Optional equirectangular environment map directory for visual lighting/reflections.")
@@ -181,6 +183,9 @@ def main() -> int:
     note_print_tone_policy = args.note_print_tone_policy.strip() or str(recipe.get("note_print_tone_policy", "off")).strip() or "off"
     if note_print_tone_policy not in WEBGL_NOTE_PRINT_TONE_POLICIES:
         raise SystemExit(f"unsupported note_print_tone_policy: {note_print_tone_policy}")
+    occluder_policy = args.occluder_policy.strip() or str(recipe.get("occluder_policy", "scene_default")).strip() or "scene_default"
+    if occluder_policy not in WEBGL_OCCLUDER_POLICIES:
+        raise SystemExit(f"unsupported occluder_policy: {occluder_policy}")
     count = int(args.count if args.count is not None else recipe.get("render_pool_count", 4))
     if count < 1:
         raise SystemExit("--count must be positive")
@@ -253,6 +258,8 @@ def main() -> int:
         camera_profile,
         "--stack-pose-policy",
         stack_pose_policy,
+        "--occluder-policy",
+        occluder_policy,
         "--recipe-name",
         args.recipe_id,
         "--artifact-status",
