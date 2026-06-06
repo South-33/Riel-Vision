@@ -353,7 +353,12 @@ Rejected latest base clean probe:
   hard-negative failures at zero and gets the best mined-real aggregate so far:
   `13/17` perfect, `pred=35`, `same 31/35`, `any 32/35`, abs count `4`, abs KHR
   `21000`. Still diagnostic: the validation set is tiny, and real no-note plus
-  reviewed real partial hard positives are missing.
+  reviewed real partial hard positives are missing. V2 validation errors are
+  concentrated in real proposal crops (`cashsnap_v1` USD banknotes and mined
+  weak `KHR_50000`) being rejected as background, so the next repair is hard
+  real positives plus reviewed real no-note props, not a simple threshold sweep.
+  Failure review pack: `data/review/proposal_gate_synpartial_v2_failures/`
+  (`9` background->banknote, `11` banknote->background high-confidence errors).
 - Full-real-only is a useful negative/proposal reference, not a browser base.
   It is cleanest on synthetic prop false positives (`4/32` and `1/8`
   detections at `conf=0.05`, and zero detections by `conf=0.18`), but browser

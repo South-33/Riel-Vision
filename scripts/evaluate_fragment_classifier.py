@@ -38,6 +38,8 @@ def resolve(path_text: str) -> Path:
 
 def choose_device(value: str) -> torch.device:
     if value != "auto":
+        if value.isdigit():
+            return torch.device(f"cuda:{value}")
         return torch.device(value)
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
