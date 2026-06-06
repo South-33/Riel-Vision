@@ -343,9 +343,10 @@ async function classifyFragments(detections) {
     return detections;
   }
   const fragmentClassNames = state.config?.fragment_classifier?.classes ?? ["KHR_1000", "KHR_10000", "KHR_20000", "KHR_5000"];
+  const applyToAllProposals = state.config?.fragment_classifier?.apply_to_all_proposals ?? false;
   const eligible = detections
     .map((detection, index) => ({ detection, index }))
-    .filter((item) => fragmentClassNames.includes(item.detection.detectorName));
+    .filter((item) => applyToAllProposals || fragmentClassNames.includes(item.detection.detectorName));
   if (!eligible.length) {
     return detections;
   }
@@ -371,15 +372,20 @@ async function classifyFragments(detections) {
     const overrideConf = state.config?.fusion?.detector_override_confidence ?? 0.17;
     const rejectOnDisagreement = state.config?.fusion?.reject_fragment_disagreement ?? false;
     const disagreementMinConf = state.config?.fusion?.reject_fragment_disagreement_min_conf ?? 0;
-    const rejected =
+    const rejectClasses = new Set(state.config?.fusion?.reject_fragment_classes ?? []);
+    const rejectClassMinConf = state.config?.fusion?.reject_fragment_class_min_conf ?? 0;
+    const rejectedByClass = rejectClasses.has(fragmentName) && fragmentScore >= rejectClassMinConf;
+    const rejectedByDisagreement =
       rejectOnDisagreement && fragmentName !== detection.detectorName && fragmentScore >= disagreementMinConf;
-    const useDetector = detection.detectorScore >= overrideConf;
+    const rejected = rejectedByClass || rejectedByDisagreement;
+    const fragmentOverrideEnabled = state.config?.fusion?.fragment_override_enabled ?? true;
+    const useDetector = !fragmentOverrideEnabled || detection.detectorScore >= overrideConf;
     classified[index] = {
       ...detection,
       fragmentName,
       fragmentScore,
       rejected,
-      rejectReason: rejected ? "fragment_disagreement" : "",
+      rejectReason: rejectedByClass ? `fragment_class:${fragmentName}` : rejectedByDisagreement ? "fragment_disagreement" : "",
       name: useDetector ? detection.detectorName : fragmentName,
       score: useDetector ? detection.detectorScore : fragmentScore,
     };
@@ -498,16 +504,18 @@ async function runModel() {
   const proposals = parseOutput(output, meta);
   const classified = await classifyFragments(proposals);
   const unclassifiedMinConf = state.config?.fusion?.unclassified_min_conf ?? 0;
+  const rejectAfterNms = state.config?.fusion?.reject_after_nms ?? false;
   const filtered = classified.map((detection) => {
     if (!detection.fragmentName && unclassifiedMinConf > 0 && detection.detectorScore < unclassifiedMinConf) {
       return { ...detection, rejected: true, rejectReason: "unclassified_low_conf" };
     }
     return detection;
   });
-  const accepted = filtered.filter((detection) => !detection.rejected);
-  state.detections = nms(accepted);
+  const clustered = rejectAfterNms ? nms(filtered) : nms(filtered.filter((detection) => !detection.rejected));
+  state.detections = clustered.filter((detection) => !detection.rejected);
   const fragmentClassified = filtered.filter((detection) => detection.fragmentName).length;
   const rejectedProposals = filtered.filter((detection) => detection.rejected).length;
+  const rejectedAfterNms = clustered.filter((detection) => detection.rejected).length;
   state.debug = {
     countingMode: COUNTING_MODE,
     countSource: COUNT_SOURCE,
@@ -517,6 +525,13 @@ async function runModel() {
     fragmentClassifiedProposals: fragmentClassified,
     rejectedProposals,
     fragmentDisagreementReject: state.config?.fusion?.reject_fragment_disagreement ?? false,
+    fragmentClassifierApplyToAll: state.config?.fragment_classifier?.apply_to_all_proposals ?? false,
+    rejectFragmentClasses: state.config?.fusion?.reject_fragment_classes ?? [],
+    rejectFragmentClassMinConf: state.config?.fusion?.reject_fragment_class_min_conf ?? 0,
+    fragmentOverrideEnabled: state.config?.fusion?.fragment_override_enabled ?? true,
+    rejectAfterNms,
+    clusteredProposals: clustered.length,
+    rejectedAfterNms,
     unclassifiedMinConf,
     finalDetections: state.detections.length,
     proposals: proposals.length,

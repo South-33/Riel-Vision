@@ -63,6 +63,37 @@ Counterfeit detection and authenticity classification are out of scope.
   the full-real-only detector is background-saner but loses mined-real and
   synthetic stress recall. The next synthetic/curriculum probe must preserve
   overlap recall while borrowing the full-real/background restraint.
+- Current WebGL overlap-stack training does not transfer like the old staged
+  overlap detector: it is worse than default on mined-real dense overlap and
+  thin-edge browser stress, and it is worse than default on synthetic prop
+  false positives. The useful old-overlap signal is curriculum/data-shape
+  evidence, not proof that the current WebGL overlap recipe is right.
+- Tiny prop-diverse hard-negative repair of the old-overlap detector reduces
+  raw prop false positives, but browser behavior shifts into duplicate proposal
+  overcount. The next repair needs duplicate/proposal calibration, not simply
+  more no-note hard negatives.
+- Browser NMS is a real deploy lever for the old-overlap recall donor. NMS
+  `0.65` keeps mined-real perfect cases at `12/17` while reducing total
+  predicted count `44 -> 39` and absolute count error `11 -> 8`; adding the
+  unclassified/disagreement guard clears synthetic hard negatives but drops
+  mined-real perfect cases to `11/17`. Lowering the guard threshold from
+  `0.14` to `0.10` does not recover those real matches.
+- The existing broad 14-class real-fragment classifier is not the missing
+  hard-negative gate. With old-overlap + NMS `0.65`, no rejection still fails
+  synthetic card/phone and wallet/sticky negatives; disagreement rejection
+  clears negatives by deleting almost all synthetic positives.
+- Broad real-fragment `background` predictions are useful evidence but not a
+  solved gate. Old-overlap + NMS `0.65` + broad background-only rejection after
+  NMS clears all three synthetic hard negatives, but mined-real does not improve
+  over plain NMS (`12/17` perfect still, `same 31/35` vs `32/35`, abs KHR
+  `152000` vs `92000`) and synthetic hand evidence is deleted.
+- A binary old-overlap proposal gate is the strongest calibration signal so
+  far. V1 trained on detector proposal crops improves mined-real to `13/17`
+  perfect and clears synthetic hard negatives; v2 adds WebGL partial-positive
+  proposal crops and improves aggregate mined-real further (`pred=35`,
+  `same=31/35`, `any=32/35`, abs count `4`, abs KHR `21000`) while still
+  clearing the three synthetic hard negatives. This is diagnostic only until
+  real no-note/non-banknote and protected real partial validation exist.
 
 ## North Star
 
@@ -81,6 +112,21 @@ A future failure should map to one of these causes:
 Scale only after a synthetic recipe improves a real stress scoreboard under
 matched controls and seed stability.
 
+## Local Machine Posture
+
+- Laptop: AMD Ryzen 5 7640HS, 6 cores / 12 threads, about 16 GB RAM, and an
+  NVIDIA GeForce RTX 4060 Laptop GPU with about 8 GB VRAM; PyTorch sees CUDA
+  device `0`.
+- Prefer GPU-backed PyTorch/Ultralytics work with `--device 0` when VRAM has
+  room. Heavy jobs should go through `scripts/run_with_headroom.py` when
+  practical: caps may go up to 95% but never above 95%; resume around 82%.
+- Do not let the headroom wrapper wait forever if it cannot find launch
+  headroom. If it stalls, shrink the job first: lower batch/workers, lower RAM
+  pressure, adjust preflight floors, or split the run.
+- RAM pressure is the main bottleneck. Keep CPU/RAM-heavy jobs bounded with
+  modest workers/batches, especially while the laptop is in active use. Browser
+  smoke validation is ONNX Runtime Web/WASM and is still CPU-side.
+
 ## Immediate Plan
 
 1. Keep the desk clean:
@@ -95,14 +141,26 @@ matched controls and seed stability.
    a renderer expansion: combine overlap/fan recall pressure with no-note or
    background restraint and require both mined-real browser stress and synthetic
    hard-negative stress to avoid regression.
-5. Improve render throughput before more 500+ image runs:
+5. Do not repeat broad old-overlap hard-negative fine-tunes as-is. A focused
+   hardneg8 repair improved raw background FPs but increased browser duplicate
+   proposals; any next variant must explicitly constrain duplicate/overcount
+   behavior.
+6. Keep old-overlap + browser NMS `0.65` as the current best diagnostic deploy
+   calibration, not a promotion. It improves mined-real count noise without
+   losing recall, but it still fails synthetic hard-negative safety unless the
+   rejection guard is added, which costs real recall.
+7. Advance the binary proposal gate, not broad denomination rejection. The v2
+   synthetic-partial proposal gate is the best current diagnostic stack, but it
+   still needs real no-note/non-banknote validation and hard-positive partial
+   review before promotion.
+8. Improve render throughput before more 500+ image runs:
    the current batch path launches/checks one WebGL render at a time and took
    about 50 minutes for 512 images. That is expected from the current harness
    but too slow for iteration on this laptop.
-6. Only revisit fresh-from-`yolo26n.pt` base-first training if the checkpoint
+9. Only revisit fresh-from-`yolo26n.pt` base-first training if the checkpoint
    ablation is not harmful. Do not stage overlap/fan/hand from a weak clean
    stage.
-7. In parallel, improve the real bridge:
+10. In parallel, improve the real bridge:
    promoted real fan/overlap/hand/no-note labels are still the biggest blocker.
 
 ## Promotion Rules
@@ -251,6 +309,51 @@ Rejected latest base clean probe:
 - The old staged overlap detector gets `12/17` perfect on the same mined-real
   browser set and improves fan/dense-overlap recall, but shifts errors into
   overcount/value noise.
+- Current WebGL overlap-stack ablation is rejected in deploy terms. Exported
+  `webgl_ablation_overlap_stack_from_clean` gets mined-real dense-overlap
+  final same recall `3/9` versus default `5/9` and old-overlap `8/9`, and
+  synthetic hard-negative browser cases still all fail. Raw prop FP is also
+  worse than default (`43/32` and `12/8` detections at `conf=0.05`).
+- Old-overlap prop-diverse hardneg8 repair is diagnostic only. Full one-epoch
+  repair cuts raw prop FPs (`11 -> 6` detections on the 8 prop-diverse frames)
+  but overcounts badly in browser (`synthetic_overlap_stack pred=21/6`;
+  mined-real fan `pred=13/8`, thin-edge `pred=18/10`). A gentler 32-batch
+  repair still overcounts synthetic overlap (`pred=11/6`) while only partly
+  reducing hard-negative FPs.
+- Old-overlap browser NMS `0.65` is a useful calibration result. It keeps the
+  old-overlap mined-real strict score at `12/17` but improves aggregate
+  stability (`pred 44 -> 39`, abs count error `11 -> 8`, abs KHR error
+  `107000 -> 92000`) versus default NMS `0.85`. NMS `0.65` plus
+  disagreement/unclassified rejection clears all three synthetic hard-negative
+  browser cases, but mined-real drops to `11/17` and loses fan/thin matches;
+  unclassified-only leaves wallet/sticky false positives, disagreement-only
+  leaves card/phone false positives.
+- Existing broad real-fragment classifier diagnostic:
+  `configs/cashsnap_two_stage_broad_realfrag_browser_stack.json` plus
+  old-overlap/NMS `0.65` is rejected. Without disagreement rejection, synthetic
+  card/phone and wallet/sticky still false-positive; with rejection, synthetic
+  hard negatives clear but positive stress collapses to near zero recall.
+- Background-only broad real-fragment gate is also diagnostic only. The browser
+  app can reject configured fragment classes and optionally run NMS before
+  rejection; `configs/cashsnap_two_stage_oldoverlap_broad_realfrag_bg_reject_browser_stack.json`
+  uses this to reject `background` while preserving detector denominations.
+  It clears synthetic hard negatives (`failures 2 -> 0`, perfect `1/9 -> 3/9`)
+  but does not beat plain old-overlap NMS on mined-real (`12/17` perfect,
+  `same 31/35`, `any 32/35`, abs count `7`, abs KHR `152000`, one rejected
+  real proposal). Use it as proof that proposal-level background evidence
+  exists, not as a default deploy stack.
+- Binary proposal-gate diagnostics are promising. `scripts/build_proposal_gate_dataset.py`
+  auto-labels old-overlap detector proposal crops as `banknote`/`background`
+  by YOLO-label IoU, adds random safe background crops, and writes ImageFolder
+  data. V1 (`mobilenet_v3_proposal_gate_oldoverlap_v1_e6`) clears synthetic
+  hard negatives and improves mined-real to `13/17` perfect, abs count `5`,
+  abs KHR `26000`, but lowers recall (`same 30/35`). V2
+  (`mobilenet_v3_proposal_gate_oldoverlap_synpartial_v2_e6`) adds WebGL
+  clean/overlap/fan/hand/thin positive proposals; it keeps synthetic
+  hard-negative failures at zero and gets the best mined-real aggregate so far:
+  `13/17` perfect, `pred=35`, `same 31/35`, `any 32/35`, abs count `4`, abs KHR
+  `21000`. Still diagnostic: the validation set is tiny, and real no-note plus
+  reviewed real partial hard positives are missing.
 - Full-real-only is a useful negative/proposal reference, not a browser base.
   It is cleanest on synthetic prop false positives (`4/32` and `1/8`
   detections at `conf=0.05`, and zero detections by `conf=0.18`), but browser
@@ -339,9 +442,19 @@ Machine profile:
 
 Current operating posture:
 
-- Heavy training/rendering should use `scripts/run_with_headroom.py`.
-- Prefer GPU for training/inference when VRAM is available.
-- RAM pressure is the main bottleneck. Keep data-loader workers low.
+- Heavy training/rendering should use `scripts/run_with_headroom.py` when
+  practical. The wrapper refuses caps above 95%, lowers child priority, waits
+  for initial headroom, and treats free RAM as preflight/runtime pressure.
+- Current cap posture: using up to 95% max CPU/RAM/GPU/VRAM is acceptable when
+  needed, but never set any cap above 95%; resume around 82%.
+- If the wrapper cannot find initial headroom, do not wait indefinitely. Reduce
+  batch/workers, lower RAM pressure, relax only safe preflight floors, or split
+  the run into smaller chunks.
+- Prefer GPU for PyTorch/Ultralytics training/inference when VRAM is available;
+  pass `--device 0` instead of letting long jobs drift onto CPU.
+- RAM pressure is the main bottleneck. Keep data-loader workers low; the
+  archived dry-run selected `batch=4`, `workers=1`, `device=0`, with
+  `--min-free-ram-gb 4.0` on this laptop.
 - Browser smoke/render jobs should not run in parallel unless the Edge profile
   and cache paths are isolated.
 - For WebGL scale, fix batch throughput before another 500+ image render.
