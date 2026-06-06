@@ -54,12 +54,20 @@ CONDITION_REAL_ROLES = {
     "repeated_same_denomination": {"fan_stress"},
 }
 
+GLOBAL_CAPTURE_REQUIREMENTS = {"single_khr"}
+
 CONDITION_CAPTURE_REQUIREMENTS = {
     "loose_counter_stack_overlap": {"simple_overlap", "khr_5000_face_number_overlap"},
     "dense_shop_overlap": {"simple_overlap", "khr_5000_face_number_overlap"},
     "handheld_fan": {"hand_fan"},
     "finger_or_hand_split_occlusion": {"hand_occlusion"},
-    "thin_edge_partial_fragments": {"thin_slice_khr_5000", "thin_slice_khr_20000"},
+    "thin_edge_partial_fragments": {
+        "partial_off_frame",
+        "thin_slice_khr_5000",
+        "thin_slice_khr_20000",
+        "khr_50000_hard_positive_partials",
+        "usd_hard_positive_partials",
+    },
     "front_back_and_old_common_confusion": {"weak_khr_20000", "weak_khr_50000"},
     "mixed_rare_common_cross_currency_stack": {"mixed_usd_khr_rare_common_stack"},
     "repeated_same_denomination": {"same_denomination_fan"},
@@ -253,6 +261,31 @@ def usable_capture_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     return usable
 
 
+def priority_value(row: dict[str, str]) -> int:
+    try:
+        return int(row.get("priority", "5") or "5")
+    except ValueError:
+        return 5
+
+
+def capture_requirement_report(req: dict[str, str], usable_rows: list[dict[str, str]]) -> dict[str, Any]:
+    minimum = int(req.get("min_images", "0") or "0")
+    count = sum(1 for row in usable_rows if row_matches(row, req["match_column"], req["match_value"]))
+    required = req.get("required", "yes").strip().lower() not in {"0", "false", "no", "optional"}
+    return {
+        "requirement_id": req.get("requirement_id", "").strip(),
+        "description": req.get("description", ""),
+        "match_column": req.get("match_column", ""),
+        "match_value": req.get("match_value", ""),
+        "priority": priority_value(req),
+        "minimum": minimum,
+        "count": count,
+        "missing": max(0, minimum - count),
+        "required": required,
+        "status": "ok" if count >= minimum else ("missing" if required else "optional_missing"),
+    }
+
+
 def capture_requirement_reports(
     condition_id: str,
     requirement_rows: list[dict[str, str]],
@@ -264,20 +297,7 @@ def capture_requirement_reports(
         requirement_id = req.get("requirement_id", "").strip()
         if requirement_id not in wanted:
             continue
-        minimum = int(req.get("min_images", "0") or "0")
-        count = sum(1 for row in usable_rows if row_matches(row, req["match_column"], req["match_value"]))
-        required = req.get("required", "yes").strip().lower() not in {"0", "false", "no", "optional"}
-        reports.append(
-            {
-                "requirement_id": requirement_id,
-                "description": req.get("description", ""),
-                "minimum": minimum,
-                "count": count,
-                "missing": max(0, minimum - count),
-                "required": required,
-                "status": "ok" if count >= minimum else ("missing" if required else "optional_missing"),
-            }
-        )
+        reports.append(capture_requirement_report(req, usable_rows))
     return reports
 
 
@@ -531,6 +551,17 @@ def main() -> int:
     scoreable_role_images = scoreable_real_images_by_role(source_rows, scoreable_images)
     capture_issues = capture_inventory_issues(capture_inventory)
     usable_captures = usable_capture_rows(capture_inventory)
+    all_capture_reports = [capture_requirement_report(row, usable_captures) for row in capture_requirements]
+    mapped_capture_requirements = {
+        requirement_id
+        for requirement_ids in CONDITION_CAPTURE_REQUIREMENTS.values()
+        for requirement_id in requirement_ids
+    } | GLOBAL_CAPTURE_REQUIREMENTS
+    unmapped_capture_requirements = sorted(
+        row["requirement_id"]
+        for row in all_capture_reports
+        if row["required"] and row["requirement_id"] not in mapped_capture_requirements
+    )
 
     condition_reports = [
         condition_state(
@@ -606,6 +637,9 @@ def main() -> int:
         "promoted_real_role_counts": dict(sorted(promoted_roles.items())),
         "usable_capture_images": len(usable_captures),
         "capture_inventory_issues": capture_issues,
+        "capture_requirement_reports": all_capture_reports,
+        "capture_requirement_status_counts": dict(Counter(str(row["status"]) for row in all_capture_reports)),
+        "unmapped_capture_requirements": unmapped_capture_requirements,
         "real_dataset_candidates": {
             "path": repo_path(args.real_dataset_candidates),
             "loaded": bool(real_dataset_candidates),

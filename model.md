@@ -23,8 +23,8 @@ Counterfeit detection and authenticity classification are out of scope.
   They are not a "perfect/done" pipeline yet.
 - The main blocker is validation and curriculum, not prettier render mechanics.
   Real fan/overlap/hand/no-note stress proof is still missing.
-- The current scorecard is blocked: `4` pass / `12` blocked axes after adding
-  the currency-taxonomy scope check.
+- The current scorecard is blocked: `4` pass / `13` blocked axes after adding
+  the project-level real-capture requirement axis.
 - Taxonomy and asset coverage must be read by layer, not assumed. Official
   current USD/KHR scope is 21 classes. The active model schema and active WebGL
   cutout bank are still 13-class operational subsets; raw Numista current-status
@@ -94,6 +94,9 @@ Counterfeit detection and authenticity classification are out of scope.
   `same=31/35`, `any=32/35`, abs count `4`, abs KHR `21000`) while still
   clearing the three synthetic hard negatives. This is diagnostic only until
   real no-note/non-banknote and protected real partial validation exist.
+- Proposal-gate promotion is now explicitly blocked by capture buckets for
+  `khr_50000_hard_positive_partials` and `usd_hard_positive_partials`; these
+  target high-confidence banknote->background errors from the v2 failure pack.
 
 ## North Star
 
@@ -161,7 +164,8 @@ matched controls and seed stability.
    ablation is not harmful. Do not stage overlap/fan/hand from a weak clean
    stage.
 10. In parallel, improve the real bridge:
-   promoted real fan/overlap/hand/no-note labels are still the biggest blocker.
+   promoted real fan/overlap/hand/no-note/hard-positive partial labels are
+   still the biggest blocker.
 
 ## Promotion Rules
 

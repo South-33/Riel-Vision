@@ -612,6 +612,81 @@ def condition_axis(
     )
 
 
+def capture_requirements_axis(readiness: dict[str, Any]) -> dict[str, Any]:
+    reports = readiness.get("capture_requirement_reports", [])
+    if not isinstance(reports, list) or not reports:
+        return axis(
+            "real_capture_requirements",
+            "blocked",
+            "Project-level real capture requirement reports are missing from readiness.",
+            blockers=["readiness is missing capture_requirement_reports"],
+            next_action="Regenerate synthetic pipeline readiness with the current script before trusting capture blockers.",
+        )
+
+    malformed = [index for index, row in enumerate(reports, start=1) if not isinstance(row, dict)]
+    usable_captures = int(readiness.get("usable_capture_images", 0) or 0)
+    inventory_issues = [str(item) for item in readiness.get("capture_inventory_issues", [])]
+    unmapped = [str(item) for item in readiness.get("unmapped_capture_requirements", [])]
+    required_rows = [row for row in reports if isinstance(row, dict) and bool(row.get("required"))]
+    missing_rows = [
+        row
+        for row in required_rows
+        if int(row.get("missing", 0) or 0) > 0 or str(row.get("status", "")) == "missing"
+    ]
+    blockers = [
+        f"{row.get('requirement_id', '<missing id>')} {row.get('count', 0)}/{row.get('minimum', 0)}"
+        for row in sorted(
+            missing_rows,
+            key=lambda item: (
+                int(item.get("priority", 5) or 5),
+                -int(item.get("missing", 0) or 0),
+                str(item.get("requirement_id", "")),
+            ),
+        )
+    ]
+    blockers.extend(f"capture inventory issue: {item}" for item in inventory_issues)
+    blockers.extend(f"unmapped required capture requirement: {item}" for item in unmapped)
+    blockers.extend(f"malformed capture requirement row {index}" for index in malformed)
+    status = "pass" if required_rows and not blockers else "blocked"
+    passed_required = len(required_rows) - len(missing_rows)
+    priority_missing = [
+        {
+            "requirement_id": row.get("requirement_id", ""),
+            "priority": row.get("priority", ""),
+            "missing": row.get("missing", 0),
+            "count": row.get("count", 0),
+            "minimum": row.get("minimum", 0),
+        }
+        for row in sorted(
+            missing_rows,
+            key=lambda item: (
+                int(item.get("priority", 5) or 5),
+                -int(item.get("missing", 0) or 0),
+                str(item.get("requirement_id", "")),
+            ),
+        )[:8]
+    ]
+    return axis(
+        "real_capture_requirements",
+        status,
+        (
+            f"{passed_required}/{len(required_rows)} required real capture bucket(s) are filled; "
+            f"usable capture inventory has {usable_captures} image(s)."
+        ),
+        evidence={
+            "usable_capture_images": usable_captures,
+            "required_bucket_count": len(required_rows),
+            "passed_required_bucket_count": passed_required,
+            "missing_required_bucket_count": len(missing_rows),
+            "status_counts": dict(Counter(str(row.get("status", "")) for row in reports if isinstance(row, dict))),
+            "priority_missing": priority_missing,
+            "unmapped_capture_requirements": unmapped,
+        },
+        blockers=blockers,
+        next_action="" if status == "pass" else "Capture/register the missing real stress buckets, then rerun capture requirements and readiness.",
+    )
+
+
 def package_blockers(readiness: dict[str, Any]) -> list[str]:
     reports = readiness.get("suite_package_reports", {})
     if not isinstance(reports, dict):
@@ -1428,6 +1503,7 @@ def build_scorecard(
             next_action="Promote reviewed real stress labels or register usable captures before claiming transfer proof.",
         )
     )
+    axes.append(capture_requirements_axis(readiness))
 
     candidates = candidate_totals(readiness)
     candidate_inventory = required_candidate_inventory(readiness)
