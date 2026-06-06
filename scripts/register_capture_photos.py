@@ -125,10 +125,14 @@ def denominations_for(args: argparse.Namespace, scene_type: str) -> str:
     lower = scene_type.lower()
     if lower.startswith("thin_slice_khr_"):
         return f"KHR_{lower.rsplit('_', 1)[-1]}"
+    if "khr_50000" in lower:
+        return "KHR_50000"
     if "khr_5000" in lower:
         return "KHR_5000"
     if lower == "mixed_usd_khr_rare_common":
         return "KHR_50000;KHR_...;USD_..."
+    if lower.startswith("usd_") or "_usd_" in lower:
+        return "USD_..."
     return ""
 
 

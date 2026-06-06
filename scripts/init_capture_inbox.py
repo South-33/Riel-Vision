@@ -66,14 +66,14 @@ def denomination_hint(scene_type: str) -> str:
         return " --denominations \"KHR_50000\""
     if "khr_5000" in lower:
         return " --denominations \"KHR_5000\""
-    if lower.startswith("usd_") or "_usd_" in lower:
-        return " --denominations \"USD_...\""
     if lower == "single_khr":
         return " --denominations \"KHR_...\""
     if lower == "mixed_usd_khr_rare_common":
         return " --denominations \"KHR_50000;KHR_...;USD_...\""
     if lower == "mixed_usd_khr":
         return " --denominations \"KHR_...;USD_...\""
+    if lower.startswith("usd_") or "_usd_" in lower:
+        return " --denominations \"USD_...\""
     return ""
 
 
