@@ -7,3 +7,4 @@ This is the project's AGENTS.md
 - Work directly on `master`/mainline for this repo unless the user explicitly asks for a branch.
 - Keep generated YOLO/training outputs under repo-local ignored `runs/`, not user-home fallback paths.
 - Do not add new active model-planning docs under `docs/`; archive/reference material can live there, but active model memory belongs in `model.md`.
+- Before claiming a currency class exists or is missing, run `scripts/check_currency_taxonomy_coverage.py`; raw Numista, active cutout bank, and YOLO schema coverage intentionally differ.

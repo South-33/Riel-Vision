@@ -18,6 +18,12 @@ from typing import Any
 
 import yaml
 
+from cashsnap_currency_taxonomy import (
+    OFFICIAL_CURRENT_CLASS_NAMES,
+    OFFICIAL_TAXONOMY_SOURCES,
+    cutout_bank_coverage,
+    numista_raw_coverage,
+)
 from check_synthetic_governance import DEFAULT_MANIFEST as DEFAULT_GOVERNANCE
 from check_synthetic_governance import check_manifest as check_governance_manifest
 
@@ -38,6 +44,8 @@ DEFAULT_BROWSER_SYNTHETIC_MANIFEST = ROOT / "manifests" / "browser_synthetic_str
 DEFAULT_BROWSER_MINED_REAL_STRESS = ROOT / "runs" / "cashsnap" / "browser_mined_real_scoreable_default_latest.json"
 DEFAULT_BROWSER_MINED_REAL_MANIFEST = ROOT / "runs" / "cashsnap" / "mined_real_browser_cases_latest.csv"
 DEFAULT_TAXONOMY_DATA = ROOT / "data" / "cashsnap_v1" / "data.yaml"
+DEFAULT_NUMISTA_METADATA = ROOT / "data" / "numista_raw" / "metadata.json"
+DEFAULT_CUTOUT_BANK = ROOT / "data" / "asset_candidates" / "numista_current_cutout_bank_v1"
 DEFAULT_JSON_OUT = ROOT / "runs" / "cashsnap" / "synthetic_dataset_scorecard_latest.json"
 
 STATUS_ORDER = {"pass": 0, "review": 1, "missing": 2, "blocked": 3}
@@ -77,35 +85,6 @@ CLASS_VALUES = {
     "KHR_20000": ("khr", 20000),
     "KHR_50000": ("khr", 50000),
 }
-OFFICIAL_CURRENT_CLASS_NAMES = [
-    "USD_1",
-    "USD_2",
-    "USD_5",
-    "USD_10",
-    "USD_20",
-    "USD_50",
-    "USD_100",
-    "KHR_50",
-    "KHR_100",
-    "KHR_200",
-    "KHR_500",
-    "KHR_1000",
-    "KHR_2000",
-    "KHR_5000",
-    "KHR_10000",
-    "KHR_15000",
-    "KHR_20000",
-    "KHR_30000",
-    "KHR_50000",
-    "KHR_100000",
-    "KHR_200000",
-]
-OFFICIAL_TAXONOMY_SOURCES = {
-    "USD": "https://www.uscurrency.gov/denominations",
-    "KHR": "https://www.nbc.gov.kh/english/about_the_bank/banknotes_in_circulation.php",
-}
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--readiness", type=Path, default=DEFAULT_READINESS)
@@ -143,6 +122,8 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_TAXONOMY_DATA,
         help="YOLO data YAML whose class names define the current model taxonomy scope.",
     )
+    parser.add_argument("--numista-metadata", type=Path, default=DEFAULT_NUMISTA_METADATA)
+    parser.add_argument("--cutout-bank", type=Path, default=DEFAULT_CUTOUT_BANK)
     parser.add_argument("--json-out", type=Path, default=DEFAULT_JSON_OUT)
     parser.add_argument("--strict", action="store_true", help="Exit non-zero when any axis is blocked or missing.")
     parser.add_argument("--require-pass", action="store_true", help="Exit non-zero unless every scorecard axis passes.")
@@ -1242,7 +1223,7 @@ def read_yolo_class_names(data_config: Path) -> tuple[list[str], list[str]]:
     return [], [f"taxonomy data config has no usable names map: {repo_path(resolved)}"]
 
 
-def currency_taxonomy_scope_axis(data_config: Path) -> dict[str, Any]:
+def currency_taxonomy_scope_axis(data_config: Path, numista_metadata: Path, cutout_bank: Path) -> dict[str, Any]:
     class_names, failures = read_yolo_class_names(data_config)
     if failures:
         return axis(
@@ -1257,16 +1238,28 @@ def currency_taxonomy_scope_axis(data_config: Path) -> dict[str, Any]:
     present = set(class_names)
     missing_official = [name for name in OFFICIAL_CURRENT_CLASS_NAMES if name not in present]
     outside_official = [name for name in class_names if name not in set(OFFICIAL_CURRENT_CLASS_NAMES)]
-    status = "pass" if not missing_official else "blocked"
+    raw = numista_raw_coverage(numista_metadata, scope="official")
+    cutout = cutout_bank_coverage(cutout_bank, scope="official")
+    missing_raw_current = raw["missing_current_front_back_class_names"]
+    missing_cutout = cutout["missing_front_back_class_names"]
+    status = "pass" if not missing_official and not missing_raw_current and not missing_cutout else "blocked"
     summary = (
-        f"Current model taxonomy covers all {len(OFFICIAL_CURRENT_CLASS_NAMES)} official current USD/KHR denomination class(es)."
+        "Model taxonomy, raw Numista cache, and active cutout bank cover all "
+        f"{len(OFFICIAL_CURRENT_CLASS_NAMES)} official current USD/KHR denomination class(es)."
         if status == "pass"
         else (
-            f"Current model taxonomy covers {len(class_names)}/{len(OFFICIAL_CURRENT_CLASS_NAMES)} official current "
-            "USD/KHR denomination class(es)."
+            f"Model taxonomy covers {len(present)}/{len(OFFICIAL_CURRENT_CLASS_NAMES)} official current class(es); "
+            f"raw current front/back cache covers {len(raw['current_front_back_ready_class_names'])}/{len(OFFICIAL_CURRENT_CLASS_NAMES)}; "
+            f"active cutout bank covers {len(cutout['front_back_ready_class_names'])}/{len(OFFICIAL_CURRENT_CLASS_NAMES)}."
         )
     )
-    blockers = [f"missing official current denomination class: {name}" for name in missing_official]
+    blockers = [
+        *[f"model schema missing official current denomination class: {name}" for name in missing_official],
+        *[f"raw Numista current front/back missing official current denomination class: {name}" for name in missing_raw_current],
+        *[f"active cutout bank front/back missing official current denomination class: {name}" for name in missing_cutout],
+        *raw.get("errors", []),
+        *cutout.get("errors", []),
+    ]
     return axis(
         "currency_taxonomy_scope",
         status,
@@ -1278,13 +1271,21 @@ def currency_taxonomy_scope_axis(data_config: Path) -> dict[str, Any]:
             "official_current_class_names": OFFICIAL_CURRENT_CLASS_NAMES,
             "missing_official_class_names": missing_official,
             "outside_official_class_names": outside_official,
+            "numista_metadata": raw["metadata"],
+            "raw_current_front_back_ready_class_names": raw["current_front_back_ready_class_names"],
+            "raw_any_front_back_ready_class_names": raw["any_front_back_ready_class_names"],
+            "missing_raw_current_front_back_class_names": missing_raw_current,
+            "missing_raw_any_front_back_class_names": raw["missing_any_front_back_class_names"],
+            "cutout_bank": cutout["bank"],
+            "cutout_front_back_ready_class_names": cutout["front_back_ready_class_names"],
+            "missing_cutout_front_back_class_names": missing_cutout,
             "official_sources": OFFICIAL_TAXONOMY_SOURCES,
         },
         blockers=blockers,
         next_action=(
             ""
             if status == "pass"
-            else "Make an explicit product-scope decision, then add real/synthetic assets and labels for missing denominations or document them as out of scope before any perfect/done claim."
+            else "Run check_currency_taxonomy_coverage.py, then promote verified raw scans into the active cutout/schema layers or document a narrower product scope before any perfect/done claim."
         ),
     )
 
@@ -1358,6 +1359,8 @@ def build_scorecard(
     browser_mined_real_manifest: list[dict[str, str]],
     browser_mined_real_manifest_path: Path,
     taxonomy_data: Path,
+    numista_metadata: Path,
+    cutout_bank: Path,
 ) -> dict[str, Any]:
     required = int(readiness.get("required_conditions", 0) or 0)
     trainable = int(readiness.get("required_with_trainable_candidate", 0) or 0)
@@ -1374,7 +1377,7 @@ def build_scorecard(
 
     axes: list[dict[str, Any]] = []
     axes.append(readiness_freshness_axis(readiness))
-    axes.append(currency_taxonomy_scope_axis(taxonomy_data))
+    axes.append(currency_taxonomy_scope_axis(taxonomy_data, numista_metadata, cutout_bank))
     axes.append(
         axis(
             "target_condition_coverage",
@@ -1618,6 +1621,8 @@ def main() -> int:
         browser_mined_real_manifest,
         args.browser_mined_real_manifest,
         args.taxonomy_data,
+        args.numista_metadata,
+        args.cutout_bank,
     )
     out = resolve(args.json_out)
     out.parent.mkdir(parents=True, exist_ok=True)

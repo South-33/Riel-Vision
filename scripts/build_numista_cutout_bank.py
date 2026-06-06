@@ -12,13 +12,13 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-from generate_synthetic_fan_dataset import CLASS_NAMES, TARGET_KHR, note_alpha
+from cashsnap_currency_taxonomy import class_name_for_metadata, class_names_for_scope
+from generate_synthetic_fan_dataset import note_alpha
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_METADATA = ROOT / "data" / "numista_raw" / "metadata.json"
 DEFAULT_OUT = ROOT / "data" / "asset_candidates" / "numista_current_cutout_bank_v1"
-USD_VALUES = {"1", "5", "10", "20", "50", "100"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -28,6 +28,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--country", choices=["Cambodia", "United States", "all"], default="all")
     parser.add_argument("--include-out-of-circulation", action="store_true")
     parser.add_argument("--classes", default="", help="Optional comma-separated canonical CashSnap classes to include.")
+    parser.add_argument(
+        "--class-scope",
+        choices=["operational", "official"],
+        default="operational",
+        help="Operational keeps the current 13-class model schema; official includes all current USD/KHR bill classes.",
+    )
     parser.add_argument("--min-year", type=int, help="Skip notes whose parsed max year is below this year.")
     parser.add_argument(
         "--alpha-mode",
@@ -46,17 +52,6 @@ def safe_clean(path: Path) -> None:
         raise SystemExit(f"Refusing to clean outside {allowed_root}: {resolved}")
     if resolved.exists():
         shutil.rmtree(resolved)
-
-
-def class_name_for(row: dict[str, object]) -> str | None:
-    country = str(row.get("country", ""))
-    denomination = str(row.get("denomination", "")).strip()
-    if country == "Cambodia":
-        return TARGET_KHR.get(denomination)
-    if country == "United States" and denomination in USD_VALUES:
-        class_name = f"USD_{denomination}"
-        return class_name if class_name in CLASS_NAMES else None
-    return None
 
 
 def max_year_for(row: dict[str, object]) -> int | None:
@@ -155,9 +150,10 @@ def main() -> None:
 
     with metadata_path.open("r", encoding="utf-8") as handle:
         metadata = json.load(handle)
+    scope_classes = set(class_names_for_scope(args.class_scope))
     allowed_classes = {item.strip() for item in args.classes.split(",") if item.strip()} or None
     if allowed_classes:
-        unknown = sorted(allowed_classes - set(CLASS_NAMES))
+        unknown = sorted(allowed_classes - scope_classes)
         if unknown:
             raise SystemExit(f"Unknown classes in --classes: {unknown}")
 
@@ -167,7 +163,7 @@ def main() -> None:
             continue
         if not args.include_out_of_circulation and note.get("circulation_status") != "in_circulation":
             continue
-        class_name = class_name_for(note)
+        class_name = class_name_for_metadata(note, scope=args.class_scope)
         if not class_name:
             continue
         if allowed_classes and class_name not in allowed_classes:

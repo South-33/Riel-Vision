@@ -11,25 +11,11 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
+from cashsnap_currency_taxonomy import class_names_for_scope
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BANK = ROOT / "data" / "asset_candidates" / "numista_current_cutout_bank_v1"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
-CLASS_NAMES = [
-    "USD_1",
-    "USD_5",
-    "USD_10",
-    "USD_20",
-    "USD_50",
-    "USD_100",
-    "KHR_500",
-    "KHR_1000",
-    "KHR_2000",
-    "KHR_5000",
-    "KHR_10000",
-    "KHR_20000",
-    "KHR_50000",
-]
 
 
 def parse_args() -> argparse.Namespace:
@@ -37,6 +23,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bank", type=Path, default=DEFAULT_BANK, help="Asset bank root containing a manifest.csv.")
     parser.add_argument("--out", type=Path, default=None, help="Audit output directory. Defaults to <bank>/audit.")
     parser.add_argument("--max-contact", type=int, default=80, help="Maximum suspect assets on the contact sheet.")
+    parser.add_argument(
+        "--class-scope",
+        choices=["operational", "official"],
+        default="operational",
+        help="Class side coverage to require in summary.json.",
+    )
     return parser.parse_args()
 
 
@@ -183,9 +175,9 @@ def alpha_quality_for(flags: list[str]) -> str:
     return "needs_review" if any(flag in alpha_flags for flag in flags) else "auto_pass"
 
 
-def dimension_ranges(rows: list[dict[str, str]]) -> dict[str, dict[str, int | None]]:
+def dimension_ranges(rows: list[dict[str, str]], class_names: list[str]) -> dict[str, dict[str, int | None]]:
     ranges: dict[str, dict[str, int | None]] = {}
-    for class_name in CLASS_NAMES:
+    for class_name in class_names:
         widths = [int(row["width"]) for row in rows if row.get("class_name") == class_name and row.get("width", "").isdigit()]
         heights = [int(row["height"]) for row in rows if row.get("class_name") == class_name and row.get("height", "").isdigit()]
         ranges[class_name] = {
@@ -266,6 +258,7 @@ def main() -> None:
     out_dir = args.out if args.out else bank / "audit"
     out_dir = out_dir if out_dir.is_absolute() else ROOT / out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
+    class_names = class_names_for_scope(args.class_scope)
 
     rows: list[dict[str, str]] = []
     for row in read_manifest(bank):
@@ -315,11 +308,11 @@ def main() -> None:
                 ).items()
             )
         )
-        for class_name in CLASS_NAMES
+        for class_name in class_names
     }
     side_coverage = {}
     missing_class_sides = []
-    for class_name in CLASS_NAMES:
+    for class_name in class_names:
         front = side_counts[(class_name, "front")]
         back = side_counts[(class_name, "back")]
         side_coverage[class_name] = {"front": front, "back": back}
@@ -328,7 +321,7 @@ def main() -> None:
         if back == 0:
             missing_class_sides.append(f"{class_name}/back")
     years_by_class: dict[str, dict[str, int | None]] = {}
-    for class_name in CLASS_NAMES:
+    for class_name in class_names:
         years = [
             year
             for row in rows
@@ -357,7 +350,7 @@ def main() -> None:
             "visual_qa_status_counts": dict(sorted(visual_qa_status_counts.items())),
             "currency_counts": dict(sorted(currency_counts.items())),
             "design_generation_counts_by_class": design_generation_counts_by_class,
-            "dimension_ranges_by_class": dimension_ranges(rows),
+            "dimension_ranges_by_class": dimension_ranges(rows, class_names),
             "flag_counts": dict(sorted(flag_counts.items())),
             "years_by_class": years_by_class,
             "audit_fields": [

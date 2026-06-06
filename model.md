@@ -25,10 +25,12 @@ Counterfeit detection and authenticity classification are out of scope.
   Real fan/overlap/hand/no-note stress proof is still missing.
 - The current scorecard is blocked: `4` pass / `12` blocked axes after adding
   the currency-taxonomy scope check.
-- Current model taxonomy is an operational 13-class subset, not full current
-  USD/KHR currency coverage. Missing official current classes are `USD_2`,
-  `KHR_50`, `KHR_100`, `KHR_200`, `KHR_15000`, `KHR_30000`,
-  `KHR_100000`, and `KHR_200000`.
+- Taxonomy and asset coverage must be read by layer, not assumed. Official
+  current USD/KHR scope is 21 classes. The active model schema and active WebGL
+  cutout bank are still 13-class operational subsets; raw Numista current-status
+  cache has front/back for 20/21 classes; raw Numista any-status cache has
+  front/back for all 21. `KHR_50` is the only official class missing from the
+  current-status raw cache, while any-status raw has 6 front/back pairs.
 - Browser failures are mostly detector-proposal/curriculum limited. Fragment
   or final-count heuristics alone are not enough.
 - The latest base-first clean probe failed hard. A fresh `yolo26n.pt` trained
@@ -119,6 +121,11 @@ Active backbone:
 - `data/asset_candidates/numista_current_cutout_bank_v1/` is the current clean
   scan/cutout bank for WebGL. It covers front/back for the 13 operational
   classes and still has usage/release limits.
+- Raw Numista coverage is broader than the active bank. Diagnostic probe banks
+  under ignored `data/asset_candidates/` show current-status full-scope cutouts
+  cover 20/21 official classes, and any-status full-scope cutouts cover 21/21.
+  Do not use the any-status bank for trainable current-currency recipes without
+  design/status review.
 
 Active diagnostic real bridge:
 
@@ -196,7 +203,9 @@ Rejected latest base clean probe:
 - No reviewed real no-note/non-banknote paper capture inventory.
 - No real mixed USD+KHR rare/common stack captures, especially with
   `KHR_50000`.
-- Current official currency taxonomy is incomplete relative to full USD/KHR.
+- Current model schema and active WebGL cutout bank are incomplete relative to
+  full USD/KHR. Verify raw/current/active/model coverage with the taxonomy
+  coverage check before saying a class exists or is missing.
 - Clean-real train split still has thin rare anchors:
   `KHR_20000=14` and `KHR_50000=15` unique train images.
 - Renderer throughput is too slow for 500+ image iteration on this laptop.
@@ -209,6 +218,12 @@ Scorecard:
 
 ```powershell
 rl python scripts\check_synthetic_dataset_scorecard.py
+```
+
+Currency coverage:
+
+```powershell
+rl python scripts\check_currency_taxonomy_coverage.py
 ```
 
 Readiness:
