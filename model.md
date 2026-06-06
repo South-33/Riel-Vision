@@ -51,6 +51,9 @@ Counterfeit detection and authenticity classification are out of scope.
   usefulness: seed0 exact class-mix control probe improved test mAP50-95 by
   `+0.002033` and `KHR_50000` by `+0.022303`, but browser mined-real stress
   regressed on dense overlap, thin edge, and weak-class value behavior.
+- Prop-diverse hard negatives are more realistic than the old weak root, but
+  not a solved path: diversity8 loses `-0.003090` mAP50-95 versus old8, and
+  browser rejection/threshold tweaks clear hard negatives by killing positives.
 
 ## North Star
 
@@ -213,6 +216,9 @@ Rejected latest base clean probe:
   overlap evidence because every stack image had synthetic finger capsules.
 - No-hand stack dose1 is a weak positive detector result, not a promotion:
   exact class-mix mAP improved, but browser mined-real stress regressed.
+- Hard-negative diversity8 is not promotable by itself: it improves some KHR
+  value noise on synthetic stress, but loses detector AP versus old8 and
+  threshold/disagreement rejection trades false positives for missed bills.
 - The 512 clean WebGL root is a useful scarcity-control signal but is not
   promotable. It improves over matched p24 real-only by `+0.006006` mAP50-95
   and fails clean-checkpoint guardrails by `-0.041934`, led by `KHR_50000`.
