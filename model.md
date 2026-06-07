@@ -675,6 +675,17 @@ Targeted branch status:
   bg-hit images `+4`; `conf=0.001` recall `-0.0462`, FP `+6`). Next
   curriculum work needs FP-aware tuning or seed-repeat proof, not a direct
   `hsv_v=0.7` promotion.
+- Candidate-only `mosaic=0.0` is the first better-shaped curriculum clue, but
+  still not a promotion. It improves fixed-step synthetic self-eval
+  (`0.011476` vs `0.007368`, delta `+0.004108`, worst `KHR_5000 -0.012462`)
+  and bounded real at `conf=0.01` finds `3/130` GT with fewer FPs/background
+  hits than baseline (`188 -> 186` FPs, `7/50 -> 6/50` bg-hit images). At
+  `conf=0.001`, recall rises slightly (`100/130 -> 102/130`) with unchanged
+  background flood, but per-class recall swaps fail the scorecard
+  (`KHR_2000 -0.20`, `KHR_1000/KHR_20000/KHR_50000 -0.10`). At `conf=0.05`,
+  it adds `28` FPs, mostly `cashcountingxl`/`USD_50`/`KHR_2000`. Read: mosaic
+  likely contributes to the full-frame/extent failure, but zero-mosaic needs an
+  FP-aware schedule, class guard, and seed repeat before any recipe change.
 - Earlier non-fallback fixed-step A/B attempts remain incomplete:
   b64/b32/b16/b8 runs hit the 95% RAM guard while RunLong/Codex were resident.
   Also, one failed b64 attempt reused the old leader run name with the
@@ -1266,6 +1277,11 @@ Key run artifacts:
 - `runs/cashsnap/light_eval_target_anchor_latest_bal20_hsvv07_s1000_realtest_bal10_bg50_i320_conf005_iou50_v1.json`
 - `runs/cashsnap/light_eval_target_anchor_latest_bal20_hsvv07_s1000_realtest_bal10_bg50_i320_conf01_iou50_v1.json`
 - `runs/cashsnap/light_eval_target_anchor_latest_bal20_hsvv07_s1000_realtest_bal10_bg50_i320_conf001_iou50_v1.json`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_nomosaic_b20_b1_s1000_i320_v1_summary.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_nomosaic_s1000_realtest_bal10_bg50_i320_conf005_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_nomosaic_s1000_realtest_bal10_bg50_i320_conf01_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_nomosaic_s1000_realtest_bal10_bg50_i320_conf001_iou50_v1.json`
+- `runs/cashsnap/scorecard_target_anchor_latest_bal20_nomosaic_realtest_bal10_bg50_v1.json`
 - `runs/cashsnap/dataset_check_rep_gap_detectorerasectx_v1.json`
 - `runs/cashsnap/unlabeled_prediction_audit_rep_gap_detectorerasectx_strictcov50_v1.json`
 - `runs/cashsnap/visual_qa_rep_gap_detectorerasectx_v1/per_class_sheet.jpg`
