@@ -242,8 +242,11 @@ Current refiner-readiness status:
 - Bridge-calibrated selected-v1 proved that prettier summary stats can still
   train a worse detector. Domain separators and visual-gap audits are warning
   lights, not judges.
-- Missing promoted real fan/overlap/hand stress labels still blocks final proof
-  for the ultimate product behavior.
+- Promoted real fan/overlap/hand proof is still incomplete. The curated real
+  benchmark has only one labeled mild-overlap image today, while the mined-real
+  diagnostic path has `17` scoreable stress images and `35` boxes. Use the mined
+  set as a validation warning slice, not release-grade proof: it has no
+  hand-occlusion rows, narrow class coverage, and mixed CashSnap source splits.
 - Before class-scope claims, run `scripts/check_currency_taxonomy_coverage.py`.
 
 ## Latest Scoreboard
@@ -513,6 +516,12 @@ Targeted branch status:
   were produced: the headroom wrapper stopped before training because RAM was
   already at `~96%`/`~0.7GB` free. This is a current-machine headroom blocker,
   not a data/config failure.
+- Current fallback model-probe configs are ready but not run. Train-only YAMLs
+  and `320/b1/1000` preflights pass for both row-matched candidates:
+  `fixed_step_target_anchor_latest_bal20_vs_sourcectx_usd50100fallback_b20_b1_s1000_i320_v1_preflight.json`
+  and
+  `fixed_step_target_anchor_latest_bal20_vs_sourcectx_boxarea90fallback_b20_b1_s1000_i320_v1_preflight.json`.
+  Use these when RAM frees up; do not rebuild the candidate packages first.
 - Fixed-step model A/B is not completed. b64/b32/b16/b8 attempts hit the 95%
   RAM guard while RunLong/Codex were resident. Also, one failed b64 attempt
   reused the old leader run name with the wrapper's real-clean default before
@@ -650,6 +659,20 @@ survives at least two seeds or a slow-promotion run.
 - True `multi_note` is only `2/3` images and is not fan/overlap proof.
 - Protected-riel slices are small; use scoped checks and do not over-read one
   noisy class row.
+- Curated real fan/overlap benchmark status:
+  `scripts/check_real_fan_benchmark.py` passes, but only
+  `real_overlap_0003_commons_shop_5k_10k_20k` is labeled (`6` boxes);
+  the harder fan and perspective multi-note candidates still need human labels.
+- Mined-real diagnostic stress status:
+  `scripts/check_mined_real_review_quality.py` reports `17` ready stress images
+  and `35` scoreable boxes; `scripts/build_mined_real_scoreable_dataset.py`
+  materializes `runs/cashsnap/mined_real_scoreable_dataset_latest/data.yaml`,
+  and `check_yolo_dataset.py` passes on it. Coverage is useful but narrow:
+  dense overlap `3`, fan `2`, thin edge `6`, weak class `6`; classes are
+  `KHR_500/KHR_1000/KHR_5000/KHR_20000/KHR_50000/USD_20` only.
+- Lightweight eval on the mined-real stress data is wired but currently
+  RAM-blocked: the headroom wrapper killed the first `320/b1` eval at the `95%`
+  RAM guard before writing metrics. Rerun when available RAM is above the guard.
 
 ## Label And Class Policy
 
