@@ -1,566 +1,527 @@
 # CashSnap Model Brain
 
-This is the active desk for model and synthetic-data work. Keep it compact and useful.
-Move old detail to archive instead of letting this file become a wall of text.
+This is the active working memory for model and synthetic-data decisions. Keep
+it compact, current, and decision-oriented. Move old evidence to
+`docs/archive/` instead of letting this file become a changelog.
 
-Full pre-cleanup history snapshot:
-`docs/archive/model_brain_full_history_2026-06-06.md`.
-
-## Mission
-
-Build a small phone/browser-deployable model that counts mixed USD and Khmer
-Riel from one casual retail photo.
-
-The hard requirement is partial-note recognition: half notes, quarters, thin
-edges, overlaps, fans, stacks, and hand occlusions must be identified when a
-human can see enough denomination evidence.
-
-Counterfeit detection and authenticity classification are out of scope.
-
-## Current Read
-
-- WebGL rendering and package QA are strong enough for bounded model probes.
-  They are not a "perfect/done" pipeline yet.
-- The main blocker is validation and curriculum, not prettier render mechanics.
-  Real fan/overlap/hand/no-note stress proof is still missing.
-- The current scorecard is blocked: `4` pass / `13` blocked axes after adding
-  the project-level real-capture requirement axis.
-- Taxonomy and asset coverage must be read by layer, not assumed. Official
-  current USD/KHR scope is 21 classes. The active model schema and active WebGL
-  cutout bank are still 13-class operational subsets; raw Numista current-status
-  cache has front/back for 20/21 classes; raw Numista any-status cache has
-  front/back for all 21. `KHR_50` is the only official class missing from the
-  current-status raw cache, while any-status raw has 6 front/back pairs.
-- `scripts/build_currency_taxonomy_gap_plan.py` turns that scope gap into a
-  promotion queue. Current full-scope Numista candidate cutouts cover the seven
-  active/model-missing current-status classes (`USD_2`, `KHR_100`, `KHR_200`,
-  `KHR_15000`, `KHR_30000`, `KHR_100000`, `KHR_200000`); `KHR_50` is any-status
-  only and needs explicit status review before trainable current-currency use.
-- Browser failures are mostly detector-proposal/curriculum limited. Fragment
-  or final-count heuristics alone are not enough.
-- The latest base-first clean probe failed hard. A fresh `yolo26n.pt` trained
-  for 20 epochs on p24 real + 32 WebGL clean-base images reached only
-  `mAP50-95=0.17524`. Do not stage overlap/fan from that checkpoint.
-- The 512-image clean WebGL curriculum root now passes the trainable gate after
-  making note-condition diversity scene-aware. It is accepted for a bounded
-  clean-checkpoint ablation, not for blind scale or overlap/fan staging.
-- The seed0 clean-checkpoint ablation is not promotable: p24 real + 512 clean
-  WebGL beats the matched p24 real-only fine-tune (`0.841867` vs `0.835861`,
-  `+0.006006` mAP50-95), but still fails the stronger clean checkpoint
-  (`0.883801`, delta `-0.041934`). Worst clean-checkpoint drops are
-  `KHR_50000=-0.246982` and `KHR_20000=-0.074754`.
-- Older stack selected-geometry roots were confounded by synthetic finger
-  occluders. Treat stack overlap and hand/finger occlusion as separate recipe
-  variables; no-hand stack probes now require explicit occluder-policy gates.
-- No-hand stack dose1 has a tiny positive detector signal but fails deploy
-  usefulness: seed0 exact class-mix control probe improved test mAP50-95 by
-  `+0.002033` and `KHR_50000` by `+0.022303`, but browser mined-real stress
-  regressed on dense overlap, thin edge, and weak-class value behavior.
-- Prop-diverse hard negatives are more realistic than the old weak root, but
-  not a solved path: diversity8 loses `-0.003090` mAP50-95 versus old8, and
-  browser rejection/threshold tweaks clear hard negatives by killing positives.
-- Background false-positive probing explains the detector/browser mismatch:
-  no-hand dose1 and both hard-negative fine-tunes hallucinate far more than the
-  default detector on zero-label synthetic prop scenes. Do not scale those
-  recipes until proposal false positives improve under a real/deploy guardrail.
-- Existing model families split the problem: the old overlap-stage detector
-  improves mined-real overlap/fan recall but is noisy on prop-diverse negatives;
-  the full-real-only detector is background-saner but loses mined-real and
-  synthetic stress recall. The next synthetic/curriculum probe must preserve
-  overlap recall while borrowing the full-real/background restraint.
-- Current WebGL overlap-stack training does not transfer like the old staged
-  overlap detector: it is worse than default on mined-real dense overlap and
-  thin-edge browser stress, and it is worse than default on synthetic prop
-  false positives. The useful old-overlap signal is curriculum/data-shape
-  evidence, not proof that the current WebGL overlap recipe is right.
-- Tiny prop-diverse hard-negative repair of the old-overlap detector reduces
-  raw prop false positives, but browser behavior shifts into duplicate proposal
-  overcount. The next repair needs duplicate/proposal calibration, not simply
-  more no-note hard negatives.
-- Browser NMS is a real deploy lever for the old-overlap recall donor. NMS
-  `0.65` keeps mined-real perfect cases at `12/17` while reducing total
-  predicted count `44 -> 39` and absolute count error `11 -> 8`; adding the
-  unclassified/disagreement guard clears synthetic hard negatives but drops
-  mined-real perfect cases to `11/17`. Lowering the guard threshold from
-  `0.14` to `0.10` does not recover those real matches.
-- The existing broad 14-class real-fragment classifier is not the missing
-  hard-negative gate. With old-overlap + NMS `0.65`, no rejection still fails
-  synthetic card/phone and wallet/sticky negatives; disagreement rejection
-  clears negatives by deleting almost all synthetic positives.
-- Broad real-fragment `background` predictions are useful evidence but not a
-  solved gate. Old-overlap + NMS `0.65` + broad background-only rejection after
-  NMS clears all three synthetic hard negatives, but mined-real does not improve
-  over plain NMS (`12/17` perfect still, `same 31/35` vs `32/35`, abs KHR
-  `152000` vs `92000`) and synthetic hand evidence is deleted.
-- A binary old-overlap proposal gate is the strongest calibration signal so
-  far. V1 trained on detector proposal crops improves mined-real to `13/17`
-  perfect and clears synthetic hard negatives; v2 adds WebGL partial-positive
-  proposal crops and improves aggregate mined-real further (`pred=35`,
-  `same=31/35`, `any=32/35`, abs count `4`, abs KHR `21000`) while still
-  clearing the three synthetic hard negatives. This is diagnostic only until
-  real no-note/non-banknote and protected real partial validation exist.
-- Proposal-gate promotion is now explicitly blocked by capture buckets for
-  `khr_50000_hard_positive_partials` and `usd_hard_positive_partials`; these
-  target high-confidence banknote->background errors from the v2 failure pack.
-- Browser-count comparison is now a first-class detector-probe artifact. Use
-  `scripts/run_browser_detector_probe.py` after bounded synth detector probes
-  when an ONNX export is available; it runs/reuses synthetic and mined-real
-  browser reports and compares them with `scripts/compare_browser_reports.py`.
-  The comparator caught no-hand stack dose1 as blocked despite its tiny detector
-  mAP gain: synthetic stress worsened abs count by `+3`, abs KHR by `+26000`,
-  and hard-negative predictions by `+1`; mined-real stress lost `3` perfect
-  cases, `5` same-class matches, and added `+166000` abs KHR error.
-- Strict browser comparison says proposal-gate v2 is the best diagnostic stack
-  but still not promotable: mined-real passes versus default (`+4` perfect,
-  `+8` same-class, `-6` abs count, `-62500` abs KHR, `-80` abs USD), while
-  synthetic stress still blocks on positive evidence (`-1` same/any,
-  `+2` abs count, `+66000` abs KHR) even though hard-negative predictions drop
-  by `5` and failures drop by `3`.
-- Proposal-gate v2 case effects are now reviewable with
-  `scripts/summarize_browser_gate_effects.py`. The browser smoke summary now
-  exposes proposal, classified, and clustered diagnostic sources, so the
-  analyzer no longer infers gate effects from counters alone. At NMS `0.65`,
-  synthetic stress has `2` hard-negative helps, `1` hard-negative same,
-  `1` positive NMS harm, `1` positive reject harm, and `4` positive same.
-  Mined-real has `14` positive same, `1` positive reject safe, and `2`
-  positive reject harms. The concrete next target is protected thin/weak
-  positives such as `cashsnapv1_weak_khr_50000_03_khmer_scan_img_9189_jpeg_jpg`,
-  not generic hard-negative scale.
-- Browser gate review targets are now generated with
-  `scripts/build_browser_gate_review_targets.py` and embedded in detector-probe
-  summaries as `gate_review`. For proposal-gate v2, the P1 review/capture
-  targets are mined KHR_50000 hard-positive partials, mined KHR_20000 thin
-  slices, synthetic hand-fan NMS/fusion harm, and synthetic same-denomination
-  fan reject harm.
-- `scripts/check_capture_requirements.py --gate-review-targets <targets.csv>`
-  annotates the real shot list with those browser failure examples; use it when
-  refreshing `runs/cashsnap/real_capture_shot_list_latest.md` so capture work is
-  tied to concrete deploy failures.
-- Raising proposal-gate v2 browser NMS from `0.65` to `0.80` is not the fix.
-  It keeps mined-real strict comparison passing but worsens the v2 aggregate
-  (`pred 35->38`, abs count `4->5`, abs KHR `21000->26000`) and synthetic KHR
-  error (`474500->531500`) despite reducing synthetic abs count (`19->17`).
-  The corrected gate-effect categories still point at the same protected-positive
-  reject harms, so this needs proposal-gate calibration/validation, not a
-  simple NMS threshold bump.
-- Strict accepted-blend visible-note geometry is now diagnosable with
-  `scripts/summarize_domain_gap_geometry_targets.py`. Current accepted-nowarmup
-  synthetic boxes are much smaller than real (`area -0.372`, `width -0.417`,
-  `height -0.381`). Thin-edge partials should remain a protected partial slice,
-  not evidence that general visible-note scale is correct; clean/base and
-  back-side confusion rows need larger visible-note framing or selected-geometry
-  filtering. Worst class aspect gaps are `USD_10`, `USD_20`, and `KHR_10000`.
-- Selection alone does not repair accepted general-visible geometry. Bounded
-  selectors over clean-base + back-side roots still fail strict geometry at
-  32 images (`area -0.352`) and 16 images (`area -0.341`). Clean-closeup v2
-  proves aggregate scale is fixable (`area -0.009`, `width +0.027`,
-  `height -0.039`) but still fails five per-class aspect checks and already
-  regressed the real-only ablation, so a v3 needs class-conditioned pose/aspect
-  calibration plus model proof, not just larger notes.
+Archives:
+- `docs/archive/model_brain_full_history_2026-06-06.md`
+- `docs/archive/model_brain_pre_compact_2026-06-07.md`
+- `docs/archive/model_brain_pre_cleanup_2026-06-07.md`
 
 ## North Star
 
-Synthetic data should be a controlled experiment generator, not just an image
-generator.
+Build a small phone/browser-deployable model that counts mixed USD and Khmer
+riel from one casual retail photo.
 
-A future failure should map to one of these causes:
+Synthetic transfer is the current bottleneck. Do not move seriously into
+overlap/fan/hand until a synthetic-only `yolo26n` can learn normal visible notes
+well enough to transfer to real photos.
 
-- missing real condition or label bridge
-- bad label semantics
-- domain/geometry/appearance gap
-- curriculum or row-order problem
-- model/fusion/deploy bug
-- governance or taxonomy gap
+Hard product requirement later: partial notes, thin edges, overlaps, fans,
+stacks, and hand occlusions must count when a human can see denomination
+evidence. Counterfeit/authenticity detection is out of scope.
 
-Scale only after a synthetic recipe improves a real stress scoreboard under
-matched controls and seed stability.
+Clean-base target: `0.82-0.85` full real test mAP50-95.
 
-## Local Machine Posture
+Why that target is real: the near-same-size real-trained `p96_bg96` probe
+reaches `0.819153` on full real test and `0.866141` on the 185-image synthetic
+blend. If synthetic data is truly camera-real and broad enough, synthetic-only
+training should approach that transfer scale.
 
-- Laptop: AMD Ryzen 5 7640HS, 6 cores / 12 threads, about 16 GB RAM, and an
-  NVIDIA GeForce RTX 4060 Laptop GPU with about 8 GB VRAM; PyTorch sees CUDA
-  device `0`.
-- Prefer GPU-backed PyTorch/Ultralytics work with `--device 0` when VRAM has
-  room. Heavy jobs should go through `scripts/run_with_headroom.py` when
-  practical: caps may go up to 95% but never above 95%; resume around 82%.
-- Do not let the headroom wrapper wait forever if it cannot find launch
-  headroom. If it stalls, shrink the job first: lower batch/workers, lower RAM
-  pressure, adjust preflight floors, or split the run.
-- RAM pressure is the main bottleneck. Keep CPU/RAM-heavy jobs bounded with
-  modest workers/batches, especially while the laptop is in active use. Browser
-  smoke validation is ONNX Runtime Web/WASM and is still CPU-side.
-- WebGL recipe rendering has an opt-in `--render-jobs` knob. Keep default `1`
-  for safest laptop use; try `2` for bounded smoke/probe batches only with
-  headroom caps at or below 95% and a short preflight timeout.
+Current reality:
+- Slow synthetic-only filtered185 full real test: `0.142098`.
+- Fast fixed-step filtered185 full real test: `0.075907`.
+- Current synthetic-only fixed-step aggregate leader: target-anchor
+  latest-design transplant `0.144740`.
+- Strongest current low-batch mechanism clue: isolated Poisson/contact
+  target-anchor `0.028350 -> 0.042401` in the quiet b8/AMP 150-update A/B, but
+  it fails empty-frame FP guardrails.
 
-## Immediate Plan
+Perspective: we are around `9-14` trying to reach `82-85`, not `80` trying to
+reach `85`. Small `+0.01` or `+0.02` wins below `0.25` are clues about a
+mechanism, not a trajectory toward done. Stay in step-change mode.
 
-1. Keep the desk clean:
-   `model.md` stays current and concise; old details go to `docs/archive/`.
-2. Do not promote the 512 clean root. Use its ablation result as signal that
-   synthetic exposure can help p24-style scarcity, while `KHR_50000` and
-   `KHR_20000` still need a better real/synthetic bridge.
-3. Do not scale no-hand stack yet. Its first exact class-mix detector probe is
-   slightly positive, but browser stress says the signal is not deploy-useful.
-   Next work should explain detector-vs-browser mismatch before more renders.
-4. Treat the next repo-only bet as a proposal-calibration/curriculum probe, not
-   a renderer expansion: combine overlap/fan recall pressure with no-note or
-   background restraint and require both mined-real browser stress and synthetic
-   hard-negative stress to avoid regression.
-5. Do not repeat broad old-overlap hard-negative fine-tunes as-is. A focused
-   hardneg8 repair improved raw background FPs but increased browser duplicate
-   proposals; any next variant must explicitly constrain duplicate/overcount
-   behavior.
-6. Keep old-overlap + browser NMS `0.65` as the current best diagnostic deploy
-   calibration, not a promotion. It improves mined-real count noise without
-   losing recall, but it still fails synthetic hard-negative safety unless the
-   rejection guard is added, which costs real recall.
-7. Advance the binary proposal gate, not broad denomination rejection. The v2
-   synthetic-partial proposal gate is the best current diagnostic stack, but it
-   still needs real no-note/non-banknote validation and hard-positive partial
-   review before promotion.
-8. Use render concurrency carefully before more 500+ image runs:
-   `render_webgl_variant_batch.py` and `run_webgl_recipe.py` support
-   `--render-jobs`; validation/package assembly remains sequential. Keep
-   laptop probes bounded until larger batches prove headroom is stable.
-9. For every detector-side synth probe that gets trained, export/reuse ONNX and
-   run `scripts/run_browser_detector_probe.py` before treating mAP as useful.
-   The pass/fail comparison and, when artifacts exist, gate-effect counts should
-   travel with the training summary.
-10. Use `scripts/summarize_browser_gate_effects.py` and
-   `scripts/build_browser_gate_review_targets.py` on two-stage browser reports
-   before proposal-gate changes. Gate deltas must separate hard-negative help,
-   positive reject harm, and NMS/duplicate harm, then map those rows to real
-   capture/review buckets.
-11. Only revisit fresh-from-`yolo26n.pt` base-first training if the checkpoint
-   ablation is not harmful. Do not stage overlap/fan/hand from a weak clean
-   stage.
-12. In parallel, improve the real bridge:
-   promoted real fan/overlap/hand/no-note/hard-positive partial labels are
-   still the biggest blocker.
-13. For geometry repairs, run `scripts/summarize_domain_gap_geometry_targets.py`
-   on the latest strict geometry CSVs before rendering more. Separate
-   protected partial slices from general visible-note scale and repair the
-   clean/back-side source groups first. Do not treat a strict geometry pass as
-   enough; clean-closeup and selected-stack history show geometry can pass while
-   model/browser utility still regresses.
+## Current Decision
 
-## Promotion Rules
+Stop iterating small negative doses around the same Poisson/contact candidate.
+The best next synth-data bet is a regime-change branch:
 
-For CashSnap, "perfect synth data" means operational fit, not raw realism.
+1. Keep Poisson/contact as the current image-formation base.
+2. Add a bounded label-preserving learned/AI refiner smoke on top of it.
+3. Build or source a realistic target-domain near-negative bank, not more
+   stylized WebGL line-prop negatives.
+4. Promote only through real-transfer, background-FP, per-class, and seed-repeat
+   guardrails.
 
-Promote synthetic data only when all relevant checks pass:
+Refiner contract: raw learned outputs are not trainable data. Any learned/AI
+refiner output must pass through protected composition first, with note+edge
+pixels restored from the trusted source unless a stricter label-preservation
+gate proves another policy safe.
 
-- real P1 exact-count accuracy improves by about `+3pp`, or total-value MAE
-  drops by about `10%`
-- no high-value or rare class drops by more than about `2pp` / `2 AP`
-- hard-negative, unknown, and non-identifiable sliver hallucination does not
-  materially increase
-- at least 3 seeds are positive; use 5 seeds for large promotions
-- matched row-count and class-exposure controls do not explain the gain
-- browser/mobile model size, latency, and quantized accuracy stay within budget
-- qualitative error review shows real fixes, not shortcut learning
+The right first learned-refiner path is `FastCUT/CUT` as the low-VRAM sanity
+check, then `CycleGAN-Turbo/img2img-turbo` if the harness and memory fit. Use
+SD1.5 ControlNet/img2img only as a low-denoise baseline. Do not start with
+Qwen/FLUX prompt editing: currency labels and security details are too easy to
+mutate, and this laptop has only an RTX 4060 Laptop 8GB VRAM with about 16GB RAM.
 
-## Label Policy
+Do not blindly scale synthetic yet. Scaling target-anchor latest, realfgstyle,
+poseclose, or the existing negative roots as-is is very unlikely to close the
+gap to `0.82-0.85`.
 
-Visible evidence is authoritative.
+Current refiner-readiness status:
+- `scripts/build_refiner_readiness_pack.py` prepares the first controlled
+  synthetic-to-real refiner smoke pack from isolated Poisson/contact.
+- Pack: `runs/cashsnap/refiner_readiness_poisson_contact_v1/`
+- It exports note masks, interior/detail lock masks, edge freedom masks,
+  train-only real target manifests, strict no-note background manifests, CUDA
+  readiness, and 95% headroom-wrapper guidance.
+- `scripts/check_refiner_label_preservation.py` is the pre-trainable gate for
+  refined outputs. Identity check against the original source images passes:
+  `runs/cashsnap/refiner_readiness_poisson_contact_v1/identity_preservation_check.json`.
+- `scripts/materialize_refiner_unaligned_dataset.py` turns that pack into a
+  CUT/FastCUT-style smoke dataset with `trainA`, `trainB`, labels, and masks.
+  Current dataset:
+  `runs/cashsnap/refiner_readiness_poisson_contact_v1/cut_unaligned_smoke/`.
+  It has 52 synthetic `trainA`/`train_A` rows, 160 train-only real
+  `trainB`/`train_B` rows, 8 train-only `test_A`/`test_B` rows for refiner
+  smoke validation, fixed CycleGAN-Turbo prompts, and its own identity
+  preservation check passes.
+- CUT/FastCUT repo was cloned into ignored
+  `.cache_runtime/third_party/contrastive-unpaired-translation`; dependencies
+  are installed after downgrading `setuptools` to restore `pkg_resources` for
+  `visdom` on Python 3.14. The cached CUT argparse bug for `--CUT_mode` was
+  patched locally.
+- Tiny FastCUT GPU/headroom proof succeeded:
+  `runs/cashsnap/refiner_checkpoints/cashsnap_fastcut_poisson_smoke_e1_m8_128/`.
+  It used CUDA `gpu_ids=0`, 8 images, 1 epoch, 128px, batch 1, smaller
+  `resnet_6blocks/ngf32/ndf32`, no flip, no HTML/visdom, and checkpoints under
+  `runs/cashsnap`.
+- Shape-preserving inference succeeded:
+  `runs/cashsnap/refiner_results/cashsnap_fastcut_poisson_smoke_e1_m8_128/train_latest/images/fake_B/`
+  emits 640x640 outputs. It is not a usable refiner candidate: label
+  preservation on first 8 fails all rows, with detail L1 mean `51.104` and max
+  `88.984`.
+- `scripts/apply_refiner_detail_lock.py` can restore source note pixels after
+  refiner inference. Detail-lock recomposite cuts detail L1 to mean `0.692` but
+  still fails 4/8 on edge/note thresholds. Full-note lock gives detail/note L1
+  `0.0` but still has one edge-only failure and visual output remains poor on
+  the toy run.
+- Cached CUT now has a local `--lambda_detail_identity` mask-aware training
+  loss wired from `masks/detail_lock`. A tiny FastCUT 8-image smoke at lambda
+  `10` still failed all rows (`detail_l1` mean `58.064`); a stronger lambda
+  `200`, 5-epoch smoke also failed all rows (`detail_l1` mean `52.125`). Read:
+  mask-aware loss is wired but not enough to trust raw FastCUT outputs at toy
+  scale.
+- `scripts/apply_refiner_detail_lock.py --lock-mask note_edge --feather-px 0`
+  restores the note plus contact edge band after refiner inference. On the
+  stronger FastCUT smoke it passes the strict first-8 preservation gate with
+  `0/8` failures and detail/note/edge L1 all `0.0`. This is the current safe
+  refiner contract: learned model may alter background/broad tone, but protected
+  note and edge pixels come from source unless a future gate proves relaxation
+  safe.
+- A 52-image note-edge-locked FastCUT candidate was materialized as a normal
+  YOLO root:
+  `runs/cashsnap/refiner_yolo_candidates/fastcut_maskid200_note_edge_e5_m52_128/`.
+  It passes strict preservation (`0/52` failures), `check_yolo_dataset.py`, and
+  numeric visual QA, but human sheet review rejects it: backgrounds collapse
+  into gray/green/purple translator artifacts.
+- `scripts/check_refiner_background_realism.py` now compares candidate
+  background pixels outside note+edge masks to strict no-note CashSnap
+  backgrounds. The original Poisson/contact `trainA` source passes; the
+  note-edge-locked FastCUT candidate fails with `luma_std_ratio=0.176884`
+  against the default `>=0.45` guard. Do not promote this FastCUT candidate.
+- `scripts/run_sd_turbo_img2img_refiner.py` is the first local AI-image-refiner
+  proof path. It runs `stabilityai/sd-turbo` img2img on CUDA/fp16 and refuses
+  CPU fallback. Low denoise `strength=0.25`, `steps=4`, `guidance=0` is one
+  effective denoise step on this setup.
+- Raw SD-Turbo is not label-safe: on the 260-image audit pack it failed
+  preservation on `257/260` rows (`detail_l1` mean `22.012`, `note_l1` mean
+  `20.450`). The prompt does not reliably preserve denomination detail.
+- Note-edge-locked SD-Turbo is the first viable AI-refiner candidate branch:
+  `runs/cashsnap/refiner_yolo_candidates/sd_turbo_note_edge_s025_steps4_m260/`
+  has 260 images, 20 per class, passes strict preservation (`0/260` failures),
+  background realism (`luma_std_ratio=1.060475`, no violations),
+  `check_yolo_dataset.py`, visual QA numeric gates, and composite-edge audit
+  (`boundary_ratio_mean=1.2708`, `edge_color_step_mean=0.0759`).
+- Full-size visual QA on SD-Turbo m260 is mixed: several clean-counter images
+  are plausible, but some outputs have pastel/blocky AI background patches,
+  washed/haloed notes from the hard edge lock, or bad source backgrounds such as
+  speckled black patches. Treat it as a promising audit candidate, not a
+  trainable/done package.
+- Model-side b4 fixed-step source-vs-SD m260 same-root learnability rejected
+  this exact SD setting: source `0.736527`, SD-Turbo `0.672436`, delta
+  `-0.064091`, with 7 classes worse than the `0.05` per-class guard and worst
+  `KHR_10000 -0.176763`. The b8 run hit the 95% RAM guard on the SD candidate,
+  so use b4 for this bounded comparison. This is not real transfer proof; it is
+  an early "do not promote as-is" signal.
+- Better-model research branch to keep current: test ICEdit, Qwen-Image-Edit,
+  FLUX.1/FLUX.2 editing variants, Step1X-Edit, and OmniGen2 only through this
+  same preservation-first harness. Do not trust model-card claims of detail
+  preservation; raw output must pass masks/OCR/detail checks or be used only
+  with note+edge recomposition.
+- CycleGAN-Turbo/img2img-turbo repo was cloned into ignored
+  `.cache_runtime/third_party/img2img-turbo`. Core deps now import
+  (`accelerate`, `diffusers`, `transformers`, `peft`, `lpips`, `clean-fid`,
+  `vision_aided_loss`, `wandb`, `open_clip`); `xformers` is still absent and
+  must not be enabled.
+- Cached CycleGAN-Turbo patches for laptop smoke: `--report_to none`, no
+  validation/FID/DINO when `--validation_steps 0 --validation_num_images 0`,
+  skip LPIPS/VGG when LPIPS weights are zero, and add `resize_128/resize_192`.
+- CycleGAN-Turbo 256px one-step crossed the guard and was killed at GPU memory
+  `96%`; do not use 256px default on this laptop yet.
+- Optimized CycleGAN-Turbo 128px one-step completed under headroom with
+  batch `1`, workers `0`, low LoRA rank, no validation, no LPIPS:
+  `runs/cashsnap/cyclegan_turbo_smoke_s1_128_noval_nolpips/`. It did not save a
+  checkpoint because the upstream save condition misses step 1 when
+  `checkpointing_steps=1`.
+- Rerunning the 128px smoke with a step-1 checkpoint request hit the 95% GPU
+  memory guard during setup. Treat CycleGAN-Turbo as barely fitting: usable for
+  tiny proof runs only until the harness gets a real lower-memory/autocast or
+  offload path.
+- An fp16 attempt failed with `Attempting to unscale FP16 gradients`; do not use
+  `--mixed_precision fp16` for this cached unpaired trainer until the loop is
+  rewritten around proper autocast instead of casting trainable weights.
+- Latest hardware read inside the pack: CUDA OK on `NVIDIA GeForce RTX 4060
+  Laptop GPU`; low available RAM warned and recommended `256px`, batch `1`,
+  fp16/AMP, workers `0`. Use `scripts/run_with_headroom.py` for long refiner
+  training/inference so CPU/RAM/GPU-memory caps stay at or below 95%.
 
-- `visible_polygon` / visible mask is the detection truth.
-- `visible_bbox` is a compatibility label for detect-only probes.
-- `oriented_bbox` is allowed only when the visible region is compact and
-  rectangle-like.
-- `physical_note_id` is the count target. One note split into several visible
-  islands is still one physical note.
-- `fragment_id` labels local visible evidence and must be fused back to the
-  parent before counting.
-- `human_identifiable=false` or `uncertain` should train/evaluate abstention or
-  ignore behavior, not forced denomination guesses.
-- Preserve side/design, visibility fraction, cue types, occlusion order, and
-  ignore reason whenever labels support it.
+## Current Read
 
-## Current Assets
+- Renderer mechanics and package QA are strong enough for bounded probes, but
+  renderer gates are not transfer proof.
+- The main blocker is real transfer: target-domain foreground/camera pixels,
+  pasted-edge/contact/focus consistency, realistic target-vs-non-target
+  banknote pressure, rare-class/capture gaps, and validation obligations tied to
+  real failures.
+- Target-anchor latest was the first clear recent mechanism signal because it
+  combines real CashSnap no-note pixels, real CashSnap geometry, and
+  latest-design target assets. It is a direction signal, not a solved package.
+- Latest-design texture policy matters. The all-manifest target-anchor MVP
+  improved aggregate but failed class guards, likely by mixing old/current class
+  appearances.
+- Poisson/contact image formation is useful. Isolated Poisson/contact improved
+  low-batch positive transfer, but it increased real-empty false positives.
+- Close-up pose/scale did not transfer. It reduced empty-frame FPs but broke
+  positive transfer, especially `KHR_10000`.
+- Existing synthetic negative pools are too stylized/easy. At `conf=0.05`, the
+  Poisson/contact b8 model had zero FPs on the current unknown/hard-negative
+  synthetic roots; they do not match real empty-frame failures.
+- Full CashSnap empty-label frames are hard negatives, not clean positive
+  canvases. Many contain visible foreign/unknown/target-like notes. Use strict
+  no-note patches for positive transplants; use full empty frames for FP
+  diagnostics and target-vs-non-target pressure.
+- Bridge-calibrated selected-v1 proved that prettier summary stats can still
+  train a worse detector. Domain separators and visual-gap audits are warning
+  lights, not judges.
+- Missing promoted real fan/overlap/hand stress labels still blocks final proof
+  for the ultimate product behavior.
+- Before class-scope claims, run `scripts/check_currency_taxonomy_coverage.py`.
 
-Active backbone:
+## Latest Scoreboard
 
-- `data/cashsnap_v1/` is the canonical clean/base YOLO dataset.
-  It has the current 13 bill classes and 9,048 labeled boxes.
-- `data/asset_candidates/numista_current_cutout_bank_v1/` is the current clean
-  scan/cutout bank for WebGL. It covers front/back for the 13 operational
-  classes and still has usage/release limits.
-- Raw Numista coverage is broader than the active bank. Diagnostic probe banks
-  under ignored `data/asset_candidates/` show current-status full-scope cutouts
-  cover 20/21 official classes, and any-status full-scope cutouts cover 21/21.
-  Do not use the any-status bank for trainable current-currency recipes without
-  design/status review.
+| Candidate | Result | Read |
+| --- | --- | --- |
+| Fast filtered185 control | `0.075907` full real test | Fixed-step reference. |
+| Target-anchor latest | `0.144740`; passes per-class guard vs fast filtered185 | Current aggregate leader and seed distribution. |
+| Target-anchor all-manifest MVP | `0.119088`; fails `KHR_5000`, `USD_10` | Rejected. Latest-design policy is important. |
+| Realfgstyle v1 | Dataset/crop stats mixed; b64/b32/b16 runs hit RAM | Diagnostic only. Visual QA still shows crisp sticker-like notes. |
+| Isolated Poisson/contact | b8 A/B `0.028350 -> 0.042401`; no class guard failures | Useful compositor clue. Fails empty-frame FPs: val `88/59 -> 168/100`, test `61/38 -> 72/48`. |
+| Poisson/contact poseclose | b8 A/B `0.028350 -> 0.027729`; `KHR_10000 -0.0546` | Rejected as replacement. Empty FPs improved but positive transfer failed. |
+| Poisson/contact hardnegdiv8 | b8 A/B `0.028350 -> 0.026388` | Rejected. Stylized WebGL negatives worsened FPs badly. |
+| Poisson/contact realbgneg25 | b8 A/B `0.028350 -> 0.030660` | Rejected. Small positive gain, but real-empty FPs worsened badly. |
+| Poisson/contact unknownsoftfp8lowconf | b8 A/B `0.028350 -> 0.031460` | Least-bad negative dose; test FPs improved but val FPs worsened. Not promotion. |
+| Target-anchor + repairmix50 | b32 A/B `0.071116 -> 0.042483` | Rejected. Naive fusion collapsed precision. |
+| Bridge-calibrated selected-v1 | CashSnap `0.075907 -> 0.048918`; bridge `0.223646/0.225793 -> 0.126261/0.121071` | Rejected. Zero USD recall on bridge review. |
 
-Active diagnostic real bridge:
+Key isolated Poisson/contact details:
+- Config: `configs/webgl_ablation/cashsnap_target_anchor_transplant_poisson_contact_puresynth_realval_v1.yaml`
+- Root: `data/synthetic/cashsnap_target_anchor_transplant_poisson_contact_v1/`
+- Build: 1,248 images, 96/class, all 26 latest-design assets, all 25 strict
+  no-note train backgrounds, 1,134 unique geometry sources.
+- Visual QA: `p50_short_px=150.8`, `p05=83.2`, tiny `0.0008`, small `0.0393`,
+  soft `0.1002`.
+- Edge audit vs old realfgstyle: boundary ratio `1.2549`, color step `0.0761`,
+  quad mean `365.6x245.9`, area `73.4k`.
+- Model read: useful image formation, not promotable without realistic negative
+  pressure and stronger proof.
 
-- `runs/cashsnap/mined_real_scoreable_dataset_latest/`
-- `runs/cashsnap/mined_real_scoreable_dataset_holdout_latest/`
-- `runs/cashsnap/mined_real_browser_cases_latest.csv`
+## Next Bet: Refiner Smoke
 
-Active WebGL trainable-candidate roots:
+Goal: test whether a label-preserving learned/refiner path can remove the
+remaining composited-camera shortcut without mutating denomination evidence.
 
-- `data/synthetic/cashsnap_webgl_clean_base_candidate_v1`
-- `data/synthetic/cashsnap_webgl_overlap_stack_candidate_v1`
-- `data/synthetic/cashsnap_webgl_fan_fullschema_candidate_v1`
-- `data/synthetic/cashsnap_webgl_hand_occlusion_candidate_v1`
-- `data/synthetic/cashsnap_webgl_thin_edge_partial_candidate_v1`
-- `data/synthetic/cashsnap_webgl_hard_negative_diversity_catalog_gate_v1`
-- `data/synthetic/cashsnap_webgl_back_side_confusion_candidate_v1`
+Starting point:
+- Use isolated Poisson/contact target-anchor output as the synthetic source.
+- Use train-only CashSnap images/crops as target-domain appearance anchors.
+- Do not use CashSnap val/test for refiner training, discriminator training, or
+  prompt tuning.
+- Keep boxes, quads, class ids, and metadata unchanged by design.
+- Use `runs/cashsnap/refiner_readiness_poisson_contact_m260_v1/synthetic_manifest.jsonl`
+  as the current audit manifest for AI-refiner work unless a stronger source
+  distribution replaces isolated Poisson/contact.
 
-New clean-curriculum probe root:
+Preferred order:
+1. Low-denoise SD-Turbo/img2img with hard note+edge recomposition is the current
+   local baseline because it passed the 260-image audit gates.
+2. Bake off newer controlled editors/inpainters (ICEdit, Qwen-Image-Edit,
+   FLUX editing variants, Step1X-Edit, OmniGen2) on the same 20-50 image pack
+   before spending larger GPU/API time.
+3. Inpainting/background-only variants are preferred over whole-image editing
+   because hallucination is harmless only outside the protected note/edge mask.
+4. FastCUT/CUT and CycleGAN-Turbo are diagnostic only unless a future patch
+   fixes visual quality and 8GB memory pressure.
 
-- `data/synthetic/cashsnap_webgl_clean_base_curriculum_probe_v1`
-- Status: rendered, label-checked, and trainable-gate accepted.
-- Evidence: 512 images, 1,023 physical count targets, roughly 78-79 boxes per
-  current class, appearance diversity passed, OBB trainable for all images.
-- Note-condition diversity: clean-scene mixed policy has `pristine=197`,
-  `circulated=826`, `dirtiness_range=0.45`, `crinkle_range=0.42`,
-  `wetness_range=0.28`. Heavy/wet stress belongs in dedicated stress recipes.
-- Model result: one-epoch clean-checkpoint ablation with seed0 passes the
-  matched p24 real-only comparison but rejects versus the clean checkpoint.
+Smoke stages:
+- `20-50` image visual/label smoke.
+- `200-500` image audit probe with edge/crop/domain checks.
+- `1k+` trainable candidate only after the small probes pass.
 
-No-hand stack diagnostic:
+Required gates before any refined dataset is trainable:
+- Exact label/metadata preservation.
+- Full-size visual QA, not just contact sheets. Open several clear,
+  full-size/simple-scene images with vision; compressed contact-sheet tiles hide
+  rendering flaws and are not enough for visual reasoning.
+- Composite-edge audit.
+- Crop/geometry audit.
+- Real-trained detector consistency on synthetic labels.
+- Class-detail spot review for weak/protected classes.
+- Domain separator as a warning light.
+- Fixed-step `yolo26n` transfer.
+- Background-FP guardrail.
+- Per-class guard.
+- At least one seed repeat before serious promotion.
 
-- `data/synthetic/cashsnap_webgl_no_hand_real_scale_stack_print_tone_selected_geometry_v1`
-- Status: diagnostic only. It isolates note-on-note stack overlap from
-  hand/finger occlusion and passes strict geometry after selecting 20 images
-  from a 40-image no-hand pool.
-- Evidence: selected20 has 83 YOLO boxes, occluder policy `no_hand`, zero
-  occluders, local dynamic-range print tone passing, and strict geometry pass.
-- Model result: dose1 selected variant 7 and beat an exact class-mix exposure
-  control by `+0.002033` mAP50-95 at seed0; `KHR_50000` improved `+0.022303`,
-  worst class drop was `USD_20=-0.009805`.
-- Deploy result: the same detector is not promotable. Browser synthetic stress
-  still fails hard negatives and overcounts overlap; mined-real browser stress
-  worsens dense-overlap recall/count, thin-edge count/value, and weak-class
-  value behavior versus the default detector.
-- Remaining blockers: class balance is loose, trainable-candidate appearance
-  diversity is too narrow for promotion, exact real class-mix controls are
-  unavailable from current repo data, and deploy behavior does not transfer.
+Immediate next concrete step: add source-background visual triage/rejects for
+speckled/blocky backgrounds, then run a small fixed-step source-vs-SD-Turbo
+transfer comparison only if the m260 visual reject slice stays bounded. In
+parallel, research/bake off one newer controlled editor through the same gates.
 
-## Current Models
+Kill criteria:
+- Denomination text, portraits, numerals, colors, or security details mutate.
+- Refiner erases small visible class evidence.
+- Edges still look pasted after tone improves.
+- Domain stats improve but real transfer does not.
+- Empty-frame FPs worsen without a compensating real-transfer result strong
+  enough to justify a new branch.
 
-Default browser detector:
+## Negative Bank
 
-- `runs/cashsnap/yolo26n_cashsnap_current_thin_legacy_clean_v1_e20_i416_b8/weights/best.pt`
-- ONNX is wired through `configs/cashsnap_two_stage_oldcommon_browser_stack.json`.
-- Useful for current browser diagnostics, not a solved final model.
+Realistic near-negatives matter now. The real background-FP review shows
+empty-label false positives are often full non-target banknotes or target-like
+paper on the same retail surfaces as positives.
 
-Useful curriculum signal:
+Current state:
+- Existing WebGL unknown/hard-negative roots are too stylized/easy.
+- Hardnegdiv8, realbgneg25, and unknownsoftfp8lowconf did not clear guardrails.
+- `configs/synthetic_recipes/cashsnap_external_negative_banks_v1.json` is
+  planned/registry work, not an accepted trainable bank.
 
-- `runs/cashsnap/yolo26n_pristine_overlap_e2_i416_b8/weights/best.pt`
-- Improves mined-real browser same-class/fan/overlap recall versus default, but
-  overcounts and has value noise. Treat as evidence for staged curriculum, not
-  as a promotion candidate.
+Next realistic bank should include reviewed foreign/unknown currencies,
+target-lookalike partial notes, receipts, cards, patterned paper, and retail
+clutter rendered or composited through the same camera-domain policy. Do not
+mine CashSnap val/test empty frames into training.
 
-Rejected latest base clean probe:
+## Promotion Gates
 
-- `runs/cashsnap/yolo26n_base_clean_webgl_clean_base_v1_e20_i416_b8_seed0/`
-- Best/last val: `mAP50-95=0.17524`, `mAP50=0.19789`, precision `0.20579`,
-  recall `0.31653`, train class loss `3.4868`.
+A synthetic axis is credible only with:
+- Full real val/test improvement or preservation.
+- Clean-visible val/test preservation.
+- Labeled-positive and geometry-stress preservation.
+- Protected-class preservation, especially riel.
+- Real empty-frame FP detections and images-with-FP not worse at `conf=0.05`,
+  `imgsz=416`, `batch=1`, `device=0`.
+- Max per-class mAP50-95 drop `<=0.05` unless explicitly waived.
+- At least one seed repeat for serious promotion, more for large claims.
 
-## Known Results
+Synthetic package gates are necessary filters, not promotion authority.
 
-- Accepted WebGL blend is not stable across seeds and rejects on mined held-out
-  rare/edge diagnostic utility. Worst issue remains `KHR_50000`.
-- Negative model probes from older selected stack roots are not pure no-hand
-  overlap evidence because every stack image had synthetic finger capsules.
-- No-hand stack dose1 is a weak positive detector result, not a promotion:
-  exact class-mix mAP improved, but browser mined-real stress regressed.
-- Hard-negative diversity8 is not promotable by itself: it improves some KHR
-  value noise on synthetic stress, but loses detector AP versus old8 and
-  threshold/disagreement rejection trades false positives for missed bills.
-- Background FP comparison (`runs/cashsnap/background_fp_default_nohand_hardneg_comparison.json`):
-  at `conf=0.05`, default has `13/32` detections on the old hard-negative root
-  and `9/8` on the prop-diverse root; no-hand dose1 jumps to `56/32` and
-  `22/8`, while hardneg old8/diversity8 remain high (`48/32`/`18/8` and
-  `46/32`/`16/8`). The no-hand AP lift is likely proposal hallucination, not a
-  deploy-useful overlap fix.
-- The 512 clean WebGL root is a useful scarcity-control signal but is not
-  promotable. It improves over matched p24 real-only by `+0.006006` mAP50-95
-  and fails clean-checkpoint guardrails by `-0.041934`, led by `KHR_50000`.
-- Real-only p48/bg48 is the best expanded real-only control on the mined
-  held-out rare/edge slice, but it is not promotable and still misses the p24
-  clean gate.
-- Duplicate-only rare oversampling, p96 scaling, and background removal are not
-  sufficient repairs.
-- Mined-real browser default stack gets `9/17` strict perfect cases on the
-  scoreable stress set.
-- The old staged overlap detector gets `12/17` perfect on the same mined-real
-  browser set and improves fan/dense-overlap recall, but shifts errors into
-  overcount/value noise.
-- Current WebGL overlap-stack ablation is rejected in deploy terms. Exported
-  `webgl_ablation_overlap_stack_from_clean` gets mined-real dense-overlap
-  final same recall `3/9` versus default `5/9` and old-overlap `8/9`, and
-  synthetic hard-negative browser cases still all fail. Raw prop FP is also
-  worse than default (`43/32` and `12/8` detections at `conf=0.05`).
-- Old-overlap prop-diverse hardneg8 repair is diagnostic only. Full one-epoch
-  repair cuts raw prop FPs (`11 -> 6` detections on the 8 prop-diverse frames)
-  but overcounts badly in browser (`synthetic_overlap_stack pred=21/6`;
-  mined-real fan `pred=13/8`, thin-edge `pred=18/10`). A gentler 32-batch
-  repair still overcounts synthetic overlap (`pred=11/6`) while only partly
-  reducing hard-negative FPs.
-- Old-overlap browser NMS `0.65` is a useful calibration result. It keeps the
-  old-overlap mined-real strict score at `12/17` but improves aggregate
-  stability (`pred 44 -> 39`, abs count error `11 -> 8`, abs KHR error
-  `107000 -> 92000`) versus default NMS `0.85`. NMS `0.65` plus
-  disagreement/unclassified rejection clears all three synthetic hard-negative
-  browser cases, but mined-real drops to `11/17` and loses fan/thin matches;
-  unclassified-only leaves wallet/sticky false positives, disagreement-only
-  leaves card/phone false positives.
-- Existing broad real-fragment classifier diagnostic:
-  `configs/cashsnap_two_stage_broad_realfrag_browser_stack.json` plus
-  old-overlap/NMS `0.65` is rejected. Without disagreement rejection, synthetic
-  card/phone and wallet/sticky still false-positive; with rejection, synthetic
-  hard negatives clear but positive stress collapses to near zero recall.
-- Background-only broad real-fragment gate is also diagnostic only. The browser
-  app can reject configured fragment classes and optionally run NMS before
-  rejection; `configs/cashsnap_two_stage_oldoverlap_broad_realfrag_bg_reject_browser_stack.json`
-  uses this to reject `background` while preserving detector denominations.
-  It clears synthetic hard negatives (`failures 2 -> 0`, perfect `1/9 -> 3/9`)
-  but does not beat plain old-overlap NMS on mined-real (`12/17` perfect,
-  `same 31/35`, `any 32/35`, abs count `7`, abs KHR `152000`, one rejected
-  real proposal). Use it as proof that proposal-level background evidence
-  exists, not as a default deploy stack.
-- Binary proposal-gate diagnostics are promising. `scripts/build_proposal_gate_dataset.py`
-  auto-labels old-overlap detector proposal crops as `banknote`/`background`
-  by YOLO-label IoU, adds random safe background crops, and writes ImageFolder
-  data. V1 (`mobilenet_v3_proposal_gate_oldoverlap_v1_e6`) clears synthetic
-  hard negatives and improves mined-real to `13/17` perfect, abs count `5`,
-  abs KHR `26000`, but lowers recall (`same 30/35`). V2
-  (`mobilenet_v3_proposal_gate_oldoverlap_synpartial_v2_e6`) adds WebGL
-  clean/overlap/fan/hand/thin positive proposals; it keeps synthetic
-  hard-negative failures at zero and gets the best mined-real aggregate so far:
-  `13/17` perfect, `pred=35`, `same 31/35`, `any 32/35`, abs count `4`, abs KHR
-  `21000`. Still diagnostic: the validation set is tiny, and real no-note plus
-  reviewed real partial hard positives are missing. V2 validation errors are
-  concentrated in real proposal crops (`cashsnap_v1` USD banknotes and mined
-  weak `KHR_50000`) being rejected as background, so the next repair is hard
-  real positives plus reviewed real no-note props, not a simple threshold sweep.
-  Failure review pack: `data/review/proposal_gate_synpartial_v2_failures/`
-  (`9` background->banknote, `11` banknote->background high-confidence errors).
-- Full-real-only is a useful negative/proposal reference, not a browser base.
-  It is cleanest on synthetic prop false positives (`4/32` and `1/8`
-  detections at `conf=0.05`, and zero detections by `conf=0.18`), but browser
-  replay regresses mined-real same-class recall versus default/old-overlap and
-  collapses positive synthetic stress. Use it to shape restraint, not to replace
-  the current detector.
-- Disagreement/unclassified browser veto flags are diagnostic only. They clear
-  some synthetic hard negatives but do not improve mined-real stress.
+Clean-base can move toward overlap/fan/hand only when synthetic-only `yolo26n`
+is near the target line, clean-visible and labeled-positive test are `>=0.75`,
+protected riel passes, real-empty FPs are no worse than control, and the result
+survives at least two seeds or a slow-promotion run.
 
-## Hard Blockers
+## Validation Slices
 
-- No protected/promoted real P1 fan/overlap/hand stress benchmark yet.
-- No real repeated-denomination fan labels for same-class counting/fusion.
-- No reviewed real no-note/non-banknote paper capture inventory.
-- No real mixed USD+KHR rare/common stack captures, especially with
-  `KHR_50000`.
-- Current model schema and active WebGL cutout bank are incomplete relative to
-  full USD/KHR. Verify raw/current/active/model coverage with the taxonomy
-  coverage check before saying a class exists or is missing.
-- Clean-real train split still has thin rare anchors:
-  `KHR_20000=14` and `KHR_50000=15` unique train images.
-- Renderer throughput is too slow for 500+ image iteration on this laptop.
+- Full real val/test includes many empty-label images; always pair aggregate AP
+  with empty-frame FP probes.
+- Roboflow core-13 bridge is the cleaner positive KHR/USD judge for the current
+  detector. Pair it with CashSnap empty-frame FP diagnostics; neither replaces
+  the other.
+- Roboflow official21 partial bridge preserves official classes present in the
+  source, including `KHR_100`, but is not evaluable with current 13-class
+  weights.
+- `runs/cashsnap/real_geometry_stress_slices_v1` is the current provisional real
+  geometry slice set.
+- `labeled_all`: positive-only val/test, `988/814` images.
+- `geometry_stress`: broad non-clean labeled val/test, `791/659` images.
+- True `multi_note` is only `2/3` images and is not fan/overlap proof.
+- Protected-riel slices are small; use scoped checks and do not over-read one
+  noisy class row.
 
-## Commands
+## Label And Class Policy
 
-Keep this list short. Use script help or archive history for older workflows.
+- Detector labels are visible-instance AABBs derived from the renderer/CV
+  visible mask or source annotation, one box per visible class instance.
+- OBB/quadrilateral metadata preserves side/pose information for audits and
+  future oriented/fusion work; it is not a direct YOLO detect label today.
+- Fragment/evidence labels are for disconnected visible evidence and future
+  count fusion. They are not direct physical-note count labels.
+- Zero-label hard-negative roots must remain zero-label. Do not silently turn
+  unknown/foreign note props into target classes.
+- Raw Roboflow exports are intake. Use bridge builders to convert them into
+  schema-aware processed roots.
+- `KHR_100` is official KHR, not garbage. It is excluded only from the current
+  core-13 bridge because the active detector cannot predict it yet.
+- Current active detector scope is 13 operational classes, not all official
+  KHR/USD. Official current scope is 21 classes.
+- `KHR_50` remains blocked for v1 operational training unless real retail/bank
+  capture evidence or an explicit product requirement justifies it.
+- Trainable WebGL target-note renders must pass
+  `scripts/check_webgl_texture_asset_policy.py` against the approved texture
+  bank. USD_20 must remain the reviewed `2004-2021` current design.
 
-Scorecard:
+## Active Artifacts
 
-```powershell
-rl python scripts\check_synthetic_dataset_scorecard.py
-```
+Key configs:
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_latest_puresynth_realval_v1.yaml`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_poisson_contact_puresynth_realval_v1.yaml`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_poisson_contact_poseclose_puresynth_realval_v1.yaml`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_poisson_contact_hardnegdiv8_puresynth_realval_v1.yaml`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_poisson_contact_realbgneg25_puresynth_realval_v1.yaml`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_poisson_contact_unknownsoftfp8lowconf_puresynth_realval_v1.yaml`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_realfgstyle_puresynth_realval_v1.yaml`
+- `configs/synthetic_recipes/cashsnap_external_negative_banks_v1.json`
+- `configs/synthetic_recipes/cashsnap_webgl_recipe_catalog_v1.json`
+- `configs/synthetic_recipes/cashsnap_synthetic_governance_v1.json`
+- `configs/synthetic_recipes/cashsnap_data_lifecycle_registry_v1.json`
+- `configs/synthetic_recipes/cashsnap_webgl_approved_texture_bank_v1.json`
 
-Currency coverage:
+Key roots:
+- `data/synthetic/cashsnap_target_anchor_transplant_latest_v1/`
+- `data/synthetic/cashsnap_target_anchor_transplant_poisson_contact_v1/`
+- `data/synthetic/cashsnap_target_anchor_transplant_poisson_contact_poseclose_v1/`
+- `data/backgrounds/cashsnap_v1_no_note_patches_strict_v1/`
+- `data/synthetic/cashsnap_webgl_unknown_currency_soft_negative_smoke_v1/`
+- `data/processed/roboflow_khmer_us_currency_core13_bridge_v1/`
+- `data/processed/roboflow_khmer_us_currency_official21_partial_bridge_v1/`
+
+Key run artifacts:
+- `runs/cashsnap/synthetic_obligation_ledger_latest.json`
+- `runs/cashsnap/synthetic_obligation_ledger_latest.md`
+- `runs/cashsnap/composite_edge_audit_target_anchor_poisson_contact_v1.json`
+- `runs/cashsnap/fixed_step_target_anchor_latest_vs_poisson_contact_b8_e50_s150_seed0_summary.json`
+- `runs/cashsnap/transfer_guardrails_target_anchor_latest_vs_poisson_contact_b8.json`
+- `runs/cashsnap/transfer_guardrails_target_anchor_latest_vs_poisson_contact_unknownsoftfp8lowconf_b8.json`
+- `runs/cashsnap/background_fp_poisson_contact_b8_unknownsoft_conf0005.json`
+- `runs/cashsnap/currency_taxonomy_gap_plan_official_latest.md`
+- `runs/cashsnap/refiner_readiness_poisson_contact_v1/summary.json`
+- `runs/cashsnap/refiner_readiness_poisson_contact_v1/synthetic_manifest.jsonl`
+- `runs/cashsnap/refiner_readiness_poisson_contact_v1/preview/mask_lock_contact.jpg`
+- `runs/cashsnap/refiner_readiness_poisson_contact_v1/identity_preservation_check.json`
+- `runs/cashsnap/refiner_readiness_poisson_contact_v1/cut_unaligned_smoke/dataset_manifest.json`
+- `runs/cashsnap/refiner_readiness_poisson_contact_v1/cut_unaligned_smoke/synthetic_manifest.jsonl`
+- `runs/cashsnap/refiner_readiness_poisson_contact_v1/cut_unaligned_smoke/identity_preservation_check.json`
+- `runs/cashsnap/refiner_checkpoints/cashsnap_fastcut_poisson_smoke_e1_m8_128/`
+- `runs/cashsnap/refiner_results/cashsnap_fastcut_poisson_smoke_e1_m8_128/label_preservation_fake_B_first8.json`
+- `runs/cashsnap/refiner_results/cashsnap_fastcut_poisson_smoke_e1_m8_128/label_preservation_detail_locked_first8.json`
+- `runs/cashsnap/refiner_results/cashsnap_fastcut_poisson_smoke_e1_m8_128/label_preservation_note_locked_hard_first8.json`
+- `runs/cashsnap/refiner_checkpoints/cashsnap_fastcut_maskid200_poisson_smoke_e5_m8_128/`
+- `runs/cashsnap/refiner_results/cashsnap_fastcut_maskid200_poisson_smoke_e5_m8_128/label_preservation_fake_B_first8.json`
+- `runs/cashsnap/refiner_results/cashsnap_fastcut_maskid200_poisson_smoke_e5_m8_128/label_preservation_note_edge_locked_first8.json`
+- `runs/cashsnap/refiner_checkpoints/cashsnap_fastcut_maskid200_poisson_candidate_e5_m52_128/`
+- `runs/cashsnap/refiner_results/cashsnap_fastcut_maskid200_poisson_candidate_e5_m52_128/label_preservation_note_edge_locked.json`
+- `runs/cashsnap/refiner_results/cashsnap_fastcut_maskid200_poisson_candidate_e5_m52_128/background_realism_note_edge_locked.json`
+- `runs/cashsnap/refiner_yolo_candidates/fastcut_maskid200_note_edge_e5_m52_128/summary.json`
+- `runs/cashsnap/refiner_yolo_candidates/fastcut_maskid200_note_edge_e5_m52_128/edge_audit.json`
+- `runs/cashsnap/refiner_yolo_candidates/fastcut_maskid200_note_edge_e5_m52_128/qa/random_blend.png`
+- `runs/cashsnap/refiner_readiness_poisson_contact_v1/background_realism_source_trainA.json`
+- `runs/cashsnap/refiner_readiness_poisson_contact_m260_v1/summary.json`
+- `runs/cashsnap/refiner_readiness_poisson_contact_m260_v1/identity_preservation_check.json`
+- `runs/cashsnap/refiner_readiness_poisson_contact_m260_v1/background_realism_source.json`
+- `runs/cashsnap/sd_turbo_img2img_s025_steps4_m52/label_preservation_raw.json`
+- `runs/cashsnap/sd_turbo_img2img_s025_steps4_m52_note_edge_locked/label_preservation.json`
+- `runs/cashsnap/sd_turbo_img2img_s025_steps4_m52_note_edge_locked/background_realism.json`
+- `runs/cashsnap/sd_turbo_img2img_s025_steps4_m260/label_preservation_raw.json`
+- `runs/cashsnap/sd_turbo_img2img_s025_steps4_m260_note_edge_locked/label_preservation.json`
+- `runs/cashsnap/sd_turbo_img2img_s025_steps4_m260_note_edge_locked/background_realism.json`
+- `runs/cashsnap/refiner_yolo_candidates/sd_turbo_note_edge_s025_steps4_m260/summary.json`
+- `runs/cashsnap/refiner_yolo_candidates/sd_turbo_note_edge_s025_steps4_m260/edge_audit.json`
+- `runs/cashsnap/refiner_yolo_candidates/sd_turbo_note_edge_s025_steps4_m260/qa/random_blend.png`
+- `runs/cashsnap/fixed_step_source_vs_sd_turbo_m260_b4_e50_s150_seed0_summary.json`
+- `runs/cashsnap/fixed_step_source_poisson_contact_m260_vs_sd_turbo_note_edge_s025_m260_steps150/summary.json`
+- `runs/cashsnap/cyclegan_turbo_smoke_s1_128_noval_nolpips/`
+
+Key scripts:
+- `scripts/build_cashsnap_target_anchor_transplant.py`
+- `scripts/audit_synthetic_composite_edges.py`
+- `scripts/build_synthetic_obligation_ledger.py`
+- `scripts/build_webgl_hard_negative_dose_config.py`
+- `scripts/build_fp_mined_negative_dose_config.py`
+- `scripts/build_external_negative_dose_config.py`
+- `scripts/build_synthetic_visual_qa_pack.py`
+- `scripts/build_refiner_readiness_pack.py`
+- `scripts/check_refiner_label_preservation.py`
+- `scripts/check_refiner_background_realism.py`
+- `scripts/materialize_refiner_unaligned_dataset.py`
+- `scripts/materialize_refiner_yolo_candidate.py`
+- `scripts/apply_refiner_detail_lock.py`
+- `scripts/run_sd_turbo_img2img_refiner.py`
+- `scripts/run_yolo_fixed_step_probe.py`
+- `scripts/probe_yolo_background_false_positives.py`
+- `scripts/check_yolo_transfer_guardrails.py`
+- `scripts/check_yolo_dataset.py`
+- `scripts/check_currency_taxonomy_coverage.py`
+
+Script notes:
+- `build_webgl_hard_negative_dose_config.py` accepts directory train splits as
+  well as `.txt` lists and supports `--filename-contains`.
+- `build_fp_mined_negative_dose_config.py` accepts directory train splits as
+  well as `.txt` lists.
+
+## Repo And Harness Rules
+
+- RunLong mode: prefix terminal commands with `rl`.
+- Work directly on `master` unless asked for a branch.
+- Repo-local runtime storage is enforced through `scripts/local_runtime.py`.
+- YOLO promotion posture: `batch=64`, `workers=0`, `device=0`, `cache=false`;
+  eval `batch=64`, `workers=2`.
+- Background-FP guardrail uses `batch=1`.
+- In RunLong/Codex memory pressure, use quiet/log-redirection and b8/b16
+  diagnostics. Do not compare lower-batch diagnostics to b64 promotion parity
+  without saying so.
+- Long refiner training/inference must run through `scripts/run_with_headroom.py`
+  unless there is a specific reason not to. The wrapper enforces the repo's
+  95% CPU/RAM/GPU-memory ceiling and keeps the machine usable.
+- WebGL posture: `--render-jobs 2 --renderer-batch-size 32 --check-jobs 4`.
+- `cache=disk` is rejected; it created many `.npy` files, used about 12 GB, and
+  slowed throughput.
+- Active docs are `README.md`, `AGENTS.md`, and this file.
+- Old working memory belongs in `docs/archive/`.
+- Generated synthetic roots stay under ignored `data/synthetic/`.
+- External negatives stay under ignored `data/external_negatives/`.
+- Training/eval outputs stay under ignored `runs/`.
+- Browser/temp/cache state stays under ignored `.cache_runtime/` or `tmp/`.
+
+## Useful Commands
 
 ```powershell
 rl python scripts\check_currency_taxonomy_coverage.py
-```
-
-Readiness:
-
-```powershell
-rl python scripts\check_synthetic_pipeline_readiness.py --check-existing --json-out runs\cashsnap\synthetic_pipeline_readiness_latest.json
-```
-
-Trainable-candidate suite:
-
-```powershell
 rl python scripts\check_webgl_trainable_candidate_suite.py --check-existing
+rl python scripts\check_synthetic_pipeline_readiness.py --check-existing --json-out runs\cashsnap\synthetic_pipeline_readiness_latest.json
+rl python scripts\check_yolo_dataset.py --data configs\webgl_ablation\cashsnap_target_anchor_transplant_poisson_contact_puresynth_realval_v1.yaml --min-train-class-images 96 --min-train-class-boxes 96 --fail-on-problems
+rl python scripts\build_synthetic_visual_qa_pack.py --data configs\webgl_ablation\cashsnap_target_anchor_transplant_poisson_contact_puresynth_realval_v1.yaml --split train --max-images 128 --out-dir runs\cashsnap\visual_qa_target_anchor_poisson_contact_v1
+rl python scripts\build_refiner_readiness_pack.py --synthetic-root data\synthetic\cashsnap_target_anchor_transplant_poisson_contact_v1 --out-dir runs\cashsnap\refiner_readiness_poisson_contact_v1 --max-synthetic 52 --max-real 160 --max-backgrounds 64 --edge-band-px 10 --detail-erode-px 10 --min-free-vram-gb 1.5 --min-free-ram-gb 1.0
+rl python scripts\materialize_refiner_unaligned_dataset.py --readiness-dir runs\cashsnap\refiner_readiness_poisson_contact_v1 --clean
+rl python scripts\check_refiner_label_preservation.py --manifest runs\cashsnap\refiner_readiness_poisson_contact_v1\synthetic_manifest.jsonl --refined-root <refined-root> --json-out runs\cashsnap\<refiner>_label_preservation.json --fail-on-violations
+rl python scripts\check_refiner_label_preservation.py --manifest runs\cashsnap\refiner_readiness_poisson_contact_v1\cut_unaligned_smoke\synthetic_manifest.jsonl --refined-root <cut-output-root> --json-out runs\cashsnap\<refiner>_cut_label_preservation.json --fail-on-violations
+rl python scripts\apply_refiner_detail_lock.py --manifest runs\cashsnap\refiner_readiness_poisson_contact_v1\cut_unaligned_smoke\synthetic_manifest.jsonl --refined-root <cut-output-root> --out-root runs\cashsnap\<refiner>_detail_locked --json-out runs\cashsnap\<refiner>_detail_lock_apply.json --lock-mask detail_lock --feather-px 1.5
+rl python scripts\run_with_headroom.py --memory-action pause -- python <refiner_train_or_infer.py>
+rl python scripts\run_with_headroom.py --memory-action pause -- python .cache_runtime\third_party\contrastive-unpaired-translation\train.py --dataroot runs\cashsnap\refiner_readiness_poisson_contact_v1\cut_unaligned_smoke --name cashsnap_fastcut_poisson_smoke_e1_m8_128 --CUT_mode FastCUT --gpu_ids 0 --checkpoints_dir runs\cashsnap\refiner_checkpoints --dataset_mode unaligned --direction AtoB --batch_size 1 --num_threads 0 --load_size 128 --crop_size 128 --preprocess resize_and_crop --max_dataset_size 8 --n_epochs 1 --n_epochs_decay 0 --netG resnet_6blocks --ngf 32 --ndf 32 --display_id -1 --no_html --print_freq 4 --save_latest_freq 100 --save_epoch_freq 1 --no_flip
+rl python scripts\run_with_headroom.py --memory-action exit -- python .cache_runtime\third_party\img2img-turbo\src\train_cyclegan_turbo.py --dataset_folder runs\cashsnap\refiner_readiness_poisson_contact_v1\cut_unaligned_smoke --train_img_prep resize_128 --val_img_prep resize_128 --dataloader_num_workers 0 --train_batch_size 1 --max_train_steps 1 --max_train_epochs 1 --pretrained_model_name_or_path stabilityai/sd-turbo --output_dir runs\cashsnap\cyclegan_turbo_smoke_s1_128_noval_nolpips --report_to none --tracker_project_name cashsnap_cyclegan_turbo_smoke --validation_steps 0 --validation_num_images 0 --checkpointing_steps 1 --learning_rate 1e-5 --gradient_accumulation_steps 1 --allow_tf32 --gradient_checkpointing --lora_rank_unet 4 --lora_rank_vae 2 --lambda_gan 0.5 --lambda_idt 1 --lambda_cycle 1 --lambda_cycle_lpips 0 --lambda_idt_lpips 0
+rl python scripts\audit_synthetic_composite_edges.py --help
+rl python scripts\run_yolo_fixed_step_probe.py --help
+rl python scripts\check_yolo_transfer_guardrails.py --help
+rl python scripts\probe_yolo_background_false_positives.py --help
 ```
-
-Occluder policy:
-
-```powershell
-rl python scripts\check_webgl_occluder_policy.py --root <root> --expected-policy no_hand --forbid-hand-occluders
-```
-
-Current clean-curriculum root checks:
-
-```powershell
-rl python scripts\check_webgl_note_condition_diversity.py --root data\synthetic\cashsnap_webgl_clean_base_curriculum_probe_v1 --allow-missing
-rl python scripts\check_webgl_trainable_candidate_gate.py --root data\synthetic\cashsnap_webgl_clean_base_curriculum_probe_v1 --require-recipe webgl_clean_base_v1 --train-views detect,fragment,obb --require-scene-mode clean --require-asset-side-policy any --require-camera-profile phone_auto
-```
-
-Mined real bridge:
-
-```powershell
-rl python scripts\check_mined_real_review_quality.py
-rl python scripts\build_mined_real_scoreable_dataset.py --min-images 17 --min-stress-images 17 --min-boxes 35
-```
-
-Capture gaps:
-
-```powershell
-rl python scripts\check_capture_requirements.py --json-out runs\cashsnap\capture_requirements_latest.json --shot-list-out runs\cashsnap\real_capture_shot_list_latest.md
-```
-
-## Laptop Runtime
-
-Machine profile:
-
-- Lenovo 82Y9 laptop
-- Ryzen 5 7640HS, 6 cores / 12 logical processors
-- 16 GB RAM
-- RTX 4060 Laptop GPU, 8 GB VRAM
-
-Current operating posture:
-
-- Heavy training/rendering should use `scripts/run_with_headroom.py` when
-  practical. The wrapper refuses caps above 95%, lowers child priority, waits
-  for initial headroom, and treats free RAM as preflight/runtime pressure.
-- Current cap posture: using up to 95% max CPU/RAM/GPU/VRAM is acceptable when
-  needed, but never set any cap above 95%; resume around 82%.
-- If the wrapper cannot find initial headroom, do not wait indefinitely. Reduce
-  batch/workers, lower RAM pressure, relax only safe preflight floors, or split
-  the run into smaller chunks.
-- Prefer GPU for PyTorch/Ultralytics training/inference when VRAM is available;
-  pass `--device 0` instead of letting long jobs drift onto CPU.
-- RAM pressure is the main bottleneck. Keep data-loader workers low; the
-  archived dry-run selected `batch=4`, `workers=1`, `device=0`, with
-  `--min-free-ram-gb 4.0` on this laptop.
-- Browser smoke/render jobs should not run in parallel unless the Edge profile
-  and cache paths are isolated.
-- For WebGL scale, fix batch throughput before another 500+ image render.
-  Launching Edge/Node per variant is correct but too slow.
-
-## Repo Hygiene
-
-- Work on `master` unless the user asks for a branch.
-- Keep generated training and browser outputs under ignored `runs/`.
-- Keep generated synthetic roots under ignored `data/synthetic/`.
-- Keep active planning in this `model.md`; archive old model history under
-  `docs/archive/`.
-- Do not add new active model-planning docs under `docs/`.
-- Leave unrelated dirty/untracked files alone unless they support the current
-  task.
-
-## Research Sources
-
-- `docs/research/CashSnap_Fact_Checked_Dataset_Strategy.pdf`
-- `docs/research/What Makes a Dataset Perfect for Synthetic Data Pipelines.pdf`
-- USD denominations: https://www.uscurrency.gov/denominations
-- KHR banknotes: https://www.nbc.gov.kh/english/about_the_bank/banknotes_in_circulation.php
