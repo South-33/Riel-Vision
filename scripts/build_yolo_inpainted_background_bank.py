@@ -31,6 +31,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pad-fraction", type=float, default=0.10)
     parser.add_argument("--inpaint-radius", type=float, default=7.0)
     parser.add_argument("--mask-dilate-px", type=int, default=5)
+    parser.add_argument("--detector-model", type=Path, default=None, help="Optional YOLO detector for extra erase boxes.")
+    parser.add_argument("--detector-conf", type=float, default=0.05)
+    parser.add_argument("--detector-imgsz", type=int, default=416)
+    parser.add_argument("--detector-batch", type=int, default=8)
+    parser.add_argument("--detector-device", default="0")
     parser.add_argument(
         "--max-mask-fraction",
         type=float,
@@ -162,6 +167,41 @@ def read_yolo_boxes(label_path: Path, image_width: int, image_height: int) -> li
     return boxes
 
 
+def batched(items: list[Path], size: int):
+    for index in range(0, len(items), size):
+        yield items[index : index + size]
+
+
+def detector_boxes_by_image(args: argparse.Namespace, images: list[Path]) -> dict[Path, list[tuple[int, int, int, int]]]:
+    if args.detector_model is None:
+        return {}
+    from local_runtime import configure_project_cache
+
+    configure_project_cache()
+
+    from ultralytics import YOLO
+
+    model = YOLO(str(resolve(args.detector_model)))
+    boxes_by_image: dict[Path, list[tuple[int, int, int, int]]] = {}
+    for batch in batched(images, max(1, args.detector_batch)):
+        results = model.predict(
+            source=[str(path) for path in batch],
+            imgsz=args.detector_imgsz,
+            conf=args.detector_conf,
+            batch=len(batch),
+            device=args.detector_device,
+            verbose=False,
+        )
+        for image_path, result in zip(batch, results):
+            boxes: list[tuple[int, int, int, int]] = []
+            if result.boxes is not None:
+                for box in result.boxes.xyxy.cpu().numpy():
+                    x1, y1, x2, y2 = [int(round(float(value))) for value in box.tolist()]
+                    boxes.append((x1, y1, x2, y2))
+            boxes_by_image[image_path.resolve()] = boxes
+    return boxes_by_image
+
+
 def mask_from_boxes(
     boxes: list[tuple[int, int, int, int]],
     shape: tuple[int, int],
@@ -207,6 +247,7 @@ def main() -> None:
     if not images:
         raise SystemExit("No input images")
 
+    detector_boxes = detector_boxes_by_image(args, images)
     records: list[dict[str, Any]] = []
     skipped = Counter()
     for index, image_path in enumerate(images):
@@ -216,7 +257,9 @@ def main() -> None:
             continue
         height, width = image.shape[:2]
         label_path = label_path_for_image(image_path)
-        boxes = read_yolo_boxes(label_path, width, height)
+        label_boxes = read_yolo_boxes(label_path, width, height)
+        detected_boxes = detector_boxes.get(image_path.resolve(), [])
+        boxes = label_boxes + detected_boxes
         if not boxes:
             skipped["no_boxes"] += 1
             continue
@@ -238,6 +281,8 @@ def main() -> None:
                 "source_image": repo_rel(image_path),
                 "source_label": repo_rel(label_path),
                 "boxes_erased": len(boxes),
+                "label_boxes_erased": len(label_boxes),
+                "detector_boxes_erased": len(detected_boxes),
                 "mask_fraction": mask_fraction,
                 "width": width,
                 "height": height,
@@ -258,6 +303,10 @@ def main() -> None:
         "pad_fraction": args.pad_fraction,
         "inpaint_radius": args.inpaint_radius,
         "mask_dilate_px": args.mask_dilate_px,
+        "detector_model": repo_rel(resolve(args.detector_model)) if args.detector_model else "",
+        "detector_conf": args.detector_conf if args.detector_model else None,
+        "detector_imgsz": args.detector_imgsz if args.detector_model else None,
+        "detector_device": args.detector_device if args.detector_model else "",
         "max_mask_fraction": args.max_mask_fraction,
         "records": records,
     }

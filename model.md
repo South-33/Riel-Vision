@@ -405,6 +405,15 @@ Targeted branch status:
   `19=0.8231`, `22=0.8577`, late MMD `0.0293`. Read: strict source-context is
   about tied with inpaintctx on late domain accuracy, better on late MMD, and
   much safer on unlabeled-target leakage.
+- Detector-erased source-background diagnostic:
+  `scripts/build_yolo_inpainted_background_bank.py` can now add detector boxes
+  to the erase mask before inpainting source backgrounds. The first detector
+  bank kept `88/151` train anchors and skipped `63` high-mask images, but the
+  resulting `detectorerasectx_v1` composite is rejected: dataset check passes,
+  yet strict composite audit still finds `26/260` suspect images and visual QA
+  shows large source-note remnants. Read: pre-erasing with the current detector
+  is not sufficient because the detector misses some visible source notes; the
+  final strict composite audit remains mandatory.
 - Model-side status: real-transfer proof is still blocked by RAM headroom, not
   by data wiring. Full latest-baseline `416/b2` train-only probe failed at the
   RAM guard while scanning/training the `1,248` row baseline. A row-matched
@@ -432,8 +441,9 @@ Targeted branch status:
 - Do not promote either branch yet. Next best move is a clean fixed-step model
   A/B/eval for the strict overgen60 balanced candidate when memory headroom is
   available, using original real test data for evaluation. While RAM is blocked,
-  the safer synth-data direction is generator-side cleanup: erase all detector
-  source-note regions before compositing, not only the sampled YOLO box.
+  the safer synth-data direction is stronger source-note removal than current
+  detector pre-erase, e.g. multi-pass/segmentation/full-region source erasure
+  plus final strict composite audit.
 
 Success signal is not a prettier sheet. A real step-change branch should reduce
 early-layer domain separability, recover broad real positive recall, and avoid
@@ -605,6 +615,7 @@ Key configs:
 - `configs/generated_lists/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen60_strictclean_v1_train.txt`
 - `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen60_strictclean_balanced20_puresynth_realval_v1.yaml`
 - `configs/generated_lists/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen60_strictclean_balanced20_v1_train.txt`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_detectorerasectx_puresynth_realval_v1.yaml`
 - `configs/synthetic_recipes/cashsnap_external_negative_banks_v1.json`
 - `configs/synthetic_recipes/cashsnap_webgl_recipe_catalog_v1.json`
 - `configs/synthetic_recipes/cashsnap_synthetic_governance_v1.json`
@@ -617,6 +628,7 @@ Key roots:
 - `data/synthetic/cashsnap_target_anchor_transplant_poisson_contact_poseclose_v1/`
 - `data/backgrounds/cashsnap_v1_no_note_patches_strict_v1/`
 - `data/backgrounds/cashsnap_rep_gap_train_anchor_inpainted_filtered_v1/`
+- `data/backgrounds/cashsnap_rep_gap_train_anchor_detector_erased_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_analogs_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_inpaintctx_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_couplectx_v1/`
@@ -625,6 +637,7 @@ Key roots:
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen40_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen60_v1/`
+- `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_detectorerasectx_v1/`
 - `data/synthetic/cashsnap_webgl_unknown_currency_soft_negative_smoke_v1/`
 - `data/processed/roboflow_khmer_us_currency_core13_bridge_v1/`
 - `data/processed/roboflow_khmer_us_currency_official21_partial_bridge_v1/`
@@ -733,6 +746,9 @@ Key run artifacts:
 - `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_sourcectx_strictclean_b20_b1_s150_i320_v1_summary.json`
 - `runs/cashsnap/fixed_step_target_anchor_latest_balanced20_trainonly_vs_sourcectx_strictclean_b20_trainonly_steps150/summary.json`
 - `runs/cashsnap/system_profile_after_i320_train_before_realtest_guard_v1.json`
+- `runs/cashsnap/dataset_check_rep_gap_detectorerasectx_v1.json`
+- `runs/cashsnap/unlabeled_prediction_audit_rep_gap_detectorerasectx_strictcov50_v1.json`
+- `runs/cashsnap/visual_qa_rep_gap_detectorerasectx_v1/per_class_sheet.jpg`
 - `runs/cashsnap/fixed_step_target_anchor_latest_vs_rep_gap_inpaintctx_b8_s150_ctxprobe_v1_preflight.json`
 - `runs/cashsnap/system_profile_after_inpaintctx_b32_guard.json`
 - `runs/cashsnap/system_profile_after_b8_inpaintctx_guard_v1.json`
