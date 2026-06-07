@@ -38,6 +38,49 @@
       "current_blocker": "Strict real-only ablation still failed after KHR rotation repair: test mAP50-95 0.821181 vs 0.835861 real-only (delta -0.014680), worst KHR_2000 and KHR_50000."
     },
     {
+      "id": "webgl_clean_topdown_readable_v1",
+      "target_condition_ids": ["clean_single_or_separated_notes"],
+      "artifact_status": "diagnostic",
+      "scene_modes": ["clean_single"],
+      "asset_side_policy": "any",
+      "camera_profile": "phone_clean_base_topdown_readable_v1",
+      "note_condition_policy": "handled_clean",
+      "render_pool_count": 96,
+      "intended_use": "Single-note, top-down-first readable clean-base probe for pure-synthetic yolo26n training before overlap, fan, or angled curricula.",
+      "promotion_gate": "visual note-quality gate passes at imgsz416, then pure-synthetic real-val/test utility beats the failed clean-base probes under matched controls",
+      "current_blocker": "Rendered 96-image handled root passes visual QA and beats the older 512-image clean pure-synth root on clean-visible test (0.0596 vs 0.0482 mAP50-95), but remains far below the real-trained clean-visible baseline (0.8975)."
+    },
+    {
+      "id": "webgl_clean_context_single_v1",
+      "target_condition_ids": ["clean_single_or_separated_notes", "hard_negatives_and_non_banknote_paper"],
+      "artifact_status": "diagnostic",
+      "scene_modes": ["clean_context"],
+      "asset_side_policy": "any",
+      "camera_profile": "phone_clean_base_topdown_readable_v1",
+      "note_condition_policy": "handled_clean",
+      "render_pool_count": 64,
+      "intended_use": "Readable single-note clean-base probe with surrounding shop/table context props before overlap, fan, or true hand-occlusion curricula.",
+      "promotion_gate": "passes clean visual-note QA, keeps one fragment per note, and improves pure-synthetic clean-visible real val/test versus webgl_clean_topdown_readable_v1 under matched controls",
+      "current_blocker": "New diagnostic mode; needs smoke/visual QA, domain-gap review, and a bounded pure-synthetic comparison before scale."
+    },
+    {
+      "id": "webgl_bridge_calibrated_clean_v1",
+      "target_condition_ids": ["clean_single_or_separated_notes"],
+      "artifact_status": "diagnostic",
+      "scene_modes": ["clean_single"],
+      "asset_side_policy": "any",
+      "camera_profile": "phone_bridge_square_topdown_v1",
+      "camera_isp_policy": "real_bridge_dynamic_range_v1",
+      "note_print_tone_policy": "real_bridge_print_contrast_v1",
+      "note_condition_policy": "handled_clean",
+      "clean_orientation_policy": "real_aspect_bridge_v1",
+      "lens_distortion_policy": "phone_mild",
+      "render_pool_count": 260,
+      "intended_use": "Bridge-calibrated clean single-note appearance reset using Roboflow core-13 positive bridge crop statistics as the first judge before any model training.",
+      "promotion_gate": "cross-dataset visual gap to Roboflow bridge must materially reduce luma_std, luma_p05, saturation_std, and fragile-class crop deltas before fixed-step TSTR probing",
+      "current_blocker": "New regime-change diagnostic. Must pass smoke/label gates, then bridge-vs-synth visual audit; do not treat contact-sheet realism as success."
+    },
+    {
       "id": "webgl_real_scale_stack_geometry_v1",
       "target_condition_ids": ["clean_single_or_separated_notes", "loose_counter_stack_overlap", "dense_shop_overlap"],
       "artifact_status": "diagnostic",
@@ -480,6 +523,77 @@
       "intended_use": "Bound false positives on receipts, wallets, cards, hands, and clean backgrounds.",
       "promotion_gate": "browser guard false positives remain bounded after synthetic mix",
       "current_blocker": "Synthetic props are now diversity-gated, but this still needs reviewed real no-note backgrounds and non-banknote paper/prop captures before promotion."
+    },
+    {
+      "id": "webgl_unknown_currency_negative_v1",
+      "target_condition_ids": ["hard_negatives_and_non_banknote_paper"],
+      "artifact_status": "diagnostic",
+      "scene_modes": ["negative"],
+      "asset_side_policy": "any",
+      "camera_profile": "phone_clean_base_topdown_readable_v1",
+      "negative_prop_policy": "unknown_currency_v1",
+      "render_pool_count": 16,
+      "diagnostic_gates": {
+        "hard_negative_diversity": {
+          "min_images": 16,
+          "min_total_props": 48,
+          "min_prop_kinds": 5,
+          "min_textured_props": 48,
+          "require_prop_kinds": ["unknown_banknote", "coin_cluster"],
+          "require_zero_assets": true
+        }
+      },
+      "intended_use": "Zero-label unknown-currency and coin/table hard negatives for real-empty false positives where blank labels include out-of-taxonomy banknotes.",
+      "promotion_gate": "A small dose reduces real-empty unknown-currency false positives without damaging clean-visible, protected-riel, or geometry-stress guardrails.",
+      "current_blocker": "New diagnostic from topdownsupport10 FP review; needs smoke/visual QA and a bounded dose against hardnegold8+topdownsupport10 with exact batch-1 background guardrails before trainable-candidate use."
+    },
+    {
+      "id": "webgl_unknown_currency_fullframe_negative_v1",
+      "target_condition_ids": ["hard_negatives_and_non_banknote_paper"],
+      "artifact_status": "diagnostic",
+      "scene_modes": ["negative"],
+      "asset_side_policy": "any",
+      "camera_profile": "phone_clean_base_topdown_readable_v1",
+      "negative_prop_policy": "unknown_currency_fullframe_v1",
+      "render_pool_count": 16,
+      "diagnostic_gates": {
+        "hard_negative_diversity": {
+          "min_images": 16,
+          "min_total_props": 32,
+          "min_prop_kinds": 4,
+          "min_textured_props": 32,
+          "require_prop_kinds": ["unknown_banknote", "coin_cluster"],
+          "require_confusion_hardness": ["fullframe", "soft", "coin"],
+          "require_zero_assets": true
+        }
+      },
+      "intended_use": "Zero-label dominant unknown-currency negatives for the mined real failure mode where large non-target banknote-like regions trigger near-full-frame target boxes.",
+      "promotion_gate": "A low diversified dose must reduce full-frame/background FPs while preserving the tiny bounded-real positive signal found by the alpha/geoscale spread-8 mined-real diagnostic.",
+      "current_blocker": "New full-frame near-negative policy; needs WebGL smoke/visual QA, hard-negative diversity, and a bounded fixed-step dose before trainable-candidate use."
+    },
+    {
+      "id": "webgl_unknown_currency_soft_negative_v1",
+      "target_condition_ids": ["hard_negatives_and_non_banknote_paper"],
+      "artifact_status": "diagnostic",
+      "scene_modes": ["negative"],
+      "asset_side_policy": "any",
+      "camera_profile": "phone_clean_base_topdown_readable_v1",
+      "negative_prop_policy": "unknown_currency_soft_v1",
+      "render_pool_count": 16,
+      "diagnostic_gates": {
+        "hard_negative_diversity": {
+          "min_images": 16,
+          "min_total_props": 48,
+          "min_prop_kinds": 5,
+          "min_textured_props": 48,
+          "require_prop_kinds": ["unknown_banknote", "coin_cluster"],
+          "require_confusion_hardness": ["soft", "coin"],
+          "require_zero_assets": true
+        }
+      },
+      "intended_use": "Lower-confusion zero-label unknown-currency and coin/table diagnostic for testing whether foreign-note FP restraint can be learned without the protected-class damage seen from hard unknown-note doses.",
+      "promotion_gate": "A capped dose must reduce real-empty unknown-currency false positives while preserving donor-relative and filtered185-relative positive guardrails.",
+      "current_blocker": "New hardness-ladder diagnostic; needs smoke/visual QA and a bounded fixed-step dose before any trainable-candidate use."
     },
     {
       "id": "webgl_shared_lens_distortion_audit_v1",

@@ -25,14 +25,22 @@ const SCENE_MODE = argValue("--scene-mode", "auto");
 const BACKGROUND_DIR = argValue("--background-dir", "");
 const ENVIRONMENT_DIR = argValue("--environment-dir", "");
 const ASSET_SIDE_POLICY = argValue("--asset-side-policy", "any");
+const ASSET_QUALITY_POLICY = argValue("--asset-quality-policy", "latest_design");
 const STACK_POSE_POLICY = argValue("--stack-pose-policy", "default");
+const CLEAN_ORIENTATION_POLICY = argValue("--clean-orientation-policy", "default");
 const CAMERA_PROFILE = argValue("--camera-profile", "generic_phone_jitter");
 const CLASS_SEQUENCE_RAW = argValue("--class-sequence", "");
 const NOTE_CONDITION_POLICY = argValue("--note-condition-policy", "mixed");
 const LENS_DISTORTION_POLICY = argValue("--lens-distortion-policy", "off");
 const NOTE_PRINT_TONE_POLICY = argValue("--note-print-tone-policy", "off");
+const CAMERA_ISP_POLICY = argValue("--camera-isp-policy", "default");
+const TEXTURE_QA_EFFECTS = argValue("--texture-qa-effects", "flat");
+const APPEARANCE_ABLATION = argValue("--appearance-ablation", "full");
 const OCCLUDER_POLICY = argValue("--occluder-policy", "scene_default");
+const NEGATIVE_PROP_POLICY = argValue("--negative-prop-policy", "classic");
 const BROWSER_EXECUTABLE = argValue("--browser-executable", process.env.CASHSNAP_WEBGL_BROWSER || EDGE);
+const BROWSER_WS_ENDPOINT = argValue("--browser-ws-endpoint", process.env.CASHSNAP_WEBGL_BROWSER_WS || "");
+const BATCH_MANIFEST = argValue("--batch-manifest", "");
 const WIDTH = Number.parseInt(argValue("--width", "1440"), 10);
 const HEIGHT = Number.parseInt(argValue("--height", "1080"), 10);
 const VISUAL_SCALE = Number.parseFloat(argValue("--visual-scale", "2"));
@@ -106,16 +114,24 @@ if (!Number.isInteger(MIN_VISIBLE_PIXELS) || MIN_VISIBLE_PIXELS < 1) {
   throw new Error("--min-visible-pixels must be a positive integer");
 }
 
-if (!["auto", "clean", "clean_single", "negative", "stack", "fan", "thin_edge", "hand_occlusion", "qa3"].includes(SCENE_MODE)) {
-  throw new Error("--scene-mode must be one of: auto, clean, clean_single, negative, stack, fan, thin_edge, hand_occlusion, qa3");
+if (!["auto", "clean", "clean_single", "clean_context", "texture_qa", "negative", "stack", "fan", "thin_edge", "hand_occlusion", "qa3"].includes(SCENE_MODE)) {
+  throw new Error("--scene-mode must be one of: auto, clean, clean_single, clean_context, texture_qa, negative, stack, fan, thin_edge, hand_occlusion, qa3");
 }
 
 if (!["any", "front_only", "back_only", "front_back_mix"].includes(ASSET_SIDE_POLICY)) {
   throw new Error("--asset-side-policy must be one of: any, front_only, back_only, front_back_mix");
 }
 
+if (!["latest_design", "all_manifest", "filesystem_all"].includes(ASSET_QUALITY_POLICY)) {
+  throw new Error("--asset-quality-policy must be one of: latest_design, all_manifest, filesystem_all");
+}
+
 if (!["default", "real_aspect_v1", "real_aspect_v2"].includes(STACK_POSE_POLICY)) {
   throw new Error("--stack-pose-policy must be one of: default, real_aspect_v1, real_aspect_v2");
+}
+
+if (!["default", "real_aspect_v1", "real_aspect_square_v1", "real_aspect_bridge_v1"].includes(CLEAN_ORIENTATION_POLICY)) {
+  throw new Error("--clean-orientation-policy must be one of: default, real_aspect_v1, real_aspect_square_v1, real_aspect_bridge_v1");
 }
 
 if (![
@@ -126,31 +142,63 @@ if (![
   "budget_android_wide_like",
   "browser_upload_resized",
   "phone_closeup_clean_like",
+  "phone_clean_base_readable_mix_v1",
+  "phone_clean_base_topdown_readable_v1",
+  "phone_clean_base_square_topdown_readable_v1",
+  "phone_bridge_square_topdown_v1",
   "phone_top_down_like",
   "phone_oblique_30_like",
   "phone_oblique_45_like",
   "phone_low_front_like",
 ].includes(CAMERA_PROFILE)) {
-  throw new Error("--camera-profile must be one of: generic_phone_jitter, phone_auto, iphone_8_like, iphone_12_wide_like, budget_android_wide_like, browser_upload_resized, phone_closeup_clean_like, phone_top_down_like, phone_oblique_30_like, phone_oblique_45_like, phone_low_front_like");
+  throw new Error("--camera-profile must be one of: generic_phone_jitter, phone_auto, iphone_8_like, iphone_12_wide_like, budget_android_wide_like, browser_upload_resized, phone_closeup_clean_like, phone_clean_base_readable_mix_v1, phone_clean_base_topdown_readable_v1, phone_clean_base_square_topdown_readable_v1, phone_bridge_square_topdown_v1, phone_top_down_like, phone_oblique_30_like, phone_oblique_45_like, phone_low_front_like");
 }
 
-if (!["mixed", "pristine_only", "heavy_wear", "wet_stress"].includes(NOTE_CONDITION_POLICY)) {
-  throw new Error("--note-condition-policy must be one of: mixed, pristine_only, heavy_wear, wet_stress");
+if (!["mixed", "scan_fidelity", "pristine_only", "handled_clean", "handled_3d", "heavy_wear", "wet_stress"].includes(NOTE_CONDITION_POLICY)) {
+  throw new Error("--note-condition-policy must be one of: mixed, scan_fidelity, pristine_only, handled_clean, handled_3d, heavy_wear, wet_stress");
 }
 
 if (!["off", "phone_mild"].includes(LENS_DISTORTION_POLICY)) {
   throw new Error("--lens-distortion-policy must be one of: off, phone_mild");
 }
 
-if (!["off", "local_dynamic_range_v1"].includes(NOTE_PRINT_TONE_POLICY)) {
-  throw new Error("--note-print-tone-policy must be one of: off, local_dynamic_range_v1");
+if (!["off", "local_dynamic_range_v1", "bill_auto_exposure_v1", "real_bridge_print_contrast_v1"].includes(NOTE_PRINT_TONE_POLICY)) {
+  throw new Error("--note-print-tone-policy must be one of: off, local_dynamic_range_v1, bill_auto_exposure_v1, real_bridge_print_contrast_v1");
+}
+
+if (!["default", "phone_dynamic_range_v1", "phone_dynamic_range_v2", "real_bridge_dynamic_range_v1"].includes(CAMERA_ISP_POLICY)) {
+  throw new Error("--camera-isp-policy must be one of: default, phone_dynamic_range_v1, phone_dynamic_range_v2, real_bridge_dynamic_range_v1");
+}
+
+if (!["flat", "lit_material", "backing_plane", "postprocess", "condition"].includes(TEXTURE_QA_EFFECTS)) {
+  throw new Error("--texture-qa-effects must be one of: flat, lit_material, backing_plane, postprocess, condition");
+}
+
+if (!["full", "source_flat", "material", "material_no_shadow", "material_no_backing", "standard_only", "texture_resolve", "postprocess", "grain", "condition"].includes(APPEARANCE_ABLATION)) {
+  throw new Error("--appearance-ablation must be one of: full, source_flat, material, material_no_shadow, material_no_backing, standard_only, texture_resolve, postprocess, grain, condition");
 }
 
 if (!["scene_default", "no_hand", "none"].includes(OCCLUDER_POLICY)) {
   throw new Error("--occluder-policy must be one of: scene_default, no_hand, none");
 }
 
-const effectiveSceneMode = SCENE_MODE === "auto" ? (VARIANT >= 100 ? "fan" : "stack") : SCENE_MODE;
+if (!["classic", "unknown_currency_soft_v1", "unknown_currency_v1", "unknown_currency_fullframe_v1"].includes(NEGATIVE_PROP_POLICY)) {
+  throw new Error("--negative-prop-policy must be one of: classic, unknown_currency_soft_v1, unknown_currency_v1, unknown_currency_fullframe_v1");
+}
+
+const ABLATION_ACTIVE = APPEARANCE_ABLATION !== "full";
+const ABLATION_MATERIAL_SPLIT = ["material", "material_no_shadow", "material_no_backing", "standard_only"].includes(APPEARANCE_ABLATION);
+const ABLATION_DISABLE_CONDITION = ["source_flat", "texture_resolve", "postprocess", "grain"].includes(APPEARANCE_ABLATION) || ABLATION_MATERIAL_SPLIT;
+const ABLATION_SOURCE_EXACT = APPEARANCE_ABLATION === "source_flat" || ABLATION_MATERIAL_SPLIT;
+const ABLATION_DISABLE_POSTPROCESS = ["source_flat", "texture_resolve", "condition"].includes(APPEARANCE_ABLATION) || ABLATION_MATERIAL_SPLIT;
+const ABLATION_DISABLE_GRAIN = ["source_flat", "texture_resolve", "postprocess", "condition"].includes(APPEARANCE_ABLATION) || ABLATION_MATERIAL_SPLIT;
+const ABLATION_FLAT_MATERIAL = APPEARANCE_ABLATION === "source_flat";
+
+function effectiveSceneModeFor(variant, sceneMode) {
+  return sceneMode === "auto" ? (variant >= 100 ? "fan" : "stack") : sceneMode;
+}
+
+let effectiveSceneMode = effectiveSceneModeFor(VARIANT, SCENE_MODE);
 
 function mulberry32(seed) {
   return () => {
@@ -190,7 +238,9 @@ function rotate2([x, y], angle) {
 
 function noteCountForSequenceMode(mode, variant) {
   if (mode === "negative") return 0;
+  if (mode === "texture_qa") return 1;
   if (mode === "clean_single") return 1;
+  if (mode === "clean_context") return 1;
   if (mode === "clean") return 1 + variant % 3;
   if (mode === "qa3") return 3;
   if (mode === "thin_edge") return 4;
@@ -229,13 +279,99 @@ function classNameForSequenceOrFallback(variant, index, fallbackClasses) {
 function noteConditionFor(asset, variant, index) {
   const seed = 26056503 + variant * 1009 + index * 9173 + (asset.classIndex ?? 0) * 137;
   const rng = mulberry32(seed);
-  const cleanScene = Boolean(asset.clean || asset.cleanSingle || effectiveSceneMode === "clean" || effectiveSceneMode === "clean_single");
+  const textureQaScene = effectiveSceneMode === "texture_qa";
+  const forceTextureQaScan = textureQaScene && !["condition"].includes(TEXTURE_QA_EFFECTS);
+  const forceScanFidelity = forceTextureQaScan || ABLATION_DISABLE_CONDITION;
+  const cleanScene = Boolean(asset.clean || asset.cleanSingle || asset.cleanContext || textureQaScene || effectiveSceneMode === "clean" || effectiveSceneMode === "clean_single" || effectiveSceneMode === "clean_context");
   let dirtiness = 0;
   let crinkle = 0;
   let wetness = 0;
+  let textureCreaseMarks = true;
+  let geometryCurlScale = 1.0;
+  let geometryRippleScale = 1.0;
+  let geometryWrinkleScale = 1.0;
+  let geometryCreaseScale = 1.0;
+  let geometryCreaseWidth = 0.0028;
+  let creaseCountOverride = null;
+  let edgeWearOverride = null;
+  let stainCountOverride = null;
+  let speckleCountOverride = null;
+  if (NOTE_CONDITION_POLICY === "scan_fidelity" || forceScanFidelity) {
+    return {
+      profile: "scan_fidelity",
+      policy: ABLATION_DISABLE_CONDITION ? "scan_fidelity_ablation" : NOTE_CONDITION_POLICY,
+      seed,
+      dirtiness: 0,
+      crinkle: 0,
+      wetness: 0,
+      edgeWear: 0,
+      creaseCount: 0,
+      stainCount: 0,
+      speckleCount: 0,
+      creaseAngle: 0,
+      creaseOffset: 0,
+      wavePhase: 0,
+      textureCreaseMarks: false,
+      geometryCurlScale: 1.0,
+      geometryRippleScale: 1.0,
+      geometryWrinkleScale: 0.0,
+      geometryCreaseScale: 0.0,
+      geometryCreaseWidth: 0.0028,
+    };
+  }
   if (NOTE_CONDITION_POLICY === "pristine_only") {
     dirtiness = randomBetween(rng, 0.00, 0.08);
     crinkle = randomBetween(rng, 0.00, 0.14);
+  } else if (NOTE_CONDITION_POLICY === "handled_clean") {
+    const bucket = rng();
+    if (cleanScene) {
+      if (bucket < 0.72) {
+        dirtiness = randomBetween(rng, 0.00, 0.08);
+        crinkle = randomBetween(rng, 0.00, 0.06);
+      } else {
+        dirtiness = randomBetween(rng, 0.06, 0.18);
+        crinkle = randomBetween(rng, 0.04, 0.14);
+      }
+    } else if (bucket < 0.14) {
+      dirtiness = randomBetween(rng, 0.04, 0.16);
+      crinkle = randomBetween(rng, 0.02, 0.18);
+    } else if (bucket < 0.78) {
+      dirtiness = randomBetween(rng, 0.20, 0.50);
+      crinkle = randomBetween(rng, 0.12, 0.46);
+    } else {
+      dirtiness = randomBetween(rng, 0.50, 0.78);
+      crinkle = randomBetween(rng, 0.34, 0.70);
+    }
+    wetness = !cleanScene && rng() < 0.05 ? randomBetween(rng, 0.04, 0.18) : 0.0;
+  } else if (NOTE_CONDITION_POLICY === "handled_3d") {
+    const bucket = rng();
+    if (cleanScene) {
+      dirtiness = bucket < 0.62
+        ? randomBetween(rng, 0.04, 0.14)
+        : randomBetween(rng, 0.12, 0.24);
+      crinkle = bucket < 0.56
+        ? randomBetween(rng, 0.26, 0.50)
+        : randomBetween(rng, 0.48, 0.72);
+    } else if (bucket < 0.72) {
+      dirtiness = randomBetween(rng, 0.12, 0.36);
+      crinkle = randomBetween(rng, 0.32, 0.66);
+    } else {
+      dirtiness = randomBetween(rng, 0.36, 0.68);
+      crinkle = randomBetween(rng, 0.52, 0.88);
+    }
+    wetness = 0.0;
+    textureCreaseMarks = false;
+    geometryCurlScale = randomBetween(rng, 1.80, 3.40);
+    geometryRippleScale = randomBetween(rng, 2.20, 4.30);
+    geometryWrinkleScale = randomBetween(rng, 3.00, 6.50);
+    geometryCreaseScale = randomBetween(rng, 5.50, 10.50);
+    geometryCreaseWidth = randomBetween(rng, 0.0010, 0.0024);
+    creaseCountOverride = 2 + randomInt(rng, cleanScene ? 3 : 4);
+    edgeWearOverride = cleanScene
+      ? 0
+      : clamp(dirtiness * randomBetween(rng, 0.18, 0.55) + crinkle * 0.12, 0, 0.58);
+    stainCountOverride = Math.max(0, Math.round(dirtiness * randomBetween(rng, 1.0, 3.2)));
+    speckleCountOverride = Math.max(8, Math.round(14 + dirtiness * randomBetween(rng, 48, 120)));
   } else if (NOTE_CONDITION_POLICY === "heavy_wear") {
     dirtiness = randomBetween(rng, 0.55, 1.00);
     crinkle = randomBetween(rng, 0.34, 1.00);
@@ -260,17 +396,27 @@ function noteConditionFor(asset, variant, index) {
     const wetChance = cleanScene ? 0.06 : 0.18;
     wetness = rng() < wetChance ? randomBetween(rng, cleanScene ? 0.06 : 0.12, cleanScene ? 0.28 : 0.78) : 0.0;
   }
-  const edgeWear = clamp(dirtiness * randomBetween(rng, 0.40, 1.10) + crinkle * 0.20, 0, 1);
-  const creaseCount = Math.max(0, Math.round(crinkle * randomBetween(rng, 1.0, 5.0)));
-  const stainCount = Math.max(0, Math.round(dirtiness * randomBetween(rng, 1.0, 4.5) + wetness * 3.0));
-  const speckleCount = Math.max(0, Math.round(12 + dirtiness * randomBetween(rng, 80, 210)));
+  const edgeWear = edgeWearOverride === null ? (cleanScene ? 0 : clamp(dirtiness * randomBetween(rng, 0.40, 1.10) + crinkle * 0.20, 0, 1)) : edgeWearOverride;
+  const creaseCount = creaseCountOverride === null ? (cleanScene ? 0 : Math.max(0, Math.round(crinkle * randomBetween(rng, 1.0, 5.0)))) : creaseCountOverride;
+  const stainCount = stainCountOverride === null ? (cleanScene ? 0 : Math.max(0, Math.round(dirtiness * randomBetween(rng, 1.4, 6.2) + wetness * 3.0))) : stainCountOverride;
+  const speckleCount = speckleCountOverride === null ? (cleanScene ? Math.max(0, Math.round(dirtiness * randomBetween(rng, 8, 36))) : Math.max(0, Math.round(12 + dirtiness * randomBetween(rng, 110, 270)))) : speckleCountOverride;
   const profile = wetness > 0.42
     ? "damp"
-    : dirtiness < 0.12 && crinkle < 0.14
-      ? "pristine"
-      : dirtiness > 0.70 || crinkle > 0.72
-        ? "heavily_circulated"
-        : "circulated";
+    : NOTE_CONDITION_POLICY === "handled_3d"
+      ? crinkle >= 0.58
+        ? "bent_handled_strong"
+        : "bent_handled"
+    : NOTE_CONDITION_POLICY === "handled_clean"
+      ? dirtiness >= 0.52 || crinkle >= 0.40
+        ? "well_handled"
+        : dirtiness < 0.18 && crinkle < 0.20
+          ? "lightly_handled"
+          : "circulated"
+      : dirtiness < 0.12 && crinkle < 0.14
+        ? "pristine"
+        : dirtiness > 0.70 || crinkle > 0.72
+          ? "heavily_circulated"
+          : "circulated";
   return {
     profile,
     policy: NOTE_CONDITION_POLICY,
@@ -285,6 +431,12 @@ function noteConditionFor(asset, variant, index) {
     creaseAngle: round3(randomBetween(rng, -1.4, 1.4)),
     creaseOffset: round3(randomBetween(rng, -0.28, 0.28)),
     wavePhase: round3(randomBetween(rng, 0, Math.PI * 2)),
+    textureCreaseMarks,
+    geometryCurlScale: round3(geometryCurlScale),
+    geometryRippleScale: round3(geometryRippleScale),
+    geometryWrinkleScale: round3(geometryWrinkleScale),
+    geometryCreaseScale: round3(geometryCreaseScale),
+    geometryCreaseWidth: round3(geometryCreaseWidth),
   };
 }
 
@@ -305,10 +457,32 @@ function notePrintToneFor(asset, variant, index, condition = {}) {
   const wetness = clamp(condition.wetness || 0, 0, 1);
   const dirtiness = clamp(condition.dirtiness || 0, 0, 1);
   const crinkle = clamp(condition.crinkle || 0, 0, 1);
-  const cleanScene = Boolean(asset.clean || asset.cleanSingle || effectiveSceneMode === "clean" || effectiveSceneMode === "clean_single");
+  const cleanScene = Boolean(asset.clean || asset.cleanSingle || asset.cleanContext || effectiveSceneMode === "clean" || effectiveSceneMode === "clean_single" || effectiveSceneMode === "clean_context");
   const wetDampening = 1.0 - wetness * 0.13;
   const wearBoost = 1.0 + Math.min(0.12, (dirtiness + crinkle) * 0.055);
   const cleanDampening = cleanScene ? 0.92 : 1.0;
+  if (NOTE_PRINT_TONE_POLICY === "bill_auto_exposure_v1") {
+    return {
+      policy: NOTE_PRINT_TONE_POLICY,
+      seed,
+      contrast: round3(randomBetween(rng, 1.22, 1.58) * wetDampening * wearBoost * cleanDampening),
+      saturation: round3(randomBetween(rng, 0.92, 1.08)),
+      brightness: round3(randomBetween(rng, -16.0, -3.0) - dirtiness * 2.0),
+      shadowPull: round3(randomBetween(rng, 10.0, 34.0) * (1.0 + dirtiness * 0.18)),
+      highlightPush: round3(randomBetween(rng, -24.0, -5.0) * (1.0 - wetness * 0.20)),
+    };
+  }
+  if (NOTE_PRINT_TONE_POLICY === "real_bridge_print_contrast_v1") {
+    return {
+      policy: NOTE_PRINT_TONE_POLICY,
+      seed,
+      contrast: round3(randomBetween(rng, 1.80, 2.45) * wetDampening * wearBoost * cleanDampening),
+      saturation: round3(randomBetween(rng, 0.84, 1.24)),
+      brightness: round3(randomBetween(rng, -28.0, -7.0) - dirtiness * 2.5),
+      shadowPull: round3(randomBetween(rng, 42.0, 88.0) * (1.0 + dirtiness * 0.24)),
+      highlightPush: round3(randomBetween(rng, 10.0, 34.0) * (1.0 - wetness * 0.18)),
+    };
+  }
   const contrast = randomBetween(rng, 1.52, 1.92) * wetDampening * wearBoost * cleanDampening;
   return {
     policy: NOTE_PRINT_TONE_POLICY,
@@ -411,6 +585,61 @@ const CAMERA_PROFILES = {
     positionZ: [1.45, 1.70],
     lookAtX: [-0.05, 0.05],
     lookAtY: [-0.03, 0.05],
+  },
+  phone_clean_base_readable_mix_v1: {
+    source: "cashsnap_clean_base_visual_qa_v1",
+    weight: 0.0,
+    targetResolution: [1440, 1080],
+    fov: [36, 62],
+    positionX: [-0.14, 0.14],
+    positionY: [-0.60, -0.02],
+    positionZ: [1.15, 1.95],
+    lookAtX: [-0.06, 0.06],
+    lookAtY: [-0.04, 0.10],
+  },
+  phone_clean_base_topdown_readable_v1: {
+    source: "cashsnap_clean_base_visual_qa_v2",
+    weight: 0.0,
+    targetResolution: [1440, 1080],
+    fov: [38, 56],
+    positionX: [-0.10, 0.10],
+    positionY: [-0.18, 0.08],
+    positionZ: [1.30, 1.75],
+    lookAtX: [-0.04, 0.04],
+    lookAtY: [-0.04, 0.06],
+  },
+  phone_clean_base_square_topdown_readable_v1: {
+    source: "cashsnap_square_topdown_geometry_bracket_v1",
+    weight: 0.0,
+    targetResolution: [640, 640],
+    fov: [40, 58],
+    positionX: [-0.09, 0.09],
+    positionY: [-0.14, 0.06],
+    positionZ: [1.50, 1.95],
+    lookAtX: [-0.04, 0.04],
+    lookAtY: [-0.04, 0.06],
+  },
+  phone_bridge_square_topdown_v1: {
+    source: "roboflow_core13_bridge_geometry_v1",
+    weight: 0.0,
+    targetResolution: [640, 640],
+    fov: [50, 68],
+    positionX: [-0.12, 0.12],
+    positionY: [-0.18, 0.10],
+    positionZ: [1.72, 2.30],
+    lookAtX: [-0.05, 0.05],
+    lookAtY: [-0.05, 0.07],
+  },
+  texture_qa_flat: {
+    source: "cashsnap_texture_fidelity_review_v1",
+    weight: 0.0,
+    targetResolution: [1440, 1080],
+    fov: [36, 36],
+    positionX: [0.0, 0.0],
+    positionY: [0.0, 0.0],
+    positionZ: [1.48, 1.48],
+    lookAtX: [0.0, 0.0],
+    lookAtY: [0.0, 0.0],
   },
   phone_top_down_like: {
     source: "cashsnap_viewpoint_v1",
@@ -524,9 +753,10 @@ function lensDistortionConfig(rng, cameraProfile) {
 }
 
 function sceneConfig(variant, mode, backgroundPath, environmentPath) {
-  const modeOffset = mode === "fan" ? 1009 : mode === "clean" ? 2003 : mode === "clean_single" ? 2309 : mode === "qa3" ? 3001 : mode === "negative" ? 4001 : mode === "thin_edge" ? 5003 : mode === "hand_occlusion" ? 6007 : 0;
+  const modeOffset = mode === "fan" ? 1009 : mode === "clean" ? 2003 : mode === "clean_single" ? 2309 : mode === "clean_context" ? 2609 : mode === "texture_qa" ? 2801 : mode === "qa3" ? 3001 : mode === "negative" ? 4001 : mode === "thin_edge" ? 5003 : mode === "hand_occlusion" ? 6007 : 0;
   const rng = mulberry32(26058003 + variant * 191 + modeOffset);
-  const cameraProfile = chooseCameraProfile(rng, CAMERA_PROFILE);
+  const textureQa = mode === "texture_qa";
+  const cameraProfile = textureQa ? { name: "texture_qa_flat", ...CAMERA_PROFILES.texture_qa_flat } : chooseCameraProfile(rng, CAMERA_PROFILE);
   const cameraPosition = [
     randomBetween(rng, ...cameraProfile.positionX),
     randomBetween(rng, ...cameraProfile.positionY),
@@ -551,14 +781,95 @@ function sceneConfig(variant, mode, backgroundPath, environmentPath) {
     { name: "light_gray_table", base: "#aaa9a2", light: "#efeee7", dark: "#62615b", scene: "#b6b5ae", repeat: [2.0, 1.8] },
     { name: "cool_countertop", base: "#aeb7b5", light: "#edf3ef", dark: "#68716f", scene: "#bbc4c2", repeat: [1.8, 1.8] },
   ];
-  const surfaces = mode === "clean_single" ? cleanSingleSurfaces : defaultSurfaces;
+  const cleanContextSurfaces = [
+    ...cleanSingleSurfaces,
+    { name: "dark_shop_counter", base: "#4f473f", light: "#aa9a84", dark: "#1f1b17", scene: "#554c43", repeat: [2.4, 1.9] },
+    { name: "red_brown_laminate", base: "#795a4e", light: "#c59b86", dark: "#241816", scene: "#80665c", repeat: [2.6, 2.0] },
+  ];
+  const textureQaSurfaces = [
+    { name: "texture_qa_flat_gray", base: "#d8d8d8", light: "#d8d8d8", dark: "#d8d8d8", scene: "#d8d8d8", repeat: [1.0, 1.0], flatTexture: true },
+  ];
+  const surfaces = textureQa ? textureQaSurfaces : mode === "clean_single" ? cleanSingleSurfaces : mode === "clean_context" ? cleanContextSurfaces : defaultSurfaces;
   const surface = surfaces[randomInt(rng, surfaces.length)];
   const cleanSingle = mode === "clean_single";
+  const cleanContext = mode === "clean_context";
+  const cleanReadable = cleanSingle || cleanContext || textureQa;
+  const textureQaFlat = textureQa && TEXTURE_QA_EFFECTS === "flat";
+  const textureQaPhysicalCondition = textureQa && TEXTURE_QA_EFFECTS === "condition" && NOTE_CONDITION_POLICY === "handled_3d";
+  const textureQaPostprocess = textureQa && TEXTURE_QA_EFFECTS === "postprocess";
+  const textureResolve = textureQa || ABLATION_SOURCE_EXACT ? {
+    policy: "source_exact",
+    maxWidth: 0,
+    blurPx: 0.0,
+  } : cleanReadable ? {
+    policy: "camera_lowpass_clean_v2",
+    maxWidth: 1400,
+    blurPx: 0.15,
+  } : {
+    policy: "camera_lowpass_scene_v2",
+    maxWidth: 1600,
+    blurPx: 0.10,
+  };
   const environmentExtension = environmentPath ? path.extname(environmentPath).toLowerCase() : "";
   const lensDistortion = lensDistortionConfig(rng, cameraProfile);
+  const postprocess = {
+    contrast: textureQa && !textureQaPostprocess ? 1.0 : cleanReadable ? randomBetween(rng, 1.04, 1.14) : randomBetween(rng, 1.00, 1.07),
+    saturation: textureQa && !textureQaPostprocess ? 1.0 : cleanSingle || textureQa ? randomBetween(rng, 1.10, 1.24) : cleanContext ? randomBetween(rng, 1.06, 1.30) : randomBetween(rng, 0.90, 1.07),
+    brightness: textureQa && !textureQaPostprocess ? 1.0 : cleanSingle || textureQa ? randomBetween(rng, 0.94, 1.02) : cleanContext ? randomBetween(rng, 0.90, 1.03) : randomBetween(rng, 0.96, 1.05),
+    focusBlurPx: textureQa && !textureQaPostprocess ? 0 : rng() < (cleanReadable ? (cleanContext || textureQa ? 0.30 : 0.20) : 0.68) ? randomBetween(rng, cleanReadable ? 0.01 : 0.05, cleanReadable ? 0.24 : 0.32) : 0,
+    grainStrength: textureQa && !textureQaPostprocess ? 0 : randomBetween(rng, cleanReadable ? 3 : 12, cleanReadable ? 16 : 30),
+    grainAlpha: textureQa && !textureQaPostprocess ? 0 : randomBetween(rng, cleanReadable ? 4 : 8, cleanReadable ? 14 : 18),
+    vignette: textureQa && !textureQaPostprocess ? 0 : randomBetween(rng, cleanReadable ? 22 : 42, cleanReadable ? 58 : 78),
+    grainSeed: Math.floor(rng() * 0x100000000),
+  };
+  if (CAMERA_ISP_POLICY === "phone_dynamic_range_v1" && !(textureQa && !textureQaPostprocess)) {
+    postprocess.contrast = cleanReadable ? randomBetween(rng, 1.55, 2.20) : randomBetween(rng, 1.35, 1.95);
+    postprocess.saturation = cleanReadable ? randomBetween(rng, 0.78, 1.46) : randomBetween(rng, 0.75, 1.35);
+    postprocess.brightness = cleanReadable ? randomBetween(rng, 0.82, 1.06) : randomBetween(rng, 0.80, 1.08);
+    postprocess.focusBlurPx = rng() < (cleanReadable ? 0.16 : 0.36) ? randomBetween(rng, 0.01, cleanReadable ? 0.12 : 0.24) : 0;
+    postprocess.grainStrength = randomBetween(rng, cleanReadable ? 12 : 18, cleanReadable ? 34 : 42);
+    postprocess.grainAlpha = randomBetween(rng, cleanReadable ? 10 : 12, cleanReadable ? 24 : 28);
+    postprocess.vignette = randomBetween(rng, cleanReadable ? 36 : 50, cleanReadable ? 96 : 118);
+  }
+  if (CAMERA_ISP_POLICY === "phone_dynamic_range_v2" && !(textureQa && !textureQaPostprocess)) {
+    postprocess.contrast = cleanReadable ? randomBetween(rng, 1.42, 2.02) : randomBetween(rng, 1.30, 1.85);
+    postprocess.saturation = cleanReadable ? randomBetween(rng, 0.46, 0.90) : randomBetween(rng, 0.48, 0.96);
+    postprocess.brightness = cleanReadable ? randomBetween(rng, 0.88, 1.10) : randomBetween(rng, 0.86, 1.10);
+    postprocess.focusBlurPx = rng() < (cleanReadable ? 0.14 : 0.32) ? randomBetween(rng, 0.01, cleanReadable ? 0.10 : 0.22) : 0;
+    postprocess.grainStrength = randomBetween(rng, cleanReadable ? 10 : 16, cleanReadable ? 30 : 38);
+    postprocess.grainAlpha = randomBetween(rng, cleanReadable ? 9 : 11, cleanReadable ? 21 : 25);
+    postprocess.vignette = randomBetween(rng, cleanReadable ? 30 : 46, cleanReadable ? 86 : 108);
+  }
+  if (CAMERA_ISP_POLICY === "real_bridge_dynamic_range_v1" && !(textureQa && !textureQaPostprocess)) {
+    postprocess.contrast = cleanReadable ? randomBetween(rng, 1.95, 2.85) : randomBetween(rng, 1.70, 2.45);
+    postprocess.saturation = cleanReadable ? randomBetween(rng, 0.72, 1.30) : randomBetween(rng, 0.70, 1.24);
+    postprocess.brightness = cleanReadable ? randomBetween(rng, 0.76, 1.00) : randomBetween(rng, 0.74, 1.02);
+    postprocess.focusBlurPx = rng() < (cleanReadable ? 0.20 : 0.38) ? randomBetween(rng, 0.01, cleanReadable ? 0.14 : 0.24) : 0;
+    postprocess.grainStrength = randomBetween(rng, cleanReadable ? 14 : 20, cleanReadable ? 38 : 48);
+    postprocess.grainAlpha = randomBetween(rng, cleanReadable ? 11 : 13, cleanReadable ? 27 : 32);
+    postprocess.vignette = randomBetween(rng, cleanReadable ? 42 : 56, cleanReadable ? 110 : 130);
+  }
+  if (ABLATION_DISABLE_POSTPROCESS) {
+    postprocess.contrast = 1.0;
+    postprocess.saturation = 1.0;
+    postprocess.brightness = 1.0;
+    postprocess.focusBlurPx = 0;
+    postprocess.vignette = 0;
+  }
+  if (ABLATION_DISABLE_GRAIN) {
+    postprocess.grainStrength = 0;
+    postprocess.grainAlpha = 0;
+  }
   return {
     noteConditionPolicy: NOTE_CONDITION_POLICY,
     notePrintTonePolicy: NOTE_PRINT_TONE_POLICY,
+    cameraIspPolicy: CAMERA_ISP_POLICY,
+    assetQualityPolicy: ASSET_QUALITY_POLICY,
+    cleanOrientationPolicy: CLEAN_ORIENTATION_POLICY,
+    negativePropPolicy: NEGATIVE_PROP_POLICY,
+    appearanceAblation: APPEARANCE_ABLATION,
+    textureQa,
+    textureQaEffects: textureQa ? TEXTURE_QA_EFFECTS : "none",
     surface: {
       ...surface,
       base: hexToNumber(surface.base),
@@ -590,24 +901,24 @@ function sceneConfig(variant, mode, backgroundPath, environmentPath) {
       lensDistortion,
     },
     lighting: {
-      hemiIntensity: randomBetween(rng, 1.15, 1.95),
-      keyIntensity: randomBetween(rng, 1.35, 2.55),
-      keyColor: [0xffd8aa, 0xffffff, 0xdff1ff, 0xffefc8][randomInt(rng, 4)],
-      keyPosition: [
+      hemiIntensity: textureQaFlat ? 0.0 : textureQaPhysicalCondition ? 1.25 : textureQa ? 2.1 : randomBetween(rng, 1.15, 1.95),
+      keyIntensity: textureQaFlat ? 0.0 : textureQaPhysicalCondition ? 3.4 : textureQa ? 2.2 : randomBetween(rng, 1.35, 2.55),
+      keyColor: textureQa ? 0xffffff : [0xffd8aa, 0xffffff, 0xdff1ff, 0xffefc8][randomInt(rng, 4)],
+      keyPosition: textureQaPhysicalCondition ? [-1.9, -2.4, 3.2] : textureQa ? [0.0, 0.0, 4.2] : [
         randomBetween(rng, -2.2, 2.2),
         randomBetween(rng, -3.0, -1.2),
         randomBetween(rng, 2.4, 4.4),
       ],
     },
-    postprocess: {
-      contrast: cleanSingle ? randomBetween(rng, 1.06, 1.14) : randomBetween(rng, 1.00, 1.07),
-      saturation: cleanSingle ? randomBetween(rng, 1.25, 1.45) : randomBetween(rng, 0.90, 1.07),
-      brightness: cleanSingle ? randomBetween(rng, 0.92, 1.00) : randomBetween(rng, 0.96, 1.05),
-      focusBlurPx: rng() < (cleanSingle ? 0.15 : 0.68) ? randomBetween(rng, cleanSingle ? 0.01 : 0.05, cleanSingle ? 0.06 : 0.32) : 0,
-      grainStrength: randomBetween(rng, cleanSingle ? 42 : 24, cleanSingle ? 70 : 46),
-      grainAlpha: randomBetween(rng, cleanSingle ? 20 : 14, cleanSingle ? 36 : 30),
-      vignette: randomBetween(rng, cleanSingle ? 18 : 42, cleanSingle ? 44 : 78),
+    shadowPolicy: {
+      engineShadowMap: "vsm_4096_bounded_v1",
+      noteContactShadow: "off",
+      noteMeshesCastEngineShadow: true,
+      noteMeshesReceiveEngineShadow: false,
+      backingMeshesReceiveEngineShadow: false,
     },
+    postprocess,
+    textureResolve,
     labelTransformPolicy: lensDistortion.applied ? {
       geometricPostprocess: "shared_rgb_id_label_radial_warp",
       sharedGeometricPostprocess: true,
@@ -673,6 +984,27 @@ const STACK_REAL_ASPECT_V2_Z_ABS_RANGES = {
   USD_50: [0.00, 0.12],
   KHR_10000: [0.00, 0.06],
   KHR_20000: [0.00, 0.08],
+};
+
+const CLEAN_REAL_ASPECT_SQUARE_Z_ABS_RANGES = {
+  ...STACK_REAL_ASPECT_Z_ABS_RANGES,
+  USD_1: [0.16, 0.36],
+  USD_5: [0.16, 0.34],
+  USD_10: [0.84, 1.08],
+  USD_50: [0.22, 0.42],
+  USD_100: [0.22, 0.42],
+  KHR_500: [0.30, 0.52],
+};
+
+const CLEAN_REAL_ASPECT_BRIDGE_Z_ABS_RANGES = {
+  ...CLEAN_REAL_ASPECT_SQUARE_Z_ABS_RANGES,
+  USD_10: [0.38, 0.66],
+  USD_50: [0.18, 0.38],
+  USD_100: [0.34, 0.58],
+  KHR_500: [0.04, 0.22],
+  KHR_2000: [0.34, 0.60],
+  KHR_5000: [0.30, 0.52],
+  KHR_50000: [0.00, 0.10],
 };
 
 const STACK_REAL_ASPECT_V2_POSITION_LIMITS = {
@@ -764,13 +1096,111 @@ function stackLayerRanksForClasses(classNames, layerOrder) {
   return ranks;
 }
 
-function listClassAssets(className) {
+function parseCsvLine(line) {
+  const values = [];
+  let value = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (char === "\"") {
+      if (quoted && line[index + 1] === "\"") {
+        value += "\"";
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (char === "," && !quoted) {
+      values.push(value);
+      value = "";
+    } else {
+      value += char;
+    }
+  }
+  values.push(value);
+  return values;
+}
+
+function readAssetManifestRows() {
+  const manifestPath = path.join(ASSET_BANK_DIR, "manifest.csv");
+  if (!fs.existsSync(manifestPath)) return [];
+  const lines = fs.readFileSync(manifestPath, "utf8").split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length < 2) return [];
+  const headers = parseCsvLine(lines[0]);
+  return lines.slice(1).map((line) => {
+    const values = parseCsvLine(line);
+    const row = {};
+    headers.forEach((header, index) => {
+      row[header] = values[index] ?? "";
+    });
+    row.resolvedPath = path.resolve(ROOT, row.asset_path || "");
+    return row;
+  });
+}
+
+function yearRangeStart(value) {
+  const match = String(value || "").match(/\d{4}/);
+  return match ? Number.parseInt(match[0], 10) : 0;
+}
+
+function numberField(row, key) {
+  const value = Number.parseFloat(row[key] || "0");
+  return Number.isFinite(value) ? value : 0;
+}
+
+function assetQualityRank(row) {
+  return [
+    row.status === "in_circulation" ? 1 : 0,
+    numberField(row, "max_year"),
+    yearRangeStart(row.years),
+    numberField(row, "width") * numberField(row, "height"),
+    numberField(row, "alpha_area"),
+  ];
+}
+
+function compareAssetRows(left, right) {
+  const leftRank = assetQualityRank(left);
+  const rightRank = assetQualityRank(right);
+  for (let index = 0; index < leftRank.length; index += 1) {
+    if (leftRank[index] !== rightRank[index]) return leftRank[index] - rightRank[index];
+  }
+  return String(left.asset_path || "").localeCompare(String(right.asset_path || ""));
+}
+
+function latestDesignRows(rows) {
+  const bySide = new Map();
+  for (const row of rows) {
+    const side = row.side || sideForAssetPath(row.resolvedPath);
+    const previous = bySide.get(side);
+    if (!previous || compareAssetRows(row, previous) > 0) {
+      bySide.set(side, row);
+    }
+  }
+  return [...bySide.values()];
+}
+
+function normalizeAssetKey(assetPath) {
+  return path.resolve(assetPath).toLowerCase();
+}
+
+function listFilesystemClassAssets(className) {
   const classDir = path.join(ASSET_BANK_DIR, className);
   if (!fs.existsSync(classDir)) return [];
   return fs.readdirSync(classDir)
     .filter((name) => /\.png$/i.test(name))
     .map((name) => path.join(classDir, name))
     .sort();
+}
+
+const assetManifestRows = readAssetManifestRows();
+const assetManifestByPath = new Map(assetManifestRows.map((row) => [normalizeAssetKey(row.resolvedPath), row]));
+
+function listClassAssets(className) {
+  if (ASSET_QUALITY_POLICY === "filesystem_all" || assetManifestRows.length === 0) {
+    return listFilesystemClassAssets(className);
+  }
+  const rows = assetManifestRows.filter((row) => row.class_name === className);
+  const selectedRows = ASSET_QUALITY_POLICY === "latest_design" ? latestDesignRows(rows) : rows;
+  return selectedRows.map((row) => row.resolvedPath).sort();
 }
 
 const assetPathPools = Object.fromEntries(CLASS_NAMES.map((className) => [className, listClassAssets(className)]));
@@ -820,11 +1250,19 @@ function selectAssetPath(className, variant, index) {
 function enrichAsset(asset, variant, index) {
   const assetPath = selectAssetPath(asset.className, variant, index);
   const condition = noteConditionFor(asset, variant, index);
+  const manifestRow = assetManifestByPath.get(normalizeAssetKey(assetPath));
   return {
     ...asset,
     path: assetPath,
     side: sideForAssetPath(assetPath),
     assetSidePolicy: ASSET_SIDE_POLICY,
+    assetQualityPolicy: ASSET_QUALITY_POLICY,
+    sourceStatus: manifestRow?.status || "",
+    sourceYears: manifestRow?.years || "",
+    sourceMaxYear: manifestRow?.max_year || "",
+    sourcePath: manifestRow?.source_path || "",
+    textureWidth: manifestRow?.width || "",
+    textureHeight: manifestRow?.height || "",
     condition,
     printTone: notePrintToneFor(asset, variant, index, condition),
   };
@@ -832,10 +1270,18 @@ function enrichAsset(asset, variant, index) {
 
 function annotateAsset(asset, index) {
   const condition = noteConditionFor(asset, 0, index);
+  const manifestRow = assetManifestByPath.get(normalizeAssetKey(asset.path));
   return {
     ...asset,
     side: sideForAssetPath(asset.path),
     assetSidePolicy: ASSET_SIDE_POLICY,
+    assetQualityPolicy: ASSET_QUALITY_POLICY,
+    sourceStatus: manifestRow?.status || "",
+    sourceYears: manifestRow?.years || "",
+    sourceMaxYear: manifestRow?.max_year || "",
+    sourcePath: manifestRow?.source_path || "",
+    textureWidth: manifestRow?.width || "",
+    textureHeight: manifestRow?.height || "",
     condition,
     printTone: notePrintToneFor(asset, 0, index, condition),
   };
@@ -865,10 +1311,12 @@ const baseOccluders = [
 function variantAssets(variant) {
   if (effectiveSceneMode === "negative") return [];
   if (effectiveSceneMode === "qa3") return qa3Assets(variant);
+  if (effectiveSceneMode === "texture_qa") return textureQaAssets(variant);
   if (effectiveSceneMode === "fan") return fanAssets(variant);
   if (effectiveSceneMode === "thin_edge") return thinEdgeAssets(variant);
   if (effectiveSceneMode === "hand_occlusion") return handOcclusionAssets(variant);
   if (effectiveSceneMode === "clean_single") return cleanSingleAssets(variant);
+  if (effectiveSceneMode === "clean_context") return cleanContextAssets(variant);
   if (effectiveSceneMode === "clean") return cleanAssets(variant);
   if (variant === 0 && ASSET_SIDE_POLICY === "any" && STACK_POSE_POLICY === "default") {
     return baseAssets.map((asset, index) => annotateAsset(asset, index));
@@ -933,7 +1381,9 @@ function variantAssets(variant) {
 function variantOccluders(variant) {
   if (effectiveSceneMode === "negative") return negativeOccluders(variant);
   if (effectiveSceneMode === "qa3") return [];
+  if (effectiveSceneMode === "texture_qa") return [];
   if (effectiveSceneMode === "clean" || effectiveSceneMode === "clean_single") return [];
+  if (effectiveSceneMode === "clean_context") return cleanContextOccluders(variant);
   if (effectiveSceneMode === "fan") return fanOccluders(variant);
   if (effectiveSceneMode === "thin_edge") return thinEdgeOccluders(variant);
   if (effectiveSceneMode === "hand_occlusion") return handOcclusionOccluders(variant);
@@ -952,6 +1402,32 @@ function variantOccluders(variant) {
       occluder.rotation[2] + randomBetween(rng, -0.38, 0.38),
     ],
   }));
+}
+
+function textureQaAssets(variant) {
+  const classIndex = classIndexFor(variant, 0);
+  const className = CLASS_NAMES[classIndex];
+  const physicalConditionProbe = NOTE_CONDITION_POLICY === "handled_3d" && TEXTURE_QA_EFFECTS === "condition";
+  const rng = mulberry32(88007111 + variant * 331 + classIndex * 17);
+  return [
+    enrichAsset({
+      ...baseAssets[0],
+      classIndex,
+      className,
+      idColor: INSTANCE_ID_COLORS[0],
+      physicalWidthMm: PHYSICAL_WIDTH_MM[className],
+      position: [0.0, 0.0, 0.012],
+      rotation: [0.0, 0.0, 0.0],
+      curl: physicalConditionProbe ? randomBetween(rng, 0.110, 0.190) : 0.0,
+      ripple: physicalConditionProbe ? randomBetween(rng, 0.024, 0.052) : 0.0,
+      roughness: 1.0,
+      layer: 0,
+      clean: true,
+      cleanSingle: true,
+      textureQa: true,
+      castShadow: false,
+    }, variant, 0),
+  ];
 }
 
 function cleanAssets(variant) {
@@ -976,18 +1452,19 @@ function cleanAssets(variant) {
       position: [
         anchor[0] + randomBetween(rng, -0.04, 0.04),
         anchor[1] + randomBetween(rng, -0.04, 0.04),
-        0.03 + index * 0.01,
+        0.012 + index * 0.006,
       ],
       rotation: [
         randomBetween(rng, -0.045, 0.045),
         randomBetween(rng, -0.055, 0.055),
-        randomBetween(rng, -0.20, 0.20),
+        cleanZRotationForClass(className, rng, [-0.20, 0.20]),
       ],
-      curl: 0.030 + randomBetween(rng, -0.010, 0.016),
+      curl: 0.014 + randomBetween(rng, -0.006, 0.010),
       ripple: 0.0,
       roughness: randomBetween(rng, 0.72, 0.88),
       layer: index,
       clean: true,
+      castShadow: rng() < 0.22,
     }, variant, index);
   });
 }
@@ -996,7 +1473,6 @@ function cleanSingleAssets(variant) {
   const rng = mulberry32(26055291 + variant * 157);
   const classIndex = classIndexFor(variant, 0);
   const className = CLASS_NAMES[classIndex];
-  const zRange = cleanSingleZRangeForClass(className);
   return [
     enrichAsset({
       ...baseAssets[0],
@@ -1007,18 +1483,70 @@ function cleanSingleAssets(variant) {
       position: [
         randomBetween(rng, -0.035, 0.035),
         randomBetween(rng, -0.030, 0.030),
-        0.045,
+        0.012,
       ],
       rotation: [
         randomBetween(rng, -0.035, 0.055),
         randomBetween(rng, -0.055, 0.055),
-        randomBetween(rng, zRange[0], zRange[1]),
+        cleanZRotationForClass(className, rng),
       ],
-      curl: 0.026 + randomBetween(rng, -0.006, 0.010),
+      curl: 0.012 + randomBetween(rng, -0.004, 0.008),
       ripple: 0.0,
       roughness: randomBetween(rng, 0.76, 0.90),
       layer: 0,
       cleanSingle: true,
+      castShadow: rng() < 0.12,
+    }, variant, 0),
+  ];
+}
+
+function cleanContextZRotationForClass(className, rng) {
+  if (CLEAN_ORIENTATION_POLICY !== "default") {
+    return cleanZRotationForClass(className, rng);
+  }
+  if (rng() < 0.24) {
+    return randomSignedBetween(rng, 1.16, 1.55);
+  }
+  const base = cleanSingleZRangeForClass(className);
+  const broader = {
+    KHR_500: [-0.30, 0.30],
+    KHR_1000: [-0.58, 0.58],
+    KHR_10000: [-0.28, 0.28],
+    KHR_20000: [-0.34, 0.34],
+    KHR_50000: [-0.32, 0.32],
+  };
+  const range = broader[className] || base;
+  return randomBetween(rng, range[0], range[1]);
+}
+
+function cleanContextAssets(variant) {
+  const rng = mulberry32(26055417 + variant * 163);
+  const classIndex = classIndexFor(variant, 0);
+  const className = CLASS_NAMES[classIndex];
+  return [
+    enrichAsset({
+      ...baseAssets[0],
+      classIndex,
+      className,
+      idColor: INSTANCE_ID_COLORS[0],
+      physicalWidthMm: PHYSICAL_WIDTH_MM[className],
+      position: [
+        randomBetween(rng, -0.12, 0.12),
+        randomBetween(rng, -0.10, 0.10),
+        0.016,
+      ],
+      rotation: [
+        randomBetween(rng, -0.060, 0.075),
+        randomBetween(rng, -0.075, 0.075),
+        cleanContextZRotationForClass(className, rng),
+      ],
+      curl: 0.014 + randomBetween(rng, -0.005, 0.010),
+      ripple: 0.0,
+      roughness: randomBetween(rng, 0.74, 0.90),
+      layer: 0,
+      cleanContext: true,
+      cleanSingle: true,
+      castShadow: rng() < 0.16,
     }, variant, 0),
   ];
 }
@@ -1034,6 +1562,32 @@ function cleanSingleZRangeForClass(className) {
     KHR_50000: [-0.20, 0.20],
   };
   return khrRanges[className] || [-0.62, 0.62];
+}
+
+function normalizeAngle(angle) {
+  let normalized = angle;
+  while (normalized > Math.PI) normalized -= Math.PI * 2;
+  while (normalized < -Math.PI) normalized += Math.PI * 2;
+  return normalized;
+}
+
+function cleanZRotationForClass(className, rng, defaultRange = null) {
+  if (CLEAN_ORIENTATION_POLICY === "default") {
+    const range = defaultRange || cleanSingleZRangeForClass(className);
+    return randomBetween(rng, range[0], range[1]);
+  }
+  const ranges = CLEAN_ORIENTATION_POLICY === "real_aspect_bridge_v1"
+    ? CLEAN_REAL_ASPECT_BRIDGE_Z_ABS_RANGES
+    : CLEAN_ORIENTATION_POLICY === "real_aspect_square_v1"
+      ? CLEAN_REAL_ASPECT_SQUARE_Z_ABS_RANGES
+      : STACK_REAL_ASPECT_Z_ABS_RANGES;
+  const range = ranges[className];
+  if (!range) {
+    throw new Error(`No clean real-aspect z-rotation range for class ${className}`);
+  }
+  let angle = randomSignedBetween(rng, range[0], range[1]);
+  if (rng() < 0.12) angle += Math.PI;
+  return normalizeAngle(angle);
 }
 
 function qa3Assets(variant) {
@@ -1249,9 +1803,102 @@ const NEGATIVE_PROP_STYLES = [
   { propKind: "sticky_note", textureStyle: "sticky_note", colors: [0xe6d1a3, 0xb6c59a, 0xf2df8f], width: [0.20, 0.42], height: [0.18, 0.34] },
 ];
 
+const UNKNOWN_CURRENCY_PROP_STYLES = [
+  { propKind: "unknown_banknote", textureStyle: "unknown_banknote", negativeConfusionHardness: "hard", colors: [0xd8b5a7, 0xc8d3b7, 0xb8c7d9, 0xd6c2da], width: [0.60, 0.98], height: [0.24, 0.42] },
+  { propKind: "unknown_banknote", textureStyle: "unknown_banknote", negativeConfusionHardness: "hard", colors: [0xe4c0a2, 0xb7d2ca, 0xd3c5a6, 0xc6b7d5], width: [0.54, 0.88], height: [0.22, 0.38] },
+  { propKind: "coin_cluster", textureStyle: "coin_cluster", negativeConfusionHardness: "coin", colors: [0x76634f, 0x88775d, 0x605447], width: [0.34, 0.66], height: [0.28, 0.58] },
+  { propKind: "receipt", textureStyle: "receipt", negativeConfusionHardness: "none", colors: [0xf4efe3, 0xe7dfcf], width: [0.48, 0.82], height: [0.14, 0.28] },
+  { propKind: "blank_paper", textureStyle: "paper", negativeConfusionHardness: "none", colors: [0xf1ead8, 0xd8d2c4, 0xd7e3ec], width: [0.42, 0.76], height: [0.18, 0.34] },
+  { propKind: "payment_card", textureStyle: "payment_card", negativeConfusionHardness: "none", colors: [0x2f5570, 0xd7e3ec, 0x5f6f61], width: [0.34, 0.56], height: [0.19, 0.32] },
+];
+
+const UNKNOWN_CURRENCY_SOFT_PROP_STYLES = [
+  { propKind: "unknown_banknote", textureStyle: "unknown_banknote", negativeConfusionHardness: "soft", colors: [0xd9d0b5, 0xc9d8d0, 0xd4c9d6, 0xcdd5df], width: [0.46, 0.74], height: [0.18, 0.30] },
+  { propKind: "unknown_banknote", textureStyle: "unknown_banknote", negativeConfusionHardness: "soft", colors: [0xe2d7bf, 0xbfd2c2, 0xd7cabb, 0xc6d2d4], width: [0.42, 0.68], height: [0.17, 0.28] },
+  { propKind: "coin_cluster", textureStyle: "coin_cluster", negativeConfusionHardness: "coin", colors: [0x76634f, 0x88775d, 0x605447], width: [0.30, 0.56], height: [0.24, 0.50] },
+  { propKind: "receipt", textureStyle: "receipt", negativeConfusionHardness: "none", colors: [0xf4efe3, 0xe7dfcf], width: [0.48, 0.82], height: [0.14, 0.28] },
+  { propKind: "blank_paper", textureStyle: "paper", negativeConfusionHardness: "none", colors: [0xf1ead8, 0xd8d2c4, 0xd7e3ec], width: [0.42, 0.76], height: [0.18, 0.34] },
+  { propKind: "payment_card", textureStyle: "payment_card", negativeConfusionHardness: "none", colors: [0x2f5570, 0xd7e3ec, 0x5f6f61], width: [0.34, 0.56], height: [0.19, 0.32] },
+];
+
+const UNKNOWN_CURRENCY_FULLFRAME_PROP_STYLES = [
+  { propKind: "unknown_banknote", textureStyle: "unknown_banknote", negativeConfusionHardness: "fullframe", colors: [0xd1b7a6, 0xb9cbbb, 0xb8c8dd, 0xd7c0cf], width: [1.02, 1.34], height: [0.40, 0.62] },
+  { propKind: "unknown_banknote", textureStyle: "unknown_banknote", negativeConfusionHardness: "fullframe", colors: [0xe0c1a0, 0xb8d2c8, 0xd5c7a6, 0xc8bad8], width: [0.92, 1.22], height: [0.36, 0.56] },
+  { propKind: "unknown_banknote", textureStyle: "unknown_banknote", negativeConfusionHardness: "fullframe", colors: [0xc7d3bc, 0xd8cab0, 0xb9c9d8, 0xd5bdd0], width: [0.84, 1.12], height: [0.34, 0.52] },
+];
+
+function negativePropStylesForPolicy() {
+  if (NEGATIVE_PROP_POLICY === "unknown_currency_soft_v1") return UNKNOWN_CURRENCY_SOFT_PROP_STYLES;
+  if (NEGATIVE_PROP_POLICY === "unknown_currency_fullframe_v1") return UNKNOWN_CURRENCY_SOFT_PROP_STYLES;
+  return NEGATIVE_PROP_POLICY === "unknown_currency_v1" ? UNKNOWN_CURRENCY_PROP_STYLES : NEGATIVE_PROP_STYLES;
+}
+
+const CLEAN_CONTEXT_PROP_PLACEMENTS = [
+  { styleIndex: 4, position: [-0.76, 0.02], zRotation: 0.06, maxWidth: 0.28, maxHeight: 0.58 },
+  { styleIndex: 0, position: [0.06, 0.60], zRotation: -0.08, maxWidth: 0.64, maxHeight: 0.16 },
+  { styleIndex: 1, position: [0.76, -0.28], zRotation: 0.30, maxWidth: 0.36, maxHeight: 0.22 },
+  { styleIndex: 2, position: [-0.72, -0.46], zRotation: -0.24, maxWidth: 0.44, maxHeight: 0.22 },
+  { styleIndex: 5, position: [0.74, 0.40], zRotation: -0.20, maxWidth: 0.26, maxHeight: 0.20 },
+  { styleIndex: 3, position: [-0.10, -0.60], zRotation: 0.10, maxWidth: 0.56, maxHeight: 0.16 },
+];
+
+function cleanContextOccluders(variant) {
+  const rng = mulberry32(26055519 + variant * 167);
+  const propCount = 2 + (variant % 3);
+  const props = [];
+  const start = variant % CLEAN_CONTEXT_PROP_PLACEMENTS.length;
+  for (let index = 0; index < propCount; index += 1) {
+    const placement = CLEAN_CONTEXT_PROP_PLACEMENTS[(start + index) % CLEAN_CONTEXT_PROP_PLACEMENTS.length];
+    const style = NEGATIVE_PROP_STYLES[placement.styleIndex];
+    props.push({
+      kind: "cover_card",
+      propKind: style.propKind,
+      textureStyle: style.textureStyle,
+      seed: 26055519 + variant * 167 + index * 977,
+      layer: 12 + index,
+      color: style.colors[randomInt(rng, style.colors.length)],
+      position: [
+        placement.position[0] + randomBetween(rng, -0.035, 0.035),
+        placement.position[1] + randomBetween(rng, -0.030, 0.030),
+        0.026 + index * 0.006,
+      ],
+      rotation: [
+        randomBetween(rng, -0.05, 0.06),
+        randomBetween(rng, -0.05, 0.06),
+        placement.zRotation + randomBetween(rng, -0.20, 0.20),
+      ],
+      width: Math.min(randomBetween(rng, style.width[0], style.width[1]), placement.maxWidth),
+      height: Math.min(randomBetween(rng, style.height[0], style.height[1]), placement.maxHeight),
+      contextOnly: true,
+    });
+  }
+  if (variant % 5 === 0) {
+    props.push({
+      kind: "finger_capsule",
+      layer: 18,
+      color: [0xc58663, 0xb87958, 0xd09a77][randomInt(rng, 3)],
+      position: [
+        randomBetween(rng, -0.80, -0.68),
+        randomBetween(rng, -0.58, -0.44),
+        0.044,
+      ],
+      rotation: [
+        randomBetween(rng, 0.02, 0.16),
+        randomBetween(rng, -0.10, 0.10),
+        randomBetween(rng, 0.35, 1.10),
+      ],
+      radius: randomBetween(rng, 0.034, 0.048),
+      length: randomBetween(rng, 0.28, 0.48),
+      contextOnly: true,
+    });
+  }
+  return props;
+}
+
 function negativeOccluders(variant) {
   const rng = mulberry32(26057511 + variant * 149);
-  const propCount = 3 + (variant % 3);
+  const propCount = NEGATIVE_PROP_POLICY === "unknown_currency_fullframe_v1" ? 2 + (variant % 3) : 3 + (variant % 3);
+  const styles = negativePropStylesForPolicy();
   const props = [];
   for (let index = 0; index < propCount; index += 1) {
     const useFinger = index === propCount - 1 && variant % 4 === 0;
@@ -1275,23 +1922,31 @@ function negativeOccluders(variant) {
       });
       continue;
     }
-    const style = NEGATIVE_PROP_STYLES[(variant + index * 3) % NEGATIVE_PROP_STYLES.length];
+    const isFullFrameUnknown = NEGATIVE_PROP_POLICY === "unknown_currency_fullframe_v1" && index === 0;
+    const style = isFullFrameUnknown
+      ? UNKNOWN_CURRENCY_FULLFRAME_PROP_STYLES[variant % UNKNOWN_CURRENCY_FULLFRAME_PROP_STYLES.length]
+      : NEGATIVE_PROP_POLICY === "unknown_currency_v1" && index === 0
+      ? UNKNOWN_CURRENCY_PROP_STYLES[variant % 2]
+      : NEGATIVE_PROP_POLICY === "unknown_currency_soft_v1" && index === 0 && variant % 2 === 0
+        ? UNKNOWN_CURRENCY_SOFT_PROP_STYLES[variant % 2]
+      : styles[(variant + index * 3) % styles.length];
     props.push({
       kind: "cover_card",
       propKind: style.propKind,
       textureStyle: style.textureStyle,
+      negativeConfusionHardness: style.negativeConfusionHardness || "none",
       seed: 26057511 + variant * 149 + index * 811,
       layer: 20 + index,
       color: style.colors[randomInt(rng, style.colors.length)],
       position: [
-        randomBetween(rng, -0.62, 0.62),
-        randomBetween(rng, -0.42, 0.42),
+        isFullFrameUnknown ? randomBetween(rng, -0.14, 0.14) : randomBetween(rng, -0.62, 0.62),
+        isFullFrameUnknown ? randomBetween(rng, -0.12, 0.12) : randomBetween(rng, -0.42, 0.42),
         0.05 + index * 0.01,
       ],
       rotation: [
-        randomBetween(rng, -0.10, 0.10),
-        randomBetween(rng, -0.10, 0.10),
-        randomBetween(rng, -1.55, 1.55),
+        isFullFrameUnknown ? randomBetween(rng, -0.05, 0.07) : randomBetween(rng, -0.10, 0.10),
+        isFullFrameUnknown ? randomBetween(rng, -0.06, 0.06) : randomBetween(rng, -0.10, 0.10),
+        isFullFrameUnknown ? randomBetween(rng, -1.30, 1.30) : randomBetween(rng, -1.55, 1.55),
       ],
       width: randomBetween(rng, style.width[0], style.width[1]),
       height: randomBetween(rng, style.height[0], style.height[1]),
@@ -1397,22 +2052,39 @@ function applyOccluderPolicy(occluders) {
   });
 }
 
-const assets = variantAssets(VARIANT);
-const sceneDefaultOccluders = variantOccluders(VARIANT);
-const occluders = applyOccluderPolicy(sceneDefaultOccluders);
 const backgroundFiles = listImageFiles(BACKGROUND_DIR);
-const selectedBackgroundPath = backgroundFiles.length ? backgroundFiles[VARIANT % backgroundFiles.length] : null;
 const environmentFiles = listEnvironmentFiles(ENVIRONMENT_DIR);
-const selectedEnvironmentPath = environmentFiles.length ? environmentFiles[VARIANT % environmentFiles.length] : null;
-const config = sceneConfig(VARIANT, effectiveSceneMode, selectedBackgroundPath, selectedEnvironmentPath);
-const assetSideCounts = assets.reduce((counts, asset) => {
-  const side = asset.side ?? "unknown";
-  counts[side] = (counts[side] ?? 0) + 1;
-  return counts;
-}, {});
-const frontBackMixSatisfied = assetSideCounts.front > 0 && assetSideCounts.back > 0;
 
-function html(textureAssets) {
+function buildRenderState(variant, outDir) {
+  effectiveSceneMode = effectiveSceneModeFor(variant, SCENE_MODE);
+  const assets = variantAssets(variant);
+  const sceneDefaultOccluders = variantOccluders(variant);
+  const occluders = applyOccluderPolicy(sceneDefaultOccluders);
+  const selectedBackgroundPath = backgroundFiles.length ? backgroundFiles[variant % backgroundFiles.length] : null;
+  const selectedEnvironmentPath = environmentFiles.length ? environmentFiles[variant % environmentFiles.length] : null;
+  const config = sceneConfig(variant, effectiveSceneMode, selectedBackgroundPath, selectedEnvironmentPath);
+  const assetSideCounts = assets.reduce((counts, asset) => {
+    const side = asset.side ?? "unknown";
+    counts[side] = (counts[side] ?? 0) + 1;
+    return counts;
+  }, {});
+  const frontBackMixSatisfied = assetSideCounts.front > 0 && assetSideCounts.back > 0;
+  const textureAssets = assets.map((asset) => ({ ...asset, textureUrl: pathToFileURL(asset.path).href }));
+  return {
+    outDir,
+    variant,
+    effectiveSceneMode,
+    assets,
+    textureAssets,
+    sceneDefaultOccluders,
+    occluders,
+    config,
+    assetSideCounts,
+    frontBackMixSatisfied,
+  };
+}
+
+function html(renderState) {
   return `<!doctype html>
 <html>
 <head>
@@ -1430,9 +2102,9 @@ function html(textureAssets) {
 import * as THREE from "three";
 import { HDRLoader } from "${HDR_LOADER_MODULE}";
 
-const assets = ${JSON.stringify(textureAssets)};
-const occluders = ${JSON.stringify(occluders)};
-const sceneConfig = ${JSON.stringify(config)};
+const assets = ${JSON.stringify(renderState.textureAssets)};
+const occluders = ${JSON.stringify(renderState.occluders)};
+const sceneConfig = ${JSON.stringify(renderState.config)};
 const WIDTH = ${JSON.stringify(WIDTH)};
 const HEIGHT = ${JSON.stringify(HEIGHT)};
 const VISUAL_SCALE = ${JSON.stringify(VISUAL_SCALE)};
@@ -1448,7 +2120,7 @@ const visualRenderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawin
 visualRenderer.setPixelRatio(VISUAL_SCALE);
 visualRenderer.setSize(WIDTH, HEIGHT);
 visualRenderer.shadowMap.enabled = true;
-visualRenderer.shadowMap.type = THREE.PCFShadowMap;
+visualRenderer.shadowMap.type = THREE.VSMShadowMap;
 visualRenderer.domElement.style.position = "absolute";
 visualRenderer.domElement.style.left = "0";
 visualRenderer.domElement.style.top = "0";
@@ -1468,17 +2140,27 @@ grainCanvas.style.pointerEvents = "none";
 grainCanvas.style.display = "none";
 document.body.appendChild(grainCanvas);
 
+function pixelNoise01(x, y, seed) {
+  let hash = (Math.imul((x + 0x9e3779b9) >>> 0, 0x85ebca6b) ^ Math.imul((y + 0xc2b2ae35) >>> 0, 0x27d4eb2d) ^ (seed >>> 0)) >>> 0;
+  hash ^= hash >>> 16;
+  hash = Math.imul(hash, 0x7feb352d) >>> 0;
+  hash ^= hash >>> 15;
+  hash = Math.imul(hash, 0x846ca68b) >>> 0;
+  hash ^= hash >>> 16;
+  return (hash >>> 0) / 0x100000000;
+}
+
 function buildCameraOverlay() {
   const context = grainCanvas.getContext("2d", { willReadFrequently: true });
   const image = context.createImageData(grainCanvas.width, grainCanvas.height);
   const cx = grainCanvas.width / 2;
   const cy = grainCanvas.height / 2;
   const maxRadius = Math.sqrt(cx * cx + cy * cy);
+  const grainSeed = sceneConfig.postprocess.grainSeed || 1;
   for (let y = 0; y < grainCanvas.height; y += 1) {
     for (let x = 0; x < grainCanvas.width; x += 1) {
       const i = (y * grainCanvas.width + x) * 4;
-      const hash = Math.sin((x + 1) * 12.9898 + (y + 1) * 78.233) * 43758.5453;
-      const grain = (hash - Math.floor(hash) - 0.5) * sceneConfig.postprocess.grainStrength;
+      const grain = (pixelNoise01(x, y, grainSeed) - 0.5) * sceneConfig.postprocess.grainStrength;
       const radius = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2) / maxRadius;
       const vignette = Math.max(0, radius - 0.48) * sceneConfig.postprocess.vignette;
       const value = Math.max(0, Math.min(255, 128 + grain - vignette));
@@ -1498,7 +2180,17 @@ scene.add(hemi);
 const key = new THREE.DirectionalLight(sceneConfig.lighting.keyColor, sceneConfig.lighting.keyIntensity);
 key.position.set(...sceneConfig.lighting.keyPosition);
 key.castShadow = true;
-key.shadow.mapSize.set(1024, 1024);
+key.shadow.mapSize.set(4096, 4096);
+key.shadow.camera.left = -2.2;
+key.shadow.camera.right = 2.2;
+key.shadow.camera.top = 1.6;
+key.shadow.camera.bottom = -1.6;
+key.shadow.camera.near = 0.2;
+key.shadow.camera.far = 8.0;
+key.shadow.radius = 4;
+key.shadow.blurSamples = 8;
+key.shadow.bias = -0.00008;
+key.shadow.normalBias = 0.018;
 scene.add(key);
 
 const loader = new THREE.TextureLoader();
@@ -1521,7 +2213,9 @@ if (environmentTexture) {
 
 const table = new THREE.Mesh(
   new THREE.PlaneGeometry(30.0, 20.0, 8, 8),
-  new THREE.MeshStandardMaterial({ color: 0xffffff, map: makeTableTexture(), roughness: 0.88 })
+  sceneConfig.textureQa
+    ? new THREE.MeshBasicMaterial({ color: sceneConfig.surface.scene, map: makeTableTexture() })
+    : new THREE.MeshStandardMaterial({ color: 0xffffff, map: makeTableTexture(), roughness: 0.88 })
 );
 table.receiveShadow = true;
 table.position.z = -0.02;
@@ -1550,6 +2244,15 @@ function makeTableTexture() {
   const context = canvas.getContext("2d");
   context.fillStyle = "#" + sceneConfig.surface.base.toString(16).padStart(6, "0");
   context.fillRect(0, 0, canvas.width, canvas.height);
+  if (sceneConfig.surface.flatTexture) {
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(...sceneConfig.surface.repeat);
+    texture.needsUpdate = true;
+    return texture;
+  }
   for (let y = 0; y < canvas.height; y += 1) {
     const stripe = Math.sin(y * 0.09) * 9 + Math.sin(y * 0.021) * 18;
     const light = sceneConfig.surface.light;
@@ -1587,19 +2290,36 @@ function bendGeometry(geometry, curl, ripple, condition = {}) {
   const phase = condition.wavePhase ?? 0.0;
   const creaseAngle = condition.creaseAngle ?? 0.0;
   const creaseOffset = condition.creaseOffset ?? 0.0;
-  const creaseStrength = Math.min(1.0, crinkle * 0.75 + (condition.creaseCount ?? 0) * 0.08);
-  const creaseCos = Math.cos(creaseAngle);
-  const creaseSin = Math.sin(creaseAngle);
+  const creaseCount = Math.max(0, Math.min(4, Math.round(condition.creaseCount ?? 0)));
+  const creaseStrength = Math.min(1.0, crinkle * 0.75 + creaseCount * 0.08);
+  const curlScale = Math.max(0.0, condition.geometryCurlScale ?? 1.0);
+  const rippleScale = Math.max(0.0, condition.geometryRippleScale ?? 1.0);
+  const wrinkleScale = Math.max(0.0, condition.geometryWrinkleScale ?? 1.0);
+  const creaseScale = Math.max(0.0, condition.geometryCreaseScale ?? 1.0);
+  const creaseWidth = Math.max(0.0008, Math.min(0.008, condition.geometryCreaseWidth ?? 0.0028));
+  const shoulderDistance = Math.max(0.030, Math.min(0.090, Math.sqrt(creaseWidth) * 1.55));
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const y = pos.getY(i);
-    const base = curl * x * x + ripple * Math.sin(x * 10.0) * Math.sin((y + 0.34) * 7.0);
-    const wrinkles = crinkle * 0.0065 * (
+    const base = curl * curlScale * x * x + ripple * rippleScale * Math.sin(x * 10.0) * Math.sin((y + 0.34) * 7.0);
+    const wrinkles = crinkle * 0.0065 * wrinkleScale * (
       Math.sin(x * 28.0 + phase) * Math.sin(y * 17.0 - phase * 0.7)
       + 0.5 * Math.sin((x + y) * 36.0 + phase * 1.7)
     );
-    const creaseDistance = x * creaseCos + y * creaseSin - creaseOffset;
-    const crease = creaseStrength * 0.012 * Math.exp(-(creaseDistance * creaseDistance) / 0.0028);
+    let crease = 0.0;
+    for (let creaseIndex = 0; creaseIndex < creaseCount; creaseIndex += 1) {
+      const centeredIndex = creaseIndex - (creaseCount - 1) / 2;
+      const localAngle = creaseAngle + centeredIndex * 0.34 + Math.sin(phase + creaseIndex * 1.17) * 0.08;
+      const localOffset = creaseOffset + centeredIndex * 0.16 + Math.sin(phase * 0.7 + creaseIndex * 1.31) * 0.035;
+      const creaseCos = Math.cos(localAngle);
+      const creaseSin = Math.sin(localAngle);
+      const creaseDistance = x * creaseCos + y * creaseSin - localOffset;
+      const core = Math.exp(-(creaseDistance * creaseDistance) / creaseWidth);
+      const shoulder = Math.exp(-Math.pow(Math.abs(creaseDistance) - shoulderDistance, 2) / (creaseWidth * 2.4));
+      const polarity = creaseIndex % 2 === 0 ? 1.0 : -0.82;
+      const localStrength = creaseStrength * (1.0 - Math.min(0.28, Math.abs(centeredIndex) * 0.10));
+      crease += polarity * localStrength * 0.012 * creaseScale * (core - shoulder * 0.38);
+    }
     const dampSag = wetness * 0.0025 * Math.sin((x - y) * 12.0 + phase);
     const z = base + wrinkles + crease + dampSag;
     pos.setZ(i, z);
@@ -1671,6 +2391,99 @@ function makeOccluderTexture(occluder) {
     context.fillStyle = "rgba(255,255,255,0.34)";
     context.fillRect(56, 350, 210, 14);
     context.fillRect(56, 386, 152, 12);
+  } else if (occluder.textureStyle === "unknown_banknote") {
+    const fullframe = occluder.negativeConfusionHardness === "fullframe";
+    const soft = occluder.negativeConfusionHardness === "soft";
+    const accent = ["rgba(122,52,78,0.34)", "rgba(42,96,116,0.32)", "rgba(74,118,66,0.30)"][Math.floor(rng() * 3)];
+    context.fillStyle = soft ? "rgba(255,255,255,0.18)" : fullframe ? "rgba(255,255,255,0.20)" : "rgba(255,255,255,0.24)";
+    context.fillRect(22, 24, 468, 464);
+    context.strokeStyle = soft ? "rgba(72,64,54,0.18)" : fullframe ? "rgba(72,54,48,0.24)" : "rgba(72,54,48,0.28)";
+    context.lineWidth = soft ? 6 : fullframe ? 9 : 8;
+    context.strokeRect(34, 36, 444, 440);
+    context.strokeStyle = accent;
+    context.lineWidth = soft ? 3 : fullframe ? 4 : 5;
+    for (let y = 76; y < 450; y += soft ? 68 : fullframe ? 34 : 42) {
+      context.beginPath();
+      for (let x = 54; x <= 458; x += soft ? 28 : fullframe ? 16 : 18) {
+        const wave = Math.sin((x + y) * (soft ? 0.022 : fullframe ? 0.040 : 0.035) + rng() * 0.4) * (soft ? 5 : fullframe ? 7 : 9);
+        if (x === 54) context.moveTo(x, y + wave);
+        else context.lineTo(x, y + wave);
+      }
+      context.stroke();
+    }
+    if (fullframe) {
+      context.save();
+      context.translate(248, 256);
+      context.rotate(-0.08);
+      context.fillStyle = "rgba(255,255,255,0.18)";
+      context.fillRect(-28, -218, 56, 436);
+      context.strokeStyle = "rgba(68,58,48,0.24)";
+      context.lineWidth = 4;
+      context.strokeRect(-28, -218, 56, 436);
+      context.restore();
+      context.fillStyle = "rgba(35,32,30,0.20)";
+      for (let y = 112; y < 396; y += 44) {
+        context.fillRect(292 + rng() * 10, y, 118 + rng() * 54, 6);
+        context.fillRect(292 + rng() * 10, y + 16, 76 + rng() * 38, 5);
+      }
+    }
+    context.fillStyle = "rgba(255,255,255,0.28)";
+    context.beginPath();
+    context.ellipse(soft ? 346 : 334, 242, soft ? 72 : 92, soft ? 104 : 132, -0.12, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = soft ? "rgba(68,58,48,0.18)" : "rgba(68,50,48,0.28)";
+    context.lineWidth = soft ? 4 : 6;
+    context.stroke();
+    context.fillStyle = accent;
+    context.beginPath();
+    context.ellipse(122, 128, soft ? 52 : 62, soft ? 30 : 40, 0.22, 0, Math.PI * 2);
+    context.fill();
+    context.beginPath();
+    context.arc(122, 128, soft ? 18 : 26, 0, Math.PI * 2);
+    context.stroke();
+    if (soft) {
+      context.save();
+      context.translate(252, 260);
+      context.rotate(-0.55);
+      context.fillStyle = "rgba(255,255,255,0.20)";
+      context.fillRect(-230, -34, 460, 68);
+      context.restore();
+    }
+    context.fillStyle = soft ? "rgba(55,48,42,0.36)" : "rgba(55,44,40,0.50)";
+    context.font = soft ? "bold 56px sans-serif" : fullframe ? "bold 86px sans-serif" : "bold 78px sans-serif";
+    const denom = (soft ? ["40", "70", "90", "250", "880"] : fullframe ? ["30", "70", "300", "700", "900"] : ["25", "75", "200", "300", "700"])[Math.floor(rng() * 5)];
+    context.fillText(denom, 54, 372);
+    context.font = soft ? "bold 26px sans-serif" : fullframe ? "bold 36px sans-serif" : "bold 34px sans-serif";
+    context.fillText(["RT", "BN", "LM", "QA"][Math.floor(rng() * 4)], 360, 92);
+    context.fillStyle = "rgba(35,32,30,0.24)";
+    for (let i = 0; i < (soft ? 4 : fullframe ? 9 : 7); i += 1) {
+      context.fillRect(78 + i * (soft ? 52 : fullframe ? 30 : 34), 420 + (rng() - 0.5) * 8, 18 + rng() * (soft ? 24 : 34), soft ? 5 : fullframe ? 6 : 7);
+    }
+  } else if (occluder.textureStyle === "coin_cluster") {
+    context.fillStyle = "rgba(65,54,42,0.34)";
+    context.fillRect(20, 18, 472, 474);
+    for (let i = 0; i < 18; i += 1) {
+      const x = 74 + rng() * 360;
+      const y = 68 + rng() * 370;
+      const radius = 24 + rng() * 35;
+      const metal = [
+        "rgba(202,184,132,0.86)",
+        "rgba(176,119,68,0.86)",
+        "rgba(196,199,190,0.88)",
+      ][Math.floor(rng() * 3)];
+      context.fillStyle = metal;
+      context.beginPath();
+      context.arc(x, y, radius, 0, Math.PI * 2);
+      context.fill();
+      context.strokeStyle = "rgba(44,38,32,0.38)";
+      context.lineWidth = 5;
+      context.stroke();
+      context.strokeStyle = "rgba(255,255,255,0.22)";
+      context.lineWidth = 3;
+      context.beginPath();
+      context.arc(x, y, radius * 0.62, 0, Math.PI * 2);
+      context.stroke();
+    }
   } else if (occluder.textureStyle === "wallet") {
     context.fillStyle = "rgba(0,0,0,0.20)";
     context.fillRect(28, 46, 456, 420);
@@ -1771,7 +2584,9 @@ function applyPrintToneAdjustment(canvas, printTone) {
 }
 
 function drawConditionedLines(context, width, height, rng, condition) {
+  if (condition.textureCreaseMarks === false) return;
   const crinkle = clamp01(condition.crinkle);
+  const dirt = clamp01(condition.dirtiness);
   const count = Math.max(0, condition.creaseCount || 0);
   for (let i = 0; i < count; i += 1) {
     const angle = (condition.creaseAngle || 0) + (rng() - 0.5) * 0.9;
@@ -1780,6 +2595,14 @@ function drawConditionedLines(context, width, height, rng, condition) {
     context.translate(width / 2, height / 2 + offset);
     context.rotate(angle);
     context.lineCap = "round";
+    if (dirt > 0.18 || crinkle > 0.24) {
+      context.lineWidth = Math.max(2, height * (0.010 + dirt * 0.020 + crinkle * 0.006));
+      context.strokeStyle = "rgba(54,43,30," + Math.min(0.18, dirt * 0.12 + crinkle * 0.04) + ")";
+      context.beginPath();
+      context.moveTo(-width * 0.64, 0);
+      context.lineTo(width * 0.64, 0);
+      context.stroke();
+    }
     context.lineWidth = Math.max(1, height * (0.0025 + crinkle * 0.003));
     context.strokeStyle = "rgba(83,64,42," + (0.08 + crinkle * 0.14) + ")";
     context.beginPath();
@@ -1803,22 +2626,44 @@ function makeConditionedNoteTexture(sourceTexture, condition, printTone) {
   const crinkle = clamp01(condition.crinkle);
   const wet = clamp01(condition.wetness);
   const edgeWear = clamp01(condition.edgeWear);
+  const textureCreaseMarks = condition.textureCreaseMarks !== false;
   const hasConditionTone = dirt >= 0.01 || crinkle >= 0.01 || wet >= 0.01 || edgeWear >= 0.01;
   if (!hasConditionTone && !hasPrintTone) return sourceTexture;
 
   const source = sourceTexture.image;
-  const width = source.naturalWidth || source.width;
-  const height = source.naturalHeight || source.height;
+  const sourceWidth = source.naturalWidth || source.width;
+  const sourceHeight = source.naturalHeight || source.height;
+  const textureResolve = sceneConfig.textureResolve || { policy: "source_exact", maxWidth: 0, blurPx: 0 };
+  const maxWidth = Math.max(0, Number(textureResolve.maxWidth || 0));
+  const resizeScale = maxWidth > 0 && sourceWidth > maxWidth ? maxWidth / sourceWidth : 1.0;
+  const width = Math.max(1, Math.round(sourceWidth * resizeScale));
+  const height = Math.max(1, Math.round(sourceHeight * resizeScale));
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext("2d");
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
   context.drawImage(source, 0, 0, width, height);
+  const textureBlurPx = Math.max(0, Number(textureResolve.blurPx || 0));
+  if (textureBlurPx > 0) {
+    const resolved = document.createElement("canvas");
+    resolved.width = width;
+    resolved.height = height;
+    const resolvedContext = resolved.getContext("2d");
+    resolvedContext.drawImage(canvas, 0, 0);
+    context.clearRect(0, 0, width, height);
+    context.filter = "blur(" + textureBlurPx + "px)";
+    context.drawImage(resolved, 0, 0);
+    context.filter = "none";
+  }
   const rng = browserMulberry32(condition.seed || 1);
 
   if (hasConditionTone) {
     const wash = applyMaskedOverlay(canvas, (overlay, w, h) => {
-      overlay.fillStyle = "rgba(117,82,38," + (dirt * 0.10) + ")";
+      overlay.fillStyle = "rgba(102,84,55," + (dirt * 0.18) + ")";
+      overlay.fillRect(0, 0, w, h);
+      overlay.fillStyle = "rgba(71,68,58," + (dirt * 0.13) + ")";
       overlay.fillRect(0, 0, w, h);
       if (wet > 0) {
         overlay.fillStyle = "rgba(29,43,47," + (wet * 0.16) + ")";
@@ -1842,12 +2687,45 @@ function makeConditionedNoteTexture(sourceTexture, condition, printTone) {
       for (let i = 0; i < stains; i += 1) {
         const x = rng() * w;
         const y = rng() * h;
-        const radius = (0.04 + rng() * 0.11) * Math.min(w, h);
+        const radius = (0.055 + rng() * 0.16) * Math.min(w, h);
         const gradient = overlay.createRadialGradient(x, y, radius * 0.1, x, y, radius);
-        gradient.addColorStop(0, "rgba(67,48,28," + (0.09 + dirt * 0.14) + ")");
+        gradient.addColorStop(0, "rgba(67,48,28," + (0.10 + dirt * 0.20) + ")");
         gradient.addColorStop(1, "rgba(67,48,28,0)");
         overlay.fillStyle = gradient;
         overlay.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+      }
+      const grimeBands = textureCreaseMarks
+        ? Math.min(6, Math.max(0, Math.round(dirt * 4 + crinkle * 2)))
+        : Math.min(4, Math.max(0, Math.round(dirt * 4)));
+      for (let i = 0; i < grimeBands; i += 1) {
+        const horizontal = rng() < 0.55;
+        const x = rng() * w;
+        const y = rng() * h;
+        overlay.save();
+        overlay.translate(x, y);
+        overlay.rotate((horizontal ? 0 : Math.PI / 2) + (rng() - 0.5) * 0.5);
+        overlay.lineCap = "round";
+        overlay.lineWidth = Math.max(2, Math.min(w, h) * (0.012 + rng() * 0.030));
+        overlay.strokeStyle = "rgba(48,42,31," + Math.min(0.18, 0.025 + dirt * (0.08 + rng() * 0.05)) + ")";
+        overlay.beginPath();
+        overlay.moveTo(-w * (0.18 + rng() * 0.24), 0);
+        overlay.bezierCurveTo(-w * 0.10, (rng() - 0.5) * h * 0.06, w * 0.10, (rng() - 0.5) * h * 0.08, w * (0.18 + rng() * 0.24), 0);
+        overlay.stroke();
+        overlay.restore();
+      }
+      if (textureCreaseMarks && (dirt > 0.20 || crinkle > 0.24)) {
+        const foldChance = Math.min(0.92, 0.18 + dirt + crinkle * 0.45);
+        if (rng() < foldChance) {
+          const foldX = w * (0.42 + (0.58 - 0.42) * rng());
+          const foldWidth = w * (0.025 + (0.060 - 0.025) * rng());
+          const fold = overlay.createLinearGradient(foldX - foldWidth, 0, foldX + foldWidth, 0);
+          fold.addColorStop(0, "rgba(65,54,39,0)");
+          fold.addColorStop(0.48, "rgba(55,44,31," + Math.min(0.20, 0.035 + dirt * 0.16 + crinkle * 0.04) + ")");
+          fold.addColorStop(0.60, "rgba(246,236,205," + Math.min(0.10, 0.02 + crinkle * 0.07) + ")");
+          fold.addColorStop(1, "rgba(65,54,39,0)");
+          overlay.fillStyle = fold;
+          overlay.fillRect(foldX - foldWidth, 0, foldWidth * 2, h);
+        }
       }
       if (wet > 0) {
         const patches = Math.max(1, Math.ceil(wet * 5));
@@ -1908,8 +2786,14 @@ function makeConditionedNoteTexture(sourceTexture, condition, printTone) {
       }
       drawConditionedLines(overlay, w, h, rng, condition);
       if (edgeWear > 0) {
+        overlay.lineWidth = Math.max(1, Math.min(w, h) * (0.006 + edgeWear * 0.012));
+        overlay.strokeStyle = "rgba(48,39,28," + Math.min(0.16, dirt * 0.10 + edgeWear * 0.06) + ")";
+        for (let i = 0; i < 2; i += 1) {
+          const inset = i * overlay.lineWidth * 1.6;
+          overlay.strokeRect(inset, inset, w - inset * 2, h - inset * 2);
+        }
         overlay.lineWidth = Math.max(1, Math.min(w, h) * (0.004 + edgeWear * 0.010));
-        overlay.strokeStyle = "rgba(246,238,211," + (edgeWear * 0.18) + ")";
+        overlay.strokeStyle = "rgba(246,238,211," + (edgeWear * 0.12) + ")";
         for (let i = 0; i < 3; i += 1) {
           const inset = i * overlay.lineWidth * 1.8;
           overlay.strokeRect(inset, inset, w - inset * 2, h - inset * 2);
@@ -1944,40 +2828,56 @@ async function addNotes() {
     const geometry = new THREE.PlaneGeometry(noteWidth, noteHeight, 160, ySegments);
     bendGeometry(geometry, asset.curl ?? 0.075, asset.ripple ?? 0.0, asset.condition);
     const condition = asset.condition || {};
+    const textureQa = Boolean(sceneConfig.textureQa || asset.textureQa);
+    const textureQaEffects = sceneConfig.textureQaEffects || "none";
+    const ablation = sceneConfig.appearanceAblation || "full";
+    const ablationDisableBacking = ["source_flat", "material_no_backing", "standard_only"].includes(ablation);
+    const ablationDisableShadows = ["source_flat", "material_no_shadow", "material_no_backing", "standard_only"].includes(ablation);
+    const textureQaFlat = (textureQa && textureQaEffects === "flat") || sceneConfig.appearanceAblation === "source_flat";
+    const textureQaBacking = textureQa && ["backing_plane", "postprocess", "condition"].includes(textureQaEffects);
     const materialRoughness = Math.max(
       0.24,
       Math.min(0.96, (asset.roughness ?? 0.82) + (condition.dirtiness || 0) * 0.04 - (condition.wetness || 0) * 0.52)
     );
-    const backingMaterial = new THREE.MeshStandardMaterial({
-      color: 0xf2ead7,
-      roughness: Math.max(0.34, 0.92 - (condition.wetness || 0) * 0.32),
-      metalness: 0.0,
-      side: THREE.DoubleSide,
-      depthTest: false,
-      depthWrite: false
-    });
-    const backing = new THREE.Mesh(geometry.clone(), backingMaterial);
-    backing.position.set(...asset.position);
-    backing.rotation.set(...asset.rotation);
-    backing.renderOrder = 10 + asset.layer * 3;
-    backing.receiveShadow = false;
-    backing.userData = { material: backingMaterial };
-    backingMeshes.push(backing);
-    scene.add(backing);
+    if (!ablationDisableBacking && (!textureQa || textureQaBacking)) {
+      const backingMaterial = new THREE.MeshStandardMaterial({
+        color: 0xf2ead7,
+        roughness: Math.max(0.34, 0.92 - (condition.wetness || 0) * 0.32),
+        metalness: 0.0,
+        side: THREE.DoubleSide,
+        depthTest: false,
+        depthWrite: false
+      });
+      const backing = new THREE.Mesh(geometry.clone(), backingMaterial);
+      backing.position.set(...asset.position);
+      backing.rotation.set(...asset.rotation);
+      backing.renderOrder = 10 + asset.layer * 3;
+      backing.receiveShadow = false;
+      backing.userData = { material: backingMaterial };
+      backingMeshes.push(backing);
+      scene.add(backing);
+    }
 
-    const material = new THREE.MeshStandardMaterial({
-      map: texture,
-      roughness: materialRoughness,
-      metalness: 0.0,
-      side: THREE.DoubleSide,
-      depthTest: false,
-      depthWrite: false
-    });
+    const material = textureQaFlat
+      ? new THREE.MeshBasicMaterial({
+        map: texture,
+        side: THREE.DoubleSide,
+        depthTest: false,
+        depthWrite: false
+      })
+      : new THREE.MeshStandardMaterial({
+        map: texture,
+        roughness: materialRoughness,
+        metalness: 0.0,
+        side: THREE.DoubleSide,
+        depthTest: false,
+        depthWrite: false
+      });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(...asset.position);
     mesh.rotation.set(...asset.rotation);
     mesh.renderOrder = 11 + asset.layer * 3;
-    mesh.castShadow = true;
+    mesh.castShadow = !textureQa && !ablationDisableShadows && asset.castShadow !== false;
     mesh.receiveShadow = false;
     mesh.userData = { material, idColor: asset.idColor, asset };
     meshes.push(mesh);
@@ -2015,6 +2915,7 @@ addOccluders();
 
 window.renderPass = (mode) => {
   if (mode === "id") {
+    idRenderer.setClearColor(0x000000, 1);
     scene.background = new THREE.Color(0x000000);
     scene.environment = null;
     table.visible = false;
@@ -2038,6 +2939,7 @@ window.renderPass = (mode) => {
       });
     }
   } else {
+    visualRenderer.setClearColor(sceneConfig.surface.scene, 1);
     scene.background = new THREE.Color(sceneConfig.surface.scene);
     scene.environment = environmentTexture;
     table.visible = true;
@@ -2320,84 +3222,126 @@ function writeDataUrlPng(dataUrl, outPath) {
   fs.writeFileSync(outPath, Buffer.from(dataUrl.slice(prefix.length), "base64"));
 }
 
+async function renderStateWithPage(page, renderState, browserMode) {
+  fs.mkdirSync(renderState.outDir, { recursive: true });
+  await page.setViewport({ width: WIDTH, height: HEIGHT, deviceScaleFactor: 1 });
+  const htmlPath = path.join(renderState.outDir, "smoke.html");
+  fs.writeFileSync(htmlPath, html(renderState));
+  await page.goto(pathToFileURL(htmlPath).href, { waitUntil: "domcontentloaded", timeout: 180000 });
+  await page.waitForFunction("window.__cashsnapReady === true");
+  await page.evaluate(() => window.renderPass("visual"));
+  const visualPngDataUrl = await page.evaluate(() => window.captureVisualPng());
+  writeDataUrlPng(visualPngDataUrl, path.join(renderState.outDir, "visual.png"));
+  const idPngDataUrl = await page.evaluate(() => {
+    window.renderPass("id");
+    return window.captureIdPng();
+  });
+  writeDataUrlPng(idPngDataUrl, path.join(renderState.outDir, "id.png"));
+  const boxes = await page.evaluate(() => window.extractIdBoxes());
+  const layerAudit = await page.evaluate(() => window.auditLayerOrder());
+  if (layerAudit.violations !== 0) {
+    throw new Error(`Layer-order audit failed with ${layerAudit.violations} violating pixels`);
+  }
+  fs.writeFileSync(path.join(renderState.outDir, "visible_boxes.json"), JSON.stringify({ boxes }, null, 2));
+  fs.writeFileSync(path.join(renderState.outDir, "layer_audit.json"), JSON.stringify(layerAudit, null, 2));
+  const labelText = boxes
+    .map((box) => `${box.classIndex} ${box.yolo.map((value) => Number(value).toFixed(6)).join(" ")}`)
+    .join("\n");
+  fs.writeFileSync(
+    path.join(renderState.outDir, "labels_visible.txt"),
+    labelText ? `${labelText}\n` : ""
+  );
+  fs.writeFileSync(
+    path.join(renderState.outDir, "metadata.json"),
+    JSON.stringify({
+      renderer: "three-webgl-edge",
+      browserExecutable: BROWSER_EXECUTABLE,
+      browserMode,
+      variant: renderState.variant,
+      sceneMode: renderState.effectiveSceneMode,
+      width: WIDTH,
+      height: HEIGHT,
+      visualScale: VISUAL_SCALE,
+      minVisiblePixels: MIN_VISIBLE_PIXELS,
+      occluderPolicy: OCCLUDER_POLICY,
+      negativePropPolicy: NEGATIVE_PROP_POLICY,
+      sceneDefaultOccluderCount: renderState.sceneDefaultOccluders.length,
+      sceneConfig: renderState.config,
+      assetSelection: {
+        sidePolicy: ASSET_SIDE_POLICY,
+        stackPosePolicy: STACK_POSE_POLICY,
+        cleanOrientationPolicy: CLEAN_ORIENTATION_POLICY,
+        classSequence: CLASS_SEQUENCE,
+        sideCounts: renderState.assetSideCounts,
+        frontBackMixSatisfied: renderState.frontBackMixSatisfied,
+      },
+      visibilityModel: "explicit-layer-order",
+      noteDepthPolicy: "banknote planes use renderOrder with depthTest/depthWrite disabled to avoid impossible surface interpenetration in visible masks",
+      assets: renderState.textureAssets,
+      occluders: renderState.occluders,
+    }, null, 2)
+  );
+  console.log(`wrote ${renderState.outDir}`);
+}
+
+function batchManifestEntries() {
+  if (!BATCH_MANIFEST) {
+    return [{ variant: VARIANT, outDir: OUT_DIR }];
+  }
+  const payload = JSON.parse(fs.readFileSync(path.resolve(ROOT, BATCH_MANIFEST), "utf-8"));
+  const entries = Array.isArray(payload) ? payload : payload.variants;
+  if (!Array.isArray(entries) || entries.length === 0) {
+    throw new Error("--batch-manifest must contain a non-empty variants array");
+  }
+  return entries.map((entry) => ({
+    variant: Number.parseInt(String(entry.variant), 10),
+    outDir: path.resolve(ROOT, String(entry.outDir)),
+  }));
+}
+
 async function main() {
-  if (!fs.existsSync(BROWSER_EXECUTABLE)) {
+  if (!BROWSER_WS_ENDPOINT && !fs.existsSync(BROWSER_EXECUTABLE)) {
     throw new Error(`Browser executable not found at ${BROWSER_EXECUTABLE}`);
   }
-  fs.mkdirSync(OUT_DIR, { recursive: true });
-  const textureAssets = assets.map((asset) => ({ ...asset, textureUrl: pathToFileURL(asset.path).href }));
-  const browser = await puppeteer.launch({
-    executablePath: BROWSER_EXECUTABLE,
-    headless: "new",
-    args: [
-      "--allow-file-access-from-files",
-      "--disable-background-timer-throttling",
-      "--disable-renderer-backgrounding",
-    ],
-  });
+  const entries = batchManifestEntries();
+  const browser = BROWSER_WS_ENDPOINT
+    ? await puppeteer.connect({ browserWSEndpoint: BROWSER_WS_ENDPOINT })
+    : await puppeteer.launch({
+      executablePath: BROWSER_EXECUTABLE,
+      headless: "new",
+      args: [
+        "--allow-file-access-from-files",
+        "--disable-background-timer-throttling",
+        "--disable-renderer-backgrounding",
+        "--enable-gpu-rasterization",
+        "--ignore-gpu-blocklist",
+        "--use-angle=d3d11",
+      ],
+    });
+  let page = null;
   try {
-    const page = await browser.newPage();
+    page = await browser.newPage();
     page.on("console", (message) => console.log(`[browser:${message.type()}] ${message.text()}`));
     page.on("pageerror", (error) => console.error(`[browser:pageerror] ${error.message}`));
     page.setDefaultTimeout(180000);
     page.setDefaultNavigationTimeout(180000);
-    await page.setViewport({ width: WIDTH, height: HEIGHT, deviceScaleFactor: 1 });
-    const htmlPath = path.join(OUT_DIR, "smoke.html");
-    fs.writeFileSync(htmlPath, html(textureAssets));
-    await page.goto(pathToFileURL(htmlPath).href, { waitUntil: "domcontentloaded", timeout: 180000 });
-    await page.waitForFunction("window.__cashsnapReady === true");
-    await page.evaluate(() => window.renderPass("visual"));
-    const visualPngDataUrl = await page.evaluate(() => window.captureVisualPng());
-    writeDataUrlPng(visualPngDataUrl, path.join(OUT_DIR, "visual.png"));
-    const idPngDataUrl = await page.evaluate(() => {
-      window.renderPass("id");
-      return window.captureIdPng();
-    });
-    writeDataUrlPng(idPngDataUrl, path.join(OUT_DIR, "id.png"));
-    const boxes = await page.evaluate(() => window.extractIdBoxes());
-    const layerAudit = await page.evaluate(() => window.auditLayerOrder());
-    if (layerAudit.violations !== 0) {
-      throw new Error(`Layer-order audit failed with ${layerAudit.violations} violating pixels`);
+    const browserMode = BATCH_MANIFEST
+      ? (BROWSER_WS_ENDPOINT ? "connected_shared_batch" : "launched_batch")
+      : (BROWSER_WS_ENDPOINT ? "connected_shared" : "launched_per_variant");
+    for (const entry of entries) {
+      if (!Number.isInteger(entry.variant)) {
+        throw new Error(`Invalid batch variant: ${JSON.stringify(entry)}`);
+      }
+      const renderState = buildRenderState(entry.variant, entry.outDir);
+      await renderStateWithPage(page, renderState, browserMode);
     }
-    fs.writeFileSync(path.join(OUT_DIR, "visible_boxes.json"), JSON.stringify({ boxes }, null, 2));
-    fs.writeFileSync(path.join(OUT_DIR, "layer_audit.json"), JSON.stringify(layerAudit, null, 2));
-    const labelText = boxes
-      .map((box) => `${box.classIndex} ${box.yolo.map((value) => Number(value).toFixed(6)).join(" ")}`)
-      .join("\n");
-    fs.writeFileSync(
-      path.join(OUT_DIR, "labels_visible.txt"),
-      labelText ? `${labelText}\n` : ""
-    );
-    fs.writeFileSync(
-      path.join(OUT_DIR, "metadata.json"),
-      JSON.stringify({
-        renderer: "three-webgl-edge",
-        browserExecutable: BROWSER_EXECUTABLE,
-        variant: VARIANT,
-        sceneMode: effectiveSceneMode,
-        width: WIDTH,
-        height: HEIGHT,
-        visualScale: VISUAL_SCALE,
-        minVisiblePixels: MIN_VISIBLE_PIXELS,
-        occluderPolicy: OCCLUDER_POLICY,
-        sceneDefaultOccluderCount: sceneDefaultOccluders.length,
-        sceneConfig: config,
-        assetSelection: {
-          sidePolicy: ASSET_SIDE_POLICY,
-          stackPosePolicy: STACK_POSE_POLICY,
-          classSequence: CLASS_SEQUENCE,
-          sideCounts: assetSideCounts,
-          frontBackMixSatisfied,
-        },
-        visibilityModel: "explicit-layer-order",
-        noteDepthPolicy: "banknote planes use renderOrder with depthTest/depthWrite disabled to avoid impossible surface interpenetration in visible masks",
-        assets: textureAssets,
-        occluders,
-      }, null, 2)
-    );
-    console.log(`wrote ${OUT_DIR}`);
   } finally {
-    await browser.close();
+    if (page) await page.close().catch(() => {});
+    if (BROWSER_WS_ENDPOINT) {
+      browser.disconnect();
+    } else {
+      await browser.close();
+    }
   }
 }
 

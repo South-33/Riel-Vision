@@ -568,6 +568,19 @@ Targeted branch status:
   diversified realistic near-negatives; blunt zero-label pressure suppresses
   positives. Next step is synthetic/curated near-negatives that mimic these
   hard real modes without depending on test leakage.
+- `webgl_unknown_currency_fullframe_negative_v1` is now the first synthetic
+  attempt to mimic the mined near-negative failure: one dominant full-frame
+  unknown banknote-like prop plus softer clutter, zero target assets, and a
+  hard-negative diversity gate requiring `fullframe`. The 16-image smoke passes
+  (`47` props, `24` unknown_banknote, `16` fullframe, zero assets). Low WebGL
+  full-frame doses reduce FP extent but do not yet match mined-real pressure:
+  dose-8 self-eval `+0.000505`, bounded `conf=0.01` bg FP `5/50`, FPs `68`,
+  full-frame FPs `22`, but recall `0/130`; dose-4 self-eval `+0.001584`,
+  bounded recall `1/130`, bg FP `8/50`, FPs `65`, full-frame FPs `19`. Read:
+  the synthetic axis has the right geometric target but the prop texture/domain
+  is still too artificial or too suppressive. Keep the policy diagnostic and
+  use mined spread-8 as the teacher for the next full-frame negative realism
+  pass.
 - Earlier non-fallback fixed-step A/B attempts remain incomplete:
   b64/b32/b16/b8 runs hit the 95% RAM guard while RunLong/Codex were resident.
   Also, one failed b64 attempt reused the old leader run name with the
@@ -716,6 +729,10 @@ Current state:
   giant/background FPs while preserving the tiny real-positive signal. Do not
   treat mined real negatives as the final synthetic pipeline; use them to define
   what realistic synthetic/curated near-negatives must reproduce.
+- WebGL full-frame unknown-currency negatives reproduce the big-box geometry
+  pressure but not the mined-real transfer balance yet. Current dose-4/8 probes
+  reduce full-frame FP counts while losing one or both bounded-real true
+  positives. Improve texture/domain realism before scaling this axis.
 
 Next realistic bank should include reviewed foreign/unknown currencies,
 target-lookalike partial notes, receipts, cards, patterned paper, and retail
@@ -1078,6 +1095,13 @@ Key run artifacts:
 - `runs/cashsnap/light_eval_alpha_geoscale205_fpminedreal8spread_b20_s1000_realtest_bal10_bg50_i320_conf01_iou50_v2.json`
 - `runs/cashsnap/background_fp_alpha_geoscale_fpminedreal25_trainval_conf001_v1.json`
 - `runs/cashsnap/background_fp_alpha_geoscale_fpminedreal8spread_trainval_conf001_v1.json`
+- `data/synthetic/cashsnap_webgl_unknown_currency_fullframe_negative_probe_v1/`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_alpha_contact_geoscale205_minshort190_webglfullframe4_bal20_probe_puresynth_realval_v1.yaml`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_alpha_contact_geoscale205_minshort190_webglfullframe8_bal20_probe_puresynth_realval_v1.yaml`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_alpha_geoscale205_webglfullframe4_b20_b1_s1000_i320_v1_summary.json`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_alpha_geoscale205_webglfullframe8_b20_b1_s1000_i320_v1_summary.json`
+- `runs/cashsnap/light_eval_alpha_geoscale205_webglfullframe4_b20_s1000_realtest_bal10_bg50_i320_conf01_iou50_v2.json`
+- `runs/cashsnap/light_eval_alpha_geoscale205_webglfullframe8_b20_s1000_realtest_bal10_bg50_i320_conf01_iou50_v2.json`
 - `runs/cashsnap/dataset_check_rep_gap_detectorerasectx_v1.json`
 - `runs/cashsnap/unlabeled_prediction_audit_rep_gap_detectorerasectx_strictcov50_v1.json`
 - `runs/cashsnap/visual_qa_rep_gap_detectorerasectx_v1/per_class_sheet.jpg`
@@ -1138,6 +1162,9 @@ Script notes:
 - `build_fp_mined_negative_dose_config.py` accepts directory train splits as
   well as `.txt` lists and supports `--selection top|spread|random` for
   negative-dose shape probes.
+- WebGL `--negative-prop-policy unknown_currency_fullframe_v1` is diagnostic
+  only: it creates dominant zero-label unknown-banknote props for full-frame FP
+  pressure and is registered as `webgl_unknown_currency_fullframe_negative_v1`.
 - `build_cashsnap_target_anchor_transplant.py` accepts
   `--geometry-manifest` with `--geometry-manifest-mode prefer|only`; `prefer`
   uses train-anchor geometry where present and falls back per missing class.
