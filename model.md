@@ -344,6 +344,22 @@ Targeted branch status:
   MMD/centroids improve further and `layer19` domain accuracy reaches `0.846`,
   but edge boundary ratio rises (`1.6120`) and `layer22` domain accuracy worsens
   to `0.9077`. Keep as a diagnostic knob, not a promotion path.
+- Dynamic source-context branch:
+  `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_dyninpaint_v1/`.
+  It uses the real train anchor image itself, couples source geometry, and
+  inpaints only under the warped synthetic note. This gives the strongest
+  representation signal so far (`layer22 0.938 -> 0.731`, MMD `0.0992 -> 0.0241`)
+  and better edge stats (`boundary=1.2876`, `color_step=0.0680`), but visual QA
+  shows unlabeled real-note remnants/extra notes. Treat it as mechanism proof,
+  not training data.
+- Source-box/singlebox variant:
+  `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_v1/`.
+  It also inpaints the sampled source YOLO box and filters manifest backgrounds
+  to `<=1` source label. The filter kept all `151` anchors, meaning source
+  labels do not expose all visually present currency. Visual leakage is reduced
+  but inpaint bands remain. Representation is still strong (`layer22=0.7769`,
+  `layer0=0.6538`), so source-context replacement is now the best mechanism
+  direction, with label-safety/erase quality as the blocker.
 - Fixed-step model A/B is not completed. b64/b32/b16/b8 attempts hit the 95%
   RAM guard while RunLong/Codex were resident. Also, one failed b64 attempt
   reused the old leader run name with the wrapper's real-clean default before
@@ -515,6 +531,8 @@ Key configs:
 - `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_inpaintctx_puresynth_realval_v1.yaml`
 - `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_couplectx_puresynth_realval_v1.yaml`
 - `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_couplectx_feather08_puresynth_realval_v1.yaml`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_dyninpaint_puresynth_realval_v1.yaml`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_puresynth_realval_v1.yaml`
 - `configs/synthetic_recipes/cashsnap_external_negative_banks_v1.json`
 - `configs/synthetic_recipes/cashsnap_webgl_recipe_catalog_v1.json`
 - `configs/synthetic_recipes/cashsnap_synthetic_governance_v1.json`
@@ -531,6 +549,8 @@ Key roots:
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_inpaintctx_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_couplectx_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_couplectx_feather08_v1/`
+- `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_dyninpaint_v1/`
+- `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_v1/`
 - `data/synthetic/cashsnap_webgl_unknown_currency_soft_negative_smoke_v1/`
 - `data/processed/roboflow_khmer_us_currency_core13_bridge_v1/`
 - `data/processed/roboflow_khmer_us_currency_official21_partial_bridge_v1/`
@@ -604,6 +624,14 @@ Key run artifacts:
 - `runs/cashsnap/visual_qa_rep_gap_couplectx_feather08_v1/`
 - `runs/cashsnap/composite_edge_audit_rep_gap_couplectx_feather08_v1.json`
 - `runs/cashsnap/representation_gap_synthleader_rep_gap_couplectx_feather08_test_v1/summary.json`
+- `runs/cashsnap/dataset_check_rep_gap_sourcectx_dyninpaint_v1.json`
+- `runs/cashsnap/visual_qa_rep_gap_sourcectx_dyninpaint_v1/`
+- `runs/cashsnap/composite_edge_audit_rep_gap_sourcectx_dyninpaint_v1.json`
+- `runs/cashsnap/representation_gap_synthleader_rep_gap_sourcectx_dyninpaint_test_v1/summary.json`
+- `runs/cashsnap/dataset_check_rep_gap_sourcectx_singlebox_v1.json`
+- `runs/cashsnap/visual_qa_rep_gap_sourcectx_singlebox_v1/`
+- `runs/cashsnap/composite_edge_audit_rep_gap_sourcectx_singlebox_v1.json`
+- `runs/cashsnap/representation_gap_synthleader_rep_gap_sourcectx_singlebox_test_v1/summary.json`
 - `runs/cashsnap/fixed_step_target_anchor_latest_vs_rep_gap_inpaintctx_b8_s150_ctxprobe_v1_preflight.json`
 - `runs/cashsnap/system_profile_after_inpaintctx_b32_guard.json`
 - `runs/cashsnap/system_profile_after_b8_inpaintctx_guard_v1.json`
@@ -646,6 +674,11 @@ Script notes:
   `--couple-background-geometry`, `--geometry-size-jitter`,
   `--position-jitter-fraction`, and `--warp-alpha-feather-px` for train-anchor
   inpaint/context diagnostics.
+- `build_cashsnap_target_anchor_transplant.py` can use train-positive source
+  images via `--background-manifest`, dynamic erase via
+  `--inpaint-under-foreground-px`, and source-box erase via
+  `--inpaint-source-box-pad-fraction`; these modes are mechanism probes until
+  visual label-safety is proven.
 - `build_yolo_inpainted_background_bank.py` creates train-only empty-label
   inpainted canvases from labeled YOLO images; use `--max-mask-fraction` to
   reject full-frame erasures that make obvious scars.
@@ -700,8 +733,10 @@ rl python scripts\build_yolo_inpainted_background_bank.py --manifest runs\cashsn
 rl python scripts\materialize_yolo_trainonly_data_yaml.py --data configs\webgl_ablation\cashsnap_target_anchor_transplant_rep_gap_inpaintctx_puresynth_realval_v1.yaml --out .cache_runtime\ultralytics_data\cashsnap_target_anchor_transplant_rep_gap_inpaintctx_trainonly_ctxprobe_v1.yaml
 rl python scripts\build_cashsnap_target_anchor_transplant.py --background-root data\backgrounds\cashsnap_rep_gap_train_anchor_inpainted_filtered_v1 --background-split train --geometry-manifest runs\cashsnap\representation_gap_synthleader_train_analogs_v1\train_anchor_manifest.jsonl --geometry-manifest-mode prefer --foreground-style-policy real_crop_stats --composite-policy poisson_mixed --shadow-policy contact --pose-policy aabb_aspect_repair --box-scale-jitter 0.12 --min-class-geometry-samples 1 --per-class 20 --seed 29 --out-root data\synthetic\cashsnap_target_anchor_transplant_rep_gap_inpaintctx_v1 --out-config configs\webgl_ablation\cashsnap_target_anchor_transplant_rep_gap_inpaintctx_puresynth_realval_v1.yaml --preview-count 30 --clean
 rl python scripts\build_cashsnap_target_anchor_transplant.py --background-root data\backgrounds\cashsnap_rep_gap_train_anchor_inpainted_filtered_v1 --background-split train --geometry-manifest runs\cashsnap\representation_gap_synthleader_train_analogs_v1\train_anchor_manifest.jsonl --geometry-manifest-mode prefer --foreground-style-policy real_crop_stats --composite-policy poisson_mixed --shadow-policy contact --pose-policy aabb_aspect_repair --box-scale 1.06 --box-scale-jitter 0.04 --geometry-size-jitter 0.05 --position-jitter-fraction 0.012 --couple-background-geometry --min-class-geometry-samples 1 --per-class 20 --seed 31 --out-root data\synthetic\cashsnap_target_anchor_transplant_rep_gap_couplectx_v1 --out-config configs\webgl_ablation\cashsnap_target_anchor_transplant_rep_gap_couplectx_puresynth_realval_v1.yaml --preview-count 30 --clean
+rl python scripts\build_cashsnap_target_anchor_transplant.py --background-manifest runs\cashsnap\representation_gap_synthleader_train_analogs_v1\train_anchor_manifest.jsonl --background-max-source-boxes 1 --geometry-manifest runs\cashsnap\representation_gap_synthleader_train_analogs_v1\train_anchor_manifest.jsonl --geometry-manifest-mode prefer --foreground-style-policy real_crop_stats --composite-policy poisson_mixed --shadow-policy contact --pose-policy aabb_aspect_repair --box-scale 1.10 --box-scale-jitter 0.03 --geometry-size-jitter 0.04 --position-jitter-fraction 0.006 --inpaint-under-foreground-px 8 --inpaint-under-foreground-radius 5 --inpaint-source-box-pad-fraction 0.02 --couple-background-geometry --min-class-geometry-samples 1 --per-class 20 --seed 53 --out-root data\synthetic\cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_v1 --out-config configs\webgl_ablation\cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_puresynth_realval_v1.yaml --preview-count 30 --clean
 rl python scripts\probe_yolo_representation_domain_gap.py --model runs\cashsnap\fixed_step_target_anchor_transplant_latest_v1_from_clean_e50_i416_b64_w0_auto_lr1e2_warmup3_amp_cachefalse_steps150_seed0\weights\best.pt --real-data data\cashsnap_v1\data.yaml --real-split test --synthetic-data configs\webgl_ablation\cashsnap_target_anchor_transplant_rep_gap_inpaintctx_puresynth_realval_v1.yaml --synthetic-split train --out-dir runs\cashsnap\representation_gap_synthleader_rep_gap_inpaintctx_test_v1 --imgsz 416 --batch 8 --device 0 --max-per-class 10 --top-k 40 --clean
 rl python scripts\probe_yolo_representation_domain_gap.py --model runs\cashsnap\fixed_step_target_anchor_transplant_latest_v1_from_clean_e50_i416_b64_w0_auto_lr1e2_warmup3_amp_cachefalse_steps150_seed0\weights\best.pt --real-data data\cashsnap_v1\data.yaml --real-split test --synthetic-data configs\webgl_ablation\cashsnap_target_anchor_transplant_rep_gap_couplectx_puresynth_realval_v1.yaml --synthetic-split train --out-dir runs\cashsnap\representation_gap_synthleader_rep_gap_couplectx_test_v1 --imgsz 416 --batch 8 --device 0 --max-per-class 10 --top-k 40 --clean
+rl python scripts\probe_yolo_representation_domain_gap.py --model runs\cashsnap\fixed_step_target_anchor_transplant_latest_v1_from_clean_e50_i416_b64_w0_auto_lr1e2_warmup3_amp_cachefalse_steps150_seed0\weights\best.pt --real-data data\cashsnap_v1\data.yaml --real-split test --synthetic-data configs\webgl_ablation\cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_puresynth_realval_v1.yaml --synthetic-split train --out-dir runs\cashsnap\representation_gap_synthleader_rep_gap_sourcectx_singlebox_test_v1 --imgsz 416 --batch 8 --device 0 --max-per-class 10 --top-k 40 --clean
 rl python scripts\build_synthetic_obligation_ledger.py --no-default-evidence --positive-error-review runs\cashsnap\positive_error_review_synthleader_real_test_v1\summary.json --background-fp runs\cashsnap\background_fp_synthleader_real_test_v1.json --visual-failure "representation_gap|real_test|Current synthetic leader remains highly domain-separable after class balancing." --json-out runs\cashsnap\synthetic_obligation_ledger_synthleader_rep_gap_v1.json --md-out runs\cashsnap\synthetic_obligation_ledger_synthleader_rep_gap_v1.md
 rl python scripts\run_yolo_fixed_step_probe.py --help
 rl python scripts\check_yolo_transfer_guardrails.py --help

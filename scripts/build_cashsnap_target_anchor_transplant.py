@@ -197,6 +197,68 @@ def load_background_manifest_sources(background_root: Path) -> dict[Path, Path]:
     return sources
 
 
+def load_manifest_images(manifest_path: Path) -> list[Path]:
+    if not manifest_path.exists():
+        raise SystemExit(f"Missing background manifest: {repo_rel(manifest_path)}")
+    images: list[Path] = []
+    if manifest_path.suffix.lower() == ".jsonl":
+        for line_no, raw_line in enumerate(manifest_path.read_text(encoding="utf-8").splitlines(), start=1):
+            line = raw_line.strip()
+            if not line:
+                continue
+            payload = json.loads(line)
+            image = payload.get("image")
+            if not image:
+                raise SystemExit(f"{repo_rel(manifest_path)}:{line_no} missing image field")
+            images.append(repo_path(image))
+    elif manifest_path.suffix.lower() == ".csv":
+        with manifest_path.open("r", newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            if "image" not in (reader.fieldnames or []):
+                raise SystemExit(f"{repo_rel(manifest_path)} must include an image column")
+            for row in reader:
+                if row.get("image"):
+                    images.append(repo_path(row["image"]))
+    else:
+        for raw_line in manifest_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if line and not line.startswith("#"):
+                images.append(repo_path(line))
+
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for image in images:
+        resolved = image.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        unique.append(image)
+    if not unique:
+        raise SystemExit(f"Background manifest selected no images: {repo_rel(manifest_path)}")
+    return unique
+
+
+def load_manifest_backgrounds(manifest_path: Path, cashsnap_root: Path, max_source_boxes: int) -> list[Background]:
+    backgrounds: list[Background] = []
+    for image_path in load_manifest_images(manifest_path):
+        if image_path.suffix.lower() not in IMAGE_EXTS:
+            continue
+        label_path = label_path_for_image(image_path, cashsnap_root)
+        if max_source_boxes > 0 and len(label_rows(label_path)) > max_source_boxes:
+            continue
+        backgrounds.append(
+            Background(
+                image_path=image_path,
+                label_path=label_path,
+                source="train_anchor_positive",
+                source_image_path=image_path.resolve(),
+            )
+        )
+    if not backgrounds:
+        raise SystemExit(f"No image backgrounds found in {repo_rel(manifest_path)}")
+    return backgrounds
+
+
 def load_patch_backgrounds(background_root: Path, split: str) -> list[Background]:
     backgrounds: list[Background] = []
     source_by_image = load_background_manifest_sources(background_root)
@@ -726,6 +788,32 @@ def feather_warped_alpha(layer_rgba: np.ndarray, radius: float) -> np.ndarray:
     return out
 
 
+def inpaint_under_foreground(
+    base_rgb: np.ndarray,
+    alpha: np.ndarray,
+    dilate_px: int,
+    radius: float,
+    source_box_xyxy: tuple[int, int, int, int] | None = None,
+) -> np.ndarray:
+    if dilate_px <= 0 and source_box_xyxy is None:
+        return base_rgb
+    mask = np.zeros(alpha.shape, dtype=np.uint8)
+    if dilate_px > 0:
+        mask[alpha > 18] = 255
+    if source_box_xyxy is not None:
+        x1, y1, x2, y2 = source_box_xyxy
+        mask[y1:y2, x1:x2] = 255
+    if not mask.any():
+        return base_rgb
+    if dilate_px > 0:
+        kernel_size = dilate_px * 2 + 1
+        kernel = np.ones((kernel_size, kernel_size), np.uint8)
+        mask = cv2.dilate(mask, kernel, iterations=1)
+    base_bgr = cv2.cvtColor(base_rgb, cv2.COLOR_RGB2BGR)
+    inpainted = cv2.inpaint(base_bgr, mask, radius, cv2.INPAINT_TELEA)
+    return cv2.cvtColor(inpainted, cv2.COLOR_BGR2RGB)
+
+
 def alpha_composite(base_rgb: np.ndarray, layer_rgba: np.ndarray) -> np.ndarray:
     alpha = layer_rgba[:, :, 3:4].astype(np.float32) / 255.0
     out = layer_rgba[:, :, :3].astype(np.float32) * alpha + base_rgb.astype(np.float32) * (1.0 - alpha)
@@ -885,6 +973,9 @@ def render_one(
     geometry_size_jitter: float,
     position_jitter_fraction: float,
     warp_alpha_feather_px: float,
+    inpaint_under_foreground_px: int,
+    inpaint_under_foreground_radius: float,
+    inpaint_source_box_pad_fraction: float | None,
     couple_background_geometry: bool,
     pose_policy: str,
     min_render_short_px: float,
@@ -952,6 +1043,15 @@ def render_one(
     if alpha.max() <= 16:
         return None
     base_arr = np.asarray(base).copy()
+    base_arr = inpaint_under_foreground(
+        base_arr,
+        alpha,
+        inpaint_under_foreground_px,
+        inpaint_under_foreground_radius,
+        sample_xyxy(sample, (width, height), pad_fraction=inpaint_source_box_pad_fraction)
+        if inpaint_source_box_pad_fraction is not None
+        else None,
+    )
     shadow = make_contact_shadow(alpha, rng) if shadow_policy == "contact" else make_shadow(alpha, rng)
     base_arr = alpha_composite(base_arr, shadow)
     if composite_policy == "alpha":
@@ -1004,6 +1104,13 @@ def render_one(
         "geometry_size_jitter": round(float(geometry_size_jitter), 4),
         "position_jitter_fraction": round(float(position_jitter_fraction), 4),
         "warp_alpha_feather_px": round(float(warp_alpha_feather_px), 4),
+        "inpaint_under_foreground_px": int(inpaint_under_foreground_px),
+        "inpaint_under_foreground_radius": round(float(inpaint_under_foreground_radius), 4),
+        "inpaint_source_box_pad_fraction": (
+            round(float(inpaint_source_box_pad_fraction), 4)
+            if inpaint_source_box_pad_fraction is not None
+            else None
+        ),
         "pose_policy": pose_policy,
         "min_render_short_px": round(float(min_render_short_px), 3),
         "min_render_width_px": round(float(min_render_width_px), 3),
@@ -1098,6 +1205,17 @@ def parse_args() -> argparse.Namespace:
         default="data/backgrounds/cashsnap_v1_no_note_patches_strict_v1",
         help="No-note background patch directory. Empty string uses empty-label CashSnap train frames.",
     )
+    parser.add_argument(
+        "--background-manifest",
+        default="",
+        help="Optional manifest/list of train-positive source images to use as backgrounds.",
+    )
+    parser.add_argument(
+        "--background-max-source-boxes",
+        type=int,
+        default=0,
+        help="When using --background-manifest, keep only images with at most this many YOLO boxes; 0 disables.",
+    )
     parser.add_argument("--background-split", default="train", help="Patch filename split suffix to use.")
     parser.add_argument(
         "--canvas-size",
@@ -1172,6 +1290,24 @@ def parse_args() -> argparse.Namespace:
         help="Gaussian blur radius applied to the warped foreground alpha before compositing.",
     )
     parser.add_argument(
+        "--inpaint-under-foreground-px",
+        type=int,
+        default=0,
+        help="Dilate the warped note alpha by this many pixels and inpaint underneath before compositing.",
+    )
+    parser.add_argument(
+        "--inpaint-under-foreground-radius",
+        type=float,
+        default=5.0,
+        help="OpenCV inpaint radius for --inpaint-under-foreground-px.",
+    )
+    parser.add_argument(
+        "--inpaint-source-box-pad-fraction",
+        type=float,
+        default=None,
+        help="Also inpaint the sampled source YOLO AABB, optionally padded by this fraction.",
+    )
+    parser.add_argument(
         "--couple-background-geometry",
         action="store_true",
         help="Prefer geometry from each background manifest's source image when available.",
@@ -1224,11 +1360,14 @@ def main() -> None:
     rng = random.Random(args.seed)
     cashsnap_root = repo_path(args.cashsnap_root)
     background_root = repo_path(args.background_root) if args.background_root else None
+    background_manifest = repo_path(args.background_manifest) if args.background_manifest.strip() else None
     manifest_path = repo_path(args.asset_manifest)
     out_root = repo_path(args.out_root)
     out_config = repo_path(args.out_config)
     if args.per_class <= 0:
         raise SystemExit("--per-class must be > 0")
+    if args.background_max_source_boxes < 0:
+        raise SystemExit("--background-max-source-boxes must be >= 0")
     if args.clean:
         safe_clean(out_root)
     (out_root / "images" / "train").mkdir(parents=True, exist_ok=True)
@@ -1244,11 +1383,12 @@ def main() -> None:
         geometry_manifest_path,
         args.geometry_manifest_mode,
     )
-    backgrounds = (
-        load_patch_backgrounds(background_root, args.background_split)
-        if background_root is not None
-        else cashsnap_empty_backgrounds
-    )
+    if background_manifest is not None:
+        backgrounds = load_manifest_backgrounds(background_manifest, cashsnap_root, args.background_max_source_boxes)
+    elif background_root is not None:
+        backgrounds = load_patch_backgrounds(background_root, args.background_split)
+    else:
+        backgrounds = cashsnap_empty_backgrounds
     assets_by_class = load_assets(manifest_path, status, sides, args.asset_quality_policy)
     if args.min_class_geometry_samples < 1:
         raise SystemExit("--min-class-geometry-samples must be > 0")
@@ -1264,6 +1404,12 @@ def main() -> None:
         raise SystemExit("--position-jitter-fraction must be >= 0 and < 0.5")
     if args.warp_alpha_feather_px < 0:
         raise SystemExit("--warp-alpha-feather-px must be >= 0")
+    if args.inpaint_under_foreground_px < 0:
+        raise SystemExit("--inpaint-under-foreground-px must be >= 0")
+    if args.inpaint_under_foreground_radius <= 0:
+        raise SystemExit("--inpaint-under-foreground-radius must be > 0")
+    if args.inpaint_source_box_pad_fraction is not None and args.inpaint_source_box_pad_fraction < 0:
+        raise SystemExit("--inpaint-source-box-pad-fraction must be >= 0")
     if args.min_render_short_px < 0:
         raise SystemExit("--min-render-short-px must be >= 0")
     if args.min_render_width_px < 0 or args.min_render_height_px < 0 or args.min_render_area_px < 0:
@@ -1324,6 +1470,9 @@ def main() -> None:
             args.geometry_size_jitter,
             args.position_jitter_fraction,
             args.warp_alpha_feather_px,
+            args.inpaint_under_foreground_px,
+            args.inpaint_under_foreground_radius,
+            args.inpaint_source_box_pad_fraction,
             args.couple_background_geometry,
             args.pose_policy,
             args.min_render_short_px,
@@ -1365,8 +1514,21 @@ def main() -> None:
         "images": len(records),
         "class_counts": dict(sorted(class_counts.items())),
         "background_source_images": len(backgrounds),
-        "background_root": repo_rel(background_root) if background_root is not None else repo_rel(cashsnap_root),
-        "background_split": args.background_split if background_root is not None else "cashsnap_empty_train",
+        "background_max_source_boxes": args.background_max_source_boxes,
+        "background_root": (
+            repo_rel(background_manifest)
+            if background_manifest is not None
+            else repo_rel(background_root)
+            if background_root is not None
+            else repo_rel(cashsnap_root)
+        ),
+        "background_split": (
+            "manifest_train_anchor_positive"
+            if background_manifest is not None
+            else args.background_split
+            if background_root is not None
+            else "cashsnap_empty_train"
+        ),
         "canvas_size": list(canvas_size) if canvas_size is not None else None,
         "unique_backgrounds_used": len(background_counts),
         "real_geometry_samples_by_class": {
@@ -1386,6 +1548,9 @@ def main() -> None:
         "geometry_size_jitter": args.geometry_size_jitter,
         "position_jitter_fraction": args.position_jitter_fraction,
         "warp_alpha_feather_px": args.warp_alpha_feather_px,
+        "inpaint_under_foreground_px": args.inpaint_under_foreground_px,
+        "inpaint_under_foreground_radius": args.inpaint_under_foreground_radius,
+        "inpaint_source_box_pad_fraction": args.inpaint_source_box_pad_fraction,
         "couple_background_geometry": args.couple_background_geometry,
         "background_source_classes": {
             class_name: len(backgrounds_by_class.get(class_name, [])) for class_name in CLASS_NAMES
