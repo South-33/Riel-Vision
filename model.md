@@ -422,6 +422,11 @@ Targeted branch status:
   composite audit (`23/260` suspect images, `32` unmatched predictions). Read:
   source-level filtering helps explain the leak but does not replace final
   composite filtering; source context can become unsafe after placement/overlap.
+- Larger source-box erase padding is rejected. `sourcectx_pad20_v1` changes
+  `inpaint_source_box_pad_fraction` from `0.02` to `0.20`, passes dataset
+  checks, but strict composite audit worsens to `53/260` suspect images and
+  `73` unmatched predictions. Read: broad rectangular erase creates stronger
+  artifacts/leak signatures; do not pursue padding alone as the fix.
 - Model-side status: real-transfer proof is still blocked by RAM headroom, not
   by data wiring. Full latest-baseline `416/b2` train-only probe failed at the
   RAM guard while scanning/training the `1,248` row baseline. A row-matched
@@ -648,6 +653,7 @@ Key configs:
 - `configs/generated_lists/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen60_strictclean_balanced20_v1_train.txt`
 - `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_detectorerasectx_puresynth_realval_v1.yaml`
 - `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_sourceclean_puresynth_realval_v1.yaml`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_pad20_puresynth_realval_v1.yaml`
 - `configs/synthetic_recipes/cashsnap_external_negative_banks_v1.json`
 - `configs/synthetic_recipes/cashsnap_webgl_recipe_catalog_v1.json`
 - `configs/synthetic_recipes/cashsnap_synthetic_governance_v1.json`
@@ -671,6 +677,7 @@ Key roots:
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen60_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_detectorerasectx_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_sourceclean_v1/`
+- `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_pad20_v1/`
 - `data/synthetic/cashsnap_webgl_unknown_currency_soft_negative_smoke_v1/`
 - `data/processed/roboflow_khmer_us_currency_core13_bridge_v1/`
 - `data/processed/roboflow_khmer_us_currency_official21_partial_bridge_v1/`
@@ -797,6 +804,9 @@ Key run artifacts:
 - `runs/cashsnap/dataset_check_rep_gap_sourcectx_sourceclean_v1.json`
 - `runs/cashsnap/unlabeled_prediction_audit_rep_gap_sourcectx_sourceclean_strictcov50_v1.json`
 - `runs/cashsnap/visual_qa_rep_gap_sourcectx_sourceclean_v1/per_class_sheet.jpg`
+- `runs/cashsnap/dataset_check_rep_gap_sourcectx_pad20_v1.json`
+- `runs/cashsnap/unlabeled_prediction_audit_rep_gap_sourcectx_pad20_strictcov50_v1.json`
+- `runs/cashsnap/visual_qa_rep_gap_sourcectx_pad20_v1/per_class_sheet.jpg`
 - `runs/cashsnap/fixed_step_target_anchor_latest_vs_rep_gap_inpaintctx_b8_s150_ctxprobe_v1_preflight.json`
 - `runs/cashsnap/system_profile_after_inpaintctx_b32_guard.json`
 - `runs/cashsnap/system_profile_after_b8_inpaintctx_guard_v1.json`
