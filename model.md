@@ -581,6 +581,14 @@ Targeted branch status:
   is still too artificial or too suppressive. Keep the policy diagnostic and
   use mined spread-8 as the teacher for the next full-frame negative realism
   pass.
+- Negative FP visual-gap audit now quantifies that mismatch:
+  `runs/cashsnap/negative_fp_visual_gap_alpha_geoscale_mined_vs_webglfullframe_v1.json`
+  compares `40` mined alpha/geoscale real FP review crops with `16` WebGL
+  full-frame negatives. Synthetic-minus-real crop deltas are luma mean `+0.303`,
+  luma p05 `+0.318`, luma p95 `+0.510`, saturation std `-0.272`, and box area
+  `+0.174`. Read: the current synthetic full-frame negatives are tabletop-bright
+  and low color-variation against the mined teacher; fix exposure/color/texture
+  before another dose sweep.
 - Earlier non-fallback fixed-step A/B attempts remain incomplete:
   b64/b32/b16/b8 runs hit the 95% RAM guard while RunLong/Codex were resident.
   Also, one failed b64 attempt reused the old leader run name with the
@@ -732,7 +740,9 @@ Current state:
 - WebGL full-frame unknown-currency negatives reproduce the big-box geometry
   pressure but not the mined-real transfer balance yet. Current dose-4/8 probes
   reduce full-frame FP counts while losing one or both bounded-real true
-  positives. Improve texture/domain realism before scaling this axis.
+  positives. Negative visual-gap audit says the synthetic root is far brighter
+  and less color-varied than mined real FPs, so improve exposure/color/texture
+  before scaling this axis.
 
 Next realistic bank should include reviewed foreign/unknown currencies,
 target-lookalike partial notes, receipts, cards, patterned paper, and retail
@@ -1165,6 +1175,9 @@ Script notes:
 - WebGL `--negative-prop-policy unknown_currency_fullframe_v1` is diagnostic
   only: it creates dominant zero-label unknown-banknote props for full-frame FP
   pressure and is registered as `webgl_unknown_currency_fullframe_negative_v1`.
+- `audit_negative_fp_visual_gap.py` compares mined real background-FP review
+  manifests with synthetic negative roots using image/crop visual stats; use it
+  before spending GPU on a new zero-label negative recipe.
 - `build_cashsnap_target_anchor_transplant.py` accepts
   `--geometry-manifest` with `--geometry-manifest-mode prefer|only`; `prefer`
   uses train-anchor geometry where present and falls back per missing class.
