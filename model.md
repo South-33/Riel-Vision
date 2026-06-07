@@ -634,6 +634,24 @@ Targeted branch status:
   with dark negatives yet. The next path is a calibrated style ladder,
   augmentation schedule, or loss/sampling curriculum that proves self-eval
   preservation before bounded real transfer.
+- The first calibrated style/curriculum pass keeps that rejection intact. A
+  label-preserving style ladder shows the support crops moving monotonically
+  darker than real train crops: mild support luma mean `-0.116`, medium
+  `-0.192`, strong `-0.270` vs sampled real train; saturation mean moves from
+  `-0.000` to `+0.043` to `+0.184`. Mild is the only rung worth model probing,
+  but it still fails self-eval (`0.004603`, delta `-0.002764`, worst
+  `KHR_5000 -0.014811`). Do not model-probe medium/strong style rows unless a
+  better support selection or gentler transform is designed.
+- Candidate-only training augmentation is a better-shaped knob than row-level
+  dark support, but not a promotion yet. `hsv_v=0.7` on target-anchor latest
+  balanced20 preserves fixed-step self-eval (`0.007401` vs `0.007368`, delta
+  `+0.000033`, worst `KHR_5000 -0.010736`) while `hsv_v=0.55` fails
+  (`0.006194`, delta `-0.001174`, worst `KHR_5000 -0.011108`). Bounded real
+  says `hsv_v=0.7` is only a noisy clue: at `conf=0.01` it raises recall from
+  `0/130` to `2/130` but worsens background-FP images from `7/50` to `11/50`;
+  at `conf=0.001` it drops recall from `100/130` to `94/130` with the same
+  `50/50` background flood. Next curriculum work needs FP-aware tuning or
+  seed-repeat proof, not a direct `hsv_v=0.7` promotion.
 - Earlier non-fallback fixed-step A/B attempts remain incomplete:
   b64/b32/b16/b8 runs hit the 95% RAM guard while RunLong/Codex were resident.
   Also, one failed b64 attempt reused the old leader run name with the
@@ -805,6 +823,12 @@ Current state:
   mild-to-strong style ladder and/or training augmentation/curriculum gate that
   preserves the alpha/geoscale self-eval first, with `KHR_5000` watched as the
   recurring worst-class canary.
+- The first style ladder confirms the row-bank lesson: even mild dark-style
+  positive copies fail self-eval. Candidate-only `hsv_v=0.7` passes self-eval
+  and gets two low-confidence bounded-real TPs at `conf=0.01`, but it worsens
+  background FPs and loses recall at `conf=0.001`. Treat augmentation as the
+  next controllable curriculum axis, but require FP-aware bounded-real and
+  seed-repeat proof before it changes the trainable recipe.
 
 Next realistic bank should include reviewed foreign/unknown currencies,
 target-lookalike partial notes, receipts, cards, patterned paper, and retail
@@ -1196,6 +1220,20 @@ Key run artifacts:
 - `data/synthetic/cashsnap_target_anchor_alpha_contact_geoscale205_minshort190_darkstyle_pos1_v1/`
 - `configs/webgl_ablation/cashsnap_target_anchor_transplant_alpha_contact_geoscale205_minshort190_darkstylepos1_bal20_probe_puresynth_realval_v1.yaml`
 - `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_alpha_geoscale205_darkstylepos1_b20_b1_s1000_i320_v1_summary.json`
+- `data/synthetic/cashsnap_target_anchor_alpha_contact_geoscale205_minshort190_darkstyle_mild_pos1_v1/`
+- `data/synthetic/cashsnap_target_anchor_alpha_contact_geoscale205_minshort190_darkstyle_medium_pos1_v1/`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_alpha_contact_geoscale205_minshort190_darkstylemildpos1_bal20_probe_puresynth_realval_v1.yaml`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_alpha_contact_geoscale205_minshort190_darkstylemediumpos1_bal20_probe_puresynth_realval_v1.yaml`
+- `runs/cashsnap/style_ladder_visual_gap_mild_support13_vs_realtrain260_v1.json`
+- `runs/cashsnap/style_ladder_visual_gap_medium_support13_vs_realtrain260_v1.json`
+- `runs/cashsnap/style_ladder_visual_gap_strong_support13_vs_realtrain260_v1.json`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_alpha_geoscale205_darkstylemildpos1_b20_b1_s1000_i320_v1_summary.json`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_hsvv055_b20_b1_s1000_i320_v1_summary.json`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_hsvv07_b20_b1_s1000_i320_v1_summary.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_s1000_realtest_bal10_bg50_i320_conf01_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_hsvv07_s1000_realtest_bal10_bg50_i320_conf005_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_hsvv07_s1000_realtest_bal10_bg50_i320_conf01_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_hsvv07_s1000_realtest_bal10_bg50_i320_conf001_iou50_v1.json`
 - `runs/cashsnap/dataset_check_rep_gap_detectorerasectx_v1.json`
 - `runs/cashsnap/unlabeled_prediction_audit_rep_gap_detectorerasectx_strictcov50_v1.json`
 - `runs/cashsnap/visual_qa_rep_gap_detectorerasectx_v1/per_class_sheet.jpg`

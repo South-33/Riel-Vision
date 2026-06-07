@@ -27,6 +27,32 @@ DEFAULT_BASE = (
     / "webgl_ablation"
     / "cashsnap_target_anchor_transplant_alpha_contact_geoscale205_minshort190_bal20_probe_puresynth_realval_v1.yaml"
 )
+STYLE_RANGES = {
+    "mined_fp_dark_mild_v1": {
+        "brightness": (0.82, 0.95),
+        "contrast": (1.02, 1.18),
+        "saturation": (1.00, 1.22),
+        "vignette": (0.04, 0.12),
+        "grain_sigma": (0.2, 1.2),
+        "gamma": (0.98, 1.04),
+    },
+    "mined_fp_dark_medium_v1": {
+        "brightness": (0.68, 0.84),
+        "contrast": (1.10, 1.35),
+        "saturation": (1.05, 1.50),
+        "vignette": (0.10, 0.24),
+        "grain_sigma": (0.8, 3.0),
+        "gamma": (0.96, 1.06),
+    },
+    "mined_fp_dark_v1": {
+        "brightness": (0.50, 0.72),
+        "contrast": (1.32, 1.92),
+        "saturation": (1.30, 2.35),
+        "vignette": (0.24, 0.46),
+        "grain_sigma": (2.0, 6.5),
+        "gamma": (0.92, 1.08),
+    },
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -36,7 +62,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rows-per-class", type=int, default=1)
     parser.add_argument("--selection", choices=("spread", "random"), default="spread")
     parser.add_argument("--seed", type=int, default=20260618)
-    parser.add_argument("--style", choices=("mined_fp_dark_v1",), default="mined_fp_dark_v1")
+    parser.add_argument("--style", choices=tuple(STYLE_RANGES), default="mined_fp_dark_v1")
     parser.add_argument("--out-root", type=Path, required=True)
     parser.add_argument("--out-config", type=Path, required=True)
     parser.add_argument("--out-list", type=Path, required=True)
@@ -210,15 +236,12 @@ def safe_stem(value: str) -> str:
 
 
 def style_params(style: str, rng: random.Random) -> dict[str, float]:
-    if style != "mined_fp_dark_v1":
+    ranges = STYLE_RANGES.get(style)
+    if ranges is None:
         raise SystemExit(f"unsupported style: {style}")
     return {
-        "brightness": rng.uniform(0.50, 0.72),
-        "contrast": rng.uniform(1.32, 1.92),
-        "saturation": rng.uniform(1.30, 2.35),
-        "vignette": rng.uniform(0.24, 0.46),
-        "grain_sigma": rng.uniform(2.0, 6.5),
-        "gamma": rng.uniform(0.92, 1.08),
+        key: rng.uniform(float(bounds[0]), float(bounds[1]))
+        for key, bounds in ranges.items()
     }
 
 
