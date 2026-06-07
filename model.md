@@ -427,6 +427,19 @@ Targeted branch status:
   checks, but strict composite audit worsens to `53/260` suspect images and
   `73` unmatched predictions. Read: broad rectangular erase creates stronger
   artifacts/leak signatures; do not pursue padding alone as the fix.
+- Source-context inpaint geometry is now measurable before detector audit.
+  `build_cashsnap_target_anchor_transplant.py` emits foreground/source-box/final
+  inpaint mask fractions and can optionally reject/retry rows by those metrics.
+  `scripts/check_target_anchor_inpaint_metadata.py` gates broad source erasures;
+  `scripts/filter_jsonl_manifest_by_yolo_geometry.py` filters train-anchor
+  manifests by source YOLO box size. The original 151-anchor manifest has `59`
+  boxes over `0.50` area and `24` over `0.80`; `boxarea90` keeps `140` and
+  removes `11` worst near-full-frame sources. A 13-image sourcectx smoke still
+  failed the source-context geometry gate, while a loose row-gated smoke
+  improved `p95` final inpaint fraction from `0.933` to `0.837` and
+  mask/foreground ratio from `10.68` to `5.88`, but still flags USD_1 full-frame
+  anchors. Read: source-context should become class/anchor-aware with fallback
+  for full-frame source positives, not a universal rectangular erase recipe.
 - Model-side status: real-transfer proof is still blocked by RAM headroom, not
   by data wiring. Full latest-baseline `416/b2` train-only probe failed at the
   RAM guard while scanning/training the `1,248` row baseline. A row-matched
@@ -820,6 +833,8 @@ Key scripts:
 - `scripts/materialize_yolo_unlabeled_audit_filtered_config.py`
 - `scripts/build_yolo_split_visual_qa_sheet.py`
 - `scripts/filter_jsonl_manifest_by_unlabeled_audit.py`
+- `scripts/filter_jsonl_manifest_by_yolo_geometry.py`
+- `scripts/check_target_anchor_inpaint_metadata.py`
 - `scripts/materialize_yolo_split_balanced_eval_subset.py`
 - `scripts/eval_yolo_lightweight_real_recall.py`
 - `scripts/audit_synthetic_composite_edges.py`

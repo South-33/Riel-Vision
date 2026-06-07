@@ -453,6 +453,36 @@ def foreground_style_quantiles(styles_by_class: dict[str, list[ForegroundStyle]]
     }
 
 
+def numeric_quantiles(values: list[float]) -> dict[str, float | int]:
+    if not values:
+        return {"count": 0}
+    arr = np.array(values, dtype=np.float32)
+    return {
+        "count": int(arr.size),
+        "min": float(np.min(arr)),
+        "p05": float(np.percentile(arr, 5)),
+        "p25": float(np.percentile(arr, 25)),
+        "p50": float(np.percentile(arr, 50)),
+        "p75": float(np.percentile(arr, 75)),
+        "p95": float(np.percentile(arr, 95)),
+        "max": float(np.max(arr)),
+    }
+
+
+def metadata_quantiles(records: list[dict[str, Any]], keys: list[str]) -> dict[str, dict[str, float | int]]:
+    summary: dict[str, dict[str, float | int]] = {}
+    for key in keys:
+        values: list[float] = []
+        for record in records:
+            value = record.get(key)
+            if isinstance(value, bool) or value is None:
+                continue
+            if isinstance(value, (int, float)):
+                values.append(float(value))
+        summary[key] = numeric_quantiles(values)
+    return summary
+
+
 def choose_foreground_style(
     class_name: str,
     styles_by_class: dict[str, list[ForegroundStyle]],
@@ -788,6 +818,100 @@ def feather_warped_alpha(layer_rgba: np.ndarray, radius: float) -> np.ndarray:
     return out
 
 
+def box_mask(shape: tuple[int, int], xyxy: tuple[int, int, int, int] | None) -> np.ndarray:
+    mask = np.zeros(shape, dtype=bool)
+    if xyxy is None:
+        return mask
+    x1, y1, x2, y2 = xyxy
+    mask[y1:y2, x1:x2] = True
+    return mask
+
+
+def mask_xyxy(mask: np.ndarray) -> list[int] | None:
+    ys, xs = np.where(mask)
+    if len(xs) == 0:
+        return None
+    return [int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1]
+
+
+def rounded_ratio(numerator: int | float, denominator: int | float) -> float | None:
+    if denominator <= 0:
+        return None
+    return round(float(numerator) / float(denominator), 6)
+
+
+def build_inpaint_masks(
+    alpha: np.ndarray,
+    dilate_px: int,
+    source_box_xyxy: tuple[int, int, int, int] | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    foreground_mask = alpha > 18
+    source_mask = box_mask(alpha.shape, source_box_xyxy)
+    seed_mask = np.zeros(alpha.shape, dtype=bool)
+    if dilate_px > 0:
+        seed_mask |= foreground_mask
+    seed_mask |= source_mask
+    if not seed_mask.any():
+        return foreground_mask, source_mask, seed_mask
+    mask_u8 = seed_mask.astype(np.uint8) * 255
+    if dilate_px > 0:
+        kernel_size = dilate_px * 2 + 1
+        kernel = np.ones((kernel_size, kernel_size), np.uint8)
+        mask_u8 = cv2.dilate(mask_u8, kernel, iterations=1)
+    return foreground_mask, source_mask, mask_u8 > 0
+
+
+def inpaint_mask_metadata(
+    alpha: np.ndarray,
+    dilate_px: int,
+    source_box_xyxy: tuple[int, int, int, int] | None = None,
+) -> dict[str, Any]:
+    foreground_mask, source_mask, inpaint_mask = build_inpaint_masks(alpha, dilate_px, source_box_xyxy)
+    canvas_area = int(alpha.shape[0] * alpha.shape[1])
+    foreground_area = int(foreground_mask.sum())
+    source_area = int(source_mask.sum())
+    inpaint_area = int(inpaint_mask.sum())
+    source_foreground_overlap = int(np.logical_and(source_mask, foreground_mask).sum())
+    inpaint_outside_foreground = int(np.logical_and(inpaint_mask, np.logical_not(foreground_mask)).sum())
+    return {
+        "foreground_visible_area_px": foreground_area,
+        "foreground_visible_fraction": rounded_ratio(foreground_area, canvas_area),
+        "foreground_visible_xyxy": mask_xyxy(foreground_mask),
+        "inpaint_source_box_xyxy": list(source_box_xyxy) if source_box_xyxy is not None else None,
+        "inpaint_source_box_area_px": source_area,
+        "inpaint_source_box_fraction": rounded_ratio(source_area, canvas_area),
+        "source_box_covered_by_foreground_fraction": rounded_ratio(source_foreground_overlap, source_area),
+        "source_box_outside_foreground_area_px": max(0, source_area - source_foreground_overlap),
+        "source_box_outside_foreground_fraction": rounded_ratio(
+            max(0, source_area - source_foreground_overlap),
+            source_area,
+        ),
+        "foreground_inside_source_box_fraction": rounded_ratio(source_foreground_overlap, foreground_area),
+        "inpaint_mask_area_px": inpaint_area,
+        "inpaint_mask_fraction": rounded_ratio(inpaint_area, canvas_area),
+        "inpaint_mask_xyxy": mask_xyxy(inpaint_mask),
+        "inpaint_mask_to_foreground_area_ratio": rounded_ratio(inpaint_area, foreground_area),
+        "inpaint_mask_outside_foreground_area_px": inpaint_outside_foreground,
+        "inpaint_mask_outside_foreground_fraction": rounded_ratio(inpaint_outside_foreground, canvas_area),
+        "inpaint_mask_outside_foreground_to_foreground_ratio": rounded_ratio(
+            inpaint_outside_foreground,
+            foreground_area,
+        ),
+    }
+
+
+def inpaint_metadata_passes(metadata: dict[str, Any], limits: dict[str, float]) -> bool:
+    for key, limit in limits.items():
+        if limit <= 0:
+            continue
+        value = metadata.get(key)
+        if isinstance(value, bool) or value is None:
+            continue
+        if isinstance(value, (int, float)) and float(value) > limit:
+            return False
+    return True
+
+
 def inpaint_under_foreground(
     base_rgb: np.ndarray,
     alpha: np.ndarray,
@@ -797,20 +921,11 @@ def inpaint_under_foreground(
 ) -> np.ndarray:
     if dilate_px <= 0 and source_box_xyxy is None:
         return base_rgb
-    mask = np.zeros(alpha.shape, dtype=np.uint8)
-    if dilate_px > 0:
-        mask[alpha > 18] = 255
-    if source_box_xyxy is not None:
-        x1, y1, x2, y2 = source_box_xyxy
-        mask[y1:y2, x1:x2] = 255
+    _, _, mask = build_inpaint_masks(alpha, dilate_px, source_box_xyxy)
     if not mask.any():
         return base_rgb
-    if dilate_px > 0:
-        kernel_size = dilate_px * 2 + 1
-        kernel = np.ones((kernel_size, kernel_size), np.uint8)
-        mask = cv2.dilate(mask, kernel, iterations=1)
     base_bgr = cv2.cvtColor(base_rgb, cv2.COLOR_RGB2BGR)
-    inpainted = cv2.inpaint(base_bgr, mask, radius, cv2.INPAINT_TELEA)
+    inpainted = cv2.inpaint(base_bgr, mask.astype(np.uint8) * 255, radius, cv2.INPAINT_TELEA)
     return cv2.cvtColor(inpainted, cv2.COLOR_BGR2RGB)
 
 
@@ -982,6 +1097,7 @@ def render_one(
     min_render_width_px: float,
     min_render_height_px: float,
     min_render_area_px: float,
+    inpaint_metadata_limits: dict[str, float],
 ) -> tuple[Image.Image, str, dict[str, Any]] | None:
     with Image.open(background.image_path).convert("RGB") as image:
         base = image.copy()
@@ -1042,15 +1158,21 @@ def render_one(
     alpha = warped[:, :, 3]
     if alpha.max() <= 16:
         return None
+    source_box_xyxy = (
+        sample_xyxy(sample, (width, height), pad_fraction=inpaint_source_box_pad_fraction)
+        if inpaint_source_box_pad_fraction is not None
+        else None
+    )
+    inpaint_metadata = inpaint_mask_metadata(alpha, inpaint_under_foreground_px, source_box_xyxy)
+    if not inpaint_metadata_passes(inpaint_metadata, inpaint_metadata_limits):
+        return None
     base_arr = np.asarray(base).copy()
     base_arr = inpaint_under_foreground(
         base_arr,
         alpha,
         inpaint_under_foreground_px,
         inpaint_under_foreground_radius,
-        sample_xyxy(sample, (width, height), pad_fraction=inpaint_source_box_pad_fraction)
-        if inpaint_source_box_pad_fraction is not None
-        else None,
+        source_box_xyxy,
     )
     shadow = make_contact_shadow(alpha, rng) if shadow_policy == "contact" else make_shadow(alpha, rng)
     base_arr = alpha_composite(base_arr, shadow)
@@ -1116,6 +1238,7 @@ def render_one(
         "min_render_width_px": round(float(min_render_width_px), 3),
         "min_render_height_px": round(float(min_render_height_px), 3),
         "min_render_area_px": round(float(min_render_area_px), 3),
+        **inpaint_metadata,
     }
     if foreground_style is not None:
         metadata.update(
@@ -1327,6 +1450,36 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-render-width-px", type=float, default=0.0)
     parser.add_argument("--min-render-height-px", type=float, default=0.0)
     parser.add_argument("--min-render-area-px", type=float, default=0.0)
+    parser.add_argument(
+        "--max-inpaint-source-box-fraction",
+        type=float,
+        default=0.0,
+        help="Reject/retry rows whose padded source box covers more than this canvas fraction; <=0 disables.",
+    )
+    parser.add_argument(
+        "--max-inpaint-mask-fraction",
+        type=float,
+        default=0.0,
+        help="Reject/retry rows whose final inpaint mask covers more than this canvas fraction; <=0 disables.",
+    )
+    parser.add_argument(
+        "--max-inpaint-mask-to-foreground-area-ratio",
+        type=float,
+        default=0.0,
+        help="Reject/retry rows whose final inpaint mask is too large relative to visible foreground; <=0 disables.",
+    )
+    parser.add_argument(
+        "--max-inpaint-mask-outside-foreground-to-foreground-ratio",
+        type=float,
+        default=0.0,
+        help="Reject/retry rows whose erased context outside the rendered note is too large; <=0 disables.",
+    )
+    parser.add_argument(
+        "--max-source-box-outside-foreground-fraction",
+        type=float,
+        default=0.0,
+        help="Reject/retry rows whose source box is poorly covered by the rendered note; <=0 disables.",
+    )
     parser.add_argument("--out-root", default="data/synthetic/cashsnap_target_anchor_transplant_mvp_v1")
     parser.add_argument("--out-config", default="configs/webgl_ablation/cashsnap_target_anchor_transplant_mvp_puresynth_realval_v1.yaml")
     parser.add_argument("--per-class", type=int, default=96, help="Generated train positives per class.")
@@ -1414,6 +1567,17 @@ def main() -> None:
         raise SystemExit("--min-render-short-px must be >= 0")
     if args.min_render_width_px < 0 or args.min_render_height_px < 0 or args.min_render_area_px < 0:
         raise SystemExit("--min-render-width/height/area-px must be >= 0")
+    inpaint_metadata_limits = {
+        "inpaint_source_box_fraction": args.max_inpaint_source_box_fraction,
+        "inpaint_mask_fraction": args.max_inpaint_mask_fraction,
+        "inpaint_mask_to_foreground_area_ratio": args.max_inpaint_mask_to_foreground_area_ratio,
+        "inpaint_mask_outside_foreground_to_foreground_ratio": (
+            args.max_inpaint_mask_outside_foreground_to_foreground_ratio
+        ),
+        "source_box_outside_foreground_fraction": args.max_source_box_outside_foreground_fraction,
+    }
+    if any(limit < 0 for limit in inpaint_metadata_limits.values()):
+        raise SystemExit("--max-inpaint/source-box metadata limits must be >= 0")
     foreground_styles_by_class: dict[str, list[ForegroundStyle]] | None = None
     foreground_sharpness_quantiles: dict[str, float] = {}
     if args.foreground_style_policy == "real_crop_stats":
@@ -1479,6 +1643,7 @@ def main() -> None:
             args.min_render_width_px,
             args.min_render_height_px,
             args.min_render_area_px,
+            inpaint_metadata_limits,
         )
         if rendered is None:
             continue
@@ -1506,6 +1671,20 @@ def main() -> None:
     metadata_path.write_text(
         "".join(json.dumps(record, sort_keys=True) + "\n" for record in records),
         encoding="utf-8",
+    )
+    inpaint_metadata_summary = metadata_quantiles(
+        records,
+        [
+            "foreground_visible_fraction",
+            "inpaint_source_box_fraction",
+            "source_box_covered_by_foreground_fraction",
+            "source_box_outside_foreground_fraction",
+            "foreground_inside_source_box_fraction",
+            "inpaint_mask_fraction",
+            "inpaint_mask_to_foreground_area_ratio",
+            "inpaint_mask_outside_foreground_fraction",
+            "inpaint_mask_outside_foreground_to_foreground_ratio",
+        ],
     )
     summary: dict[str, Any] = {
         "schema": "cashsnap_target_anchor_transplant_summary_v1",
@@ -1561,6 +1740,9 @@ def main() -> None:
         "min_render_width_px": args.min_render_width_px,
         "min_render_height_px": args.min_render_height_px,
         "min_render_area_px": args.min_render_area_px,
+        "inpaint_metadata_limits": {
+            key: value for key, value in inpaint_metadata_limits.items() if value > 0
+        },
         "foreground_style_policy": args.foreground_style_policy,
         "foreground_style_min_class_samples": args.foreground_style_min_class_samples,
         "foreground_style_max_class_samples": args.foreground_style_max_class_samples,
@@ -1570,6 +1752,7 @@ def main() -> None:
             else {}
         ),
         "foreground_style_sharpness_quantiles": foreground_sharpness_quantiles,
+        "inpaint_metadata_quantiles": inpaint_metadata_summary,
         "metadata": repo_rel(metadata_path),
     }
     (out_root / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
