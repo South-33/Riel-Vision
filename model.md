@@ -650,8 +650,13 @@ Targeted branch status:
   says `hsv_v=0.7` is only a noisy clue: at `conf=0.01` it raises recall from
   `0/130` to `2/130` but worsens background-FP images from `7/50` to `11/50`;
   at `conf=0.001` it drops recall from `100/130` to `94/130` with the same
-  `50/50` background flood. Next curriculum work needs FP-aware tuning or
-  seed-repeat proof, not a direct `hsv_v=0.7` promotion.
+  `50/50` background flood. The lightweight transfer scorecard makes the
+  rejection explicit:
+  `runs/cashsnap/scorecard_target_anchor_latest_bal20_hsvv07_realtest_bal10_bg50_v1.json`
+  fails all three thresholds (`conf=0.05` FP `+14`; `conf=0.01` FP `+57` and
+  bg-hit images `+4`; `conf=0.001` recall `-0.0462`, FP `+6`). Next
+  curriculum work needs FP-aware tuning or seed-repeat proof, not a direct
+  `hsv_v=0.7` promotion.
 - Earlier non-fallback fixed-step A/B attempts remain incomplete:
   b64/b32/b16/b8 runs hit the 95% RAM guard while RunLong/Codex were resident.
   Also, one failed b64 attempt reused the old leader run name with the
@@ -850,6 +855,11 @@ A synthetic axis is credible only with:
 - At least one seed repeat for serious promotion, more for large claims.
 
 Synthetic package gates are necessary filters, not promotion authority.
+For low-memory bounded real probes, run
+`scripts/build_yolo_lightweight_transfer_scorecard.py` over the matching
+`eval_yolo_lightweight_real_recall.py` baseline/candidate JSONs at multiple
+confidence thresholds. Self-eval preservation is not enough; the scorecard must
+also show no recall regression and no increase in total/image/background FPs.
 
 Clean-base can move toward overlap/fan/hand only when synthetic-only `yolo26n`
 is near the target line, clean-visible and labeled-positive test are `>=0.75`,
