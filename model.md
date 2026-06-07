@@ -15,15 +15,16 @@ Major history snapshots:
 Keep this shape simple and stable:
 
 1. Yardstick And Posture.
-2. Research Frame.
+2. Research Frame: Current State, Tested Ideas, Untested Ideas.
 3. Promotion Gates.
 4. Validation, Labels, And Scope.
 5. Repo Hygiene.
 
 Do not split the live context into separate "current read", "current bet",
-"next move", and "evidence" sections. Those are one thing. If the direction
-changes, update `Research Frame` in one pass so future agents do not inherit
-contradictory stale fragments.
+"next move", and "evidence" sections. Keep those inside `Research Frame` as
+current state, tested ideas, and untested ideas. If an idea cannot name the
+expected effect, the guardrail, and what would kill it, leave the space open
+instead of adding filler.
 
 Do not use this file as an artifact index. Folder placement, archive folders,
 JSON registries, generated-list locations, and `rg` should answer "where is that
@@ -90,71 +91,74 @@ Working posture:
 
 ## Research Frame
 
-The current working research frame is an obligation-driven sim-to-real rebuild
-for clean-visible note transfer. Treat this as a hypothesis to challenge, not a
-script to follow: start from real failure clusters when that still looks like a
-good use of time, build candidate data that names which obligation it attacks,
-and promote only when real/deploy guardrails improve.
+Use this section as working state, not a pep talk. Keep untested ideas short and
+sharp; if the next good idea is unclear, say that instead of padding the list.
 
-Current read:
-- Synthetic transfer is the bottleneck. Synthetic self-eval and package QA can
-  pass while real transfer fails.
-- Target-anchor latest worked because it combined train-only CashSnap no-note
-  pixels, real CashSnap geometry, and latest-design target assets. It is a
-  direction signal, not a trainable foundation.
-- The current leader misses `669/817` real-test GT boxes at `conf=0.05` and fires
-  on `174/748` empty test images. It is not close.
-- Detector representation gaps show synthetic-vs-real separability at early and
-  late layers. Camera/image-formation statistics, context, extent, and background
-  rejection are major suspects.
-- Reverse-transfer asymmetry is the core warning: a real-trained model reads the
+### Current State
+
+- Synthetic-to-real clean-visible transfer is the blocker. Synthetic self-eval,
+  package QA, geometry gates, and visual contact sheets can all pass while real
+  transfer still fails.
+- Current synthetic-only fixed-step leader is the target-anchor latest-design
+  transplant at `0.144740` mAP50-95. It is still roughly `+0.68` to `+0.71`
+  short of the hard clean-base target.
+- The leader is not close operationally: it misses `669/817` real-test GT boxes
+  at `conf=0.05` and fires on `174/748` empty test images.
+- Reverse-transfer asymmetry is the core warning. A real-trained model reads the
   synthetic blend well (`0.866141`), while the pure-synth model learns synthetic
   self-eval (`0.914675`) but transfers poorly (`0.142098`).
+- Representation probes show synthetic-vs-real separability at early and late
+  layers. Camera/image-formation statistics, context, extent, and background
+  rejection are still the main suspects.
+- The own-photo capture bridge is empty, so rare/high-value class claims and
+  mixed USD/KHR retail scenes are still under-validated.
 
-Mechanism clues:
-- Poisson/contact image formation isolated a useful low-batch positive-transfer
-  clue (`0.028350 -> 0.042401`), but worsened empty-frame FPs.
-- Source-context replacement is the strongest representation mechanism so far,
-  but label safety, inpaint scars, and real-transfer proof remain blockers.
-- Reduced mosaic is a useful curriculum clue. `mosaic=0.75` improved small
-  bounded-real behavior but still failed class/threshold guards.
-- Realistic near-negatives are necessary now. Existing stylized WebGL
-  unknown/hard-negative roots are too easy or suppressive. Mined-real negatives
-  should teach failure shape, not become leakage-prone training data.
-- Old overlap-stage detectors improve mined-real fan/overlap recall but
-  overcount and hallucinate more. They support staged curriculum thinking, not
-  overlap promotion.
+### Tested Ideas
 
-Directions that need a new reason before revisiting:
-- Broad stat matching or strict geometry matching without real-transfer proof.
-- Naive duplicated fusion of rejected/weak roots.
-- Dark negative row banks or target-like zero-label rows without positive-safe
-  curriculum controls.
-- Tiny row-dose hill-climbing without matched row/class controls and seed repeat.
-- Pretty contact-sheet work that does not attack real misses, FPs, or separable
-  representation shortcuts.
+- **Target-anchor latest-design transplant: useful clue, not foundation.** It is
+  the current synthetic-only leader because it combines train-only CashSnap
+  no-note pixels, real CashSnap geometry, and latest-design target assets. The
+  result is too weak to scale directly.
+- **Poisson/contact image formation: partial positive clue.** Low-batch transfer
+  improved (`0.028350 -> 0.042401`), but empty-frame FPs worsened, so this needs
+  background/negative pressure before it can matter.
+- **Source-context and multi-instance replacement: plausible but unsafe.** They
+  are the strongest representation mechanism so far, but source remnants,
+  inpaint scars, label safety, and real-transfer proof still block promotion.
+- **Reduced mosaic: curriculum clue only.** `mosaic=0.75` improved small
+  bounded-real behavior, but class/threshold guards still failed.
+- **Broad stat matching, strict geometry matching, and accepted-blend polishing:
+  not enough.** These improved proxies and contact sheets but did not prove real
+  transfer. Do not revisit without a specific failure mechanism.
+- **Stylized dark/unknown/hard-negative rows: not a fix.** They can be too easy
+  or suppressive and risk hurting positives unless tied to real FP failures and
+  matched controls.
+- **Overlap/fragment/two-stage detectors: not current clean-base work.** They
+  improve some mined-real fan/overlap recall but overcount and hallucinate more.
+  Keep them archived until clean-visible transfer is credible.
+- **Refiner/editor outputs: harness lesson, not trainable data.** SD-Turbo
+  note-edge locking proved label-preservation mechanics can work. FastCUT/CUT
+  and CycleGAN-Turbo remain diagnostic paths only; raw learned outputs are not
+  trainable without full preservation and transfer gates.
 
-Candidate directions to consider:
-- Diagnose and repair full-frame/extent/background hallucination alongside
-  positive recall.
-- Use low-dose diversified realistic near-negatives as a teacher for synthetic
-  negative design while avoiding val/test leakage.
-- Treat source-context replacement and multi-instance replacement as bounded
-  mechanism branches only after strict source-remnant audits pass.
-- Explore refiner/editor models only through the preservation-first harness.
-- If a candidate cannot plausibly close a meaningful part of the target gap,
-  convert its lesson into a guardrail and move on.
+### Untested Ideas
 
-Refiner contract:
-- Raw learned outputs are not trainable data.
-- Any refiner must preserve labels, note detail, and edge evidence by design or
-  hard recomposition until stricter gates prove relaxation safe.
-- Full-size visual QA, composite-edge audit, crop/geometry audit,
-  background-realism audit, real-trained detector consistency, fixed-step
-  transfer, background-FP guardrail, and per-class guardrail all apply.
-- FastCUT/CUT and CycleGAN-Turbo are memory/diagnostic paths. SD-Turbo note-edge
-  locking proved the harness can preserve labels, but the current candidate is
-  not promoted. Prompt-based editors are small gated smokes only.
+- **Failure-led obligation set.** Build the next candidate from the current
+  real-test misses and empty-frame FPs, not from renderer aesthetics. It should
+  improve real positive recall at low confidence without increasing empty-frame
+  FPs; otherwise the obligation design is wrong.
+- **Train-side mined-real near-negative curriculum.** Use only train-side mined
+  false-positive shapes to design or dose realistic negatives, with val/test
+  leakage blocked. Kill it if positives drop or FPs do not improve at
+  `conf=0.05`.
+- **Audited source-context replacement.** Revisit source-context or
+  multi-instance replacement only with strict source-remnant/inpaint-scar audits
+  and hard recomposition of labels/edges. Kill it on any remnant leakage or
+  background-FP regression.
+- **Own-photo bridge before rare-class claims.** Capture or label the missing
+  retail scenes: mixed USD+KHR stacks, hard `KHR_50000`, `KHR_5000/KHR_20000`
+  thin slices, same-denomination fans, and no-note paper props. Without this,
+  rare/high-value progress claims stay weak.
 
 ## Promotion Gates
 
