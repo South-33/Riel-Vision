@@ -182,8 +182,8 @@ if (!["scene_default", "no_hand", "none"].includes(OCCLUDER_POLICY)) {
   throw new Error("--occluder-policy must be one of: scene_default, no_hand, none");
 }
 
-if (!["classic", "unknown_currency_soft_v1", "unknown_currency_soft_dark_v1", "unknown_currency_v1", "unknown_currency_fullframe_v1", "unknown_currency_fullframe_dark_v1"].includes(NEGATIVE_PROP_POLICY)) {
-  throw new Error("--negative-prop-policy must be one of: classic, unknown_currency_soft_v1, unknown_currency_soft_dark_v1, unknown_currency_v1, unknown_currency_fullframe_v1, unknown_currency_fullframe_dark_v1");
+if (!["classic", "unknown_currency_soft_v1", "unknown_currency_soft_dark_v1", "unknown_currency_spread_dark_v1", "unknown_currency_v1", "unknown_currency_fullframe_v1", "unknown_currency_fullframe_dark_v1"].includes(NEGATIVE_PROP_POLICY)) {
+  throw new Error("--negative-prop-policy must be one of: classic, unknown_currency_soft_v1, unknown_currency_soft_dark_v1, unknown_currency_spread_dark_v1, unknown_currency_v1, unknown_currency_fullframe_v1, unknown_currency_fullframe_dark_v1");
 }
 
 const ABLATION_ACTIVE = APPEARANCE_ABLATION !== "full";
@@ -798,6 +798,7 @@ function sceneConfig(variant, mode, backgroundPath, environmentPath) {
   const minedFpDarkNegative = mode === "negative" && (
     NEGATIVE_PROP_POLICY === "unknown_currency_fullframe_dark_v1"
     || NEGATIVE_PROP_POLICY === "unknown_currency_soft_dark_v1"
+    || NEGATIVE_PROP_POLICY === "unknown_currency_spread_dark_v1"
   );
   const surfaces = textureQa
     ? textureQaSurfaces
@@ -1857,6 +1858,16 @@ const UNKNOWN_CURRENCY_SOFT_DARK_PROP_STYLES = [
   { propKind: "payment_card", textureStyle: "payment_card", negativeConfusionHardness: "none", colors: [0x142434, 0x263427, 0x351f31], width: [0.34, 0.56], height: [0.19, 0.32] },
 ];
 
+const UNKNOWN_CURRENCY_SPREAD_DARK_PROP_STYLES = [
+  { propKind: "unknown_banknote", textureStyle: "unknown_banknote", negativeConfusionHardness: "partial", negativeVisualDomain: "mined_fp_dark_v1", colors: [0x342018, 0x1c3440, 0x2b3c1d, 0x3e244b], width: [0.58, 0.92], height: [0.22, 0.38] },
+  { propKind: "receipt", textureStyle: "receipt", negativeConfusionHardness: "none", colors: [0x655a4a, 0x514638, 0x463f36], width: [0.48, 0.86], height: [0.14, 0.30] },
+  { propKind: "payment_card", textureStyle: "payment_card", negativeConfusionHardness: "none", colors: [0x142434, 0x263427, 0x351f31], width: [0.34, 0.58], height: [0.19, 0.34] },
+  { propKind: "patterned_paper", textureStyle: "paper", negativeConfusionHardness: "none", colors: [0x4b4740, 0x353a3d, 0x463a42], width: [0.42, 0.78], height: [0.18, 0.36] },
+  { propKind: "coin_cluster", textureStyle: "coin_cluster", negativeConfusionHardness: "coin", colors: [0x453427, 0x55432e, 0x2e2922], width: [0.30, 0.56], height: [0.24, 0.50] },
+  { propKind: "unknown_banknote", textureStyle: "unknown_banknote", negativeConfusionHardness: "soft", negativeVisualDomain: "mined_fp_dark_v1", colors: [0x482818, 0x174048, 0x28381f, 0x3c244c], width: [0.36, 0.64], height: [0.15, 0.27] },
+  { propKind: "wallet", textureStyle: "wallet", negativeConfusionHardness: "none", colors: [0x1f1714, 0x33251c, 0x171f28], width: [0.42, 0.74], height: [0.22, 0.40] },
+];
+
 const UNKNOWN_CURRENCY_FULLFRAME_PROP_STYLES = [
   { propKind: "unknown_banknote", textureStyle: "unknown_banknote", negativeConfusionHardness: "fullframe", colors: [0xd1b7a6, 0xb9cbbb, 0xb8c8dd, 0xd7c0cf], width: [1.02, 1.34], height: [0.40, 0.62] },
   { propKind: "unknown_banknote", textureStyle: "unknown_banknote", negativeConfusionHardness: "fullframe", colors: [0xe0c1a0, 0xb8d2c8, 0xd5c7a6, 0xc8bad8], width: [0.92, 1.22], height: [0.36, 0.56] },
@@ -1873,7 +1884,12 @@ function isFullFrameNegativePolicy() {
   return NEGATIVE_PROP_POLICY === "unknown_currency_fullframe_v1" || NEGATIVE_PROP_POLICY === "unknown_currency_fullframe_dark_v1";
 }
 
+function isSpreadDarkNegativePolicy() {
+  return NEGATIVE_PROP_POLICY === "unknown_currency_spread_dark_v1";
+}
+
 function negativePropStylesForPolicy() {
+  if (isSpreadDarkNegativePolicy()) return UNKNOWN_CURRENCY_SPREAD_DARK_PROP_STYLES;
   if (NEGATIVE_PROP_POLICY === "unknown_currency_soft_dark_v1") return UNKNOWN_CURRENCY_SOFT_DARK_PROP_STYLES;
   if (NEGATIVE_PROP_POLICY === "unknown_currency_soft_v1") return UNKNOWN_CURRENCY_SOFT_PROP_STYLES;
   if (isFullFrameNegativePolicy()) return UNKNOWN_CURRENCY_SOFT_PROP_STYLES;
@@ -1948,7 +1964,7 @@ function cleanContextOccluders(variant) {
 
 function negativeOccluders(variant) {
   const rng = mulberry32(26057511 + variant * 149);
-  const propCount = isFullFrameNegativePolicy() ? 2 + (variant % 3) : 3 + (variant % 3);
+  const propCount = isFullFrameNegativePolicy() ? 2 + (variant % 3) : isSpreadDarkNegativePolicy() ? 4 + (variant % 3) : 3 + (variant % 3);
   const styles = negativePropStylesForPolicy();
   const props = [];
   for (let index = 0; index < propCount; index += 1) {
@@ -1986,6 +2002,9 @@ function negativeOccluders(variant) {
       : isSoftUnknownCurrencyPolicy() && index === 0 && variant % 2 === 0
         ? softUnknownStyles[variant % 2]
       : styles[(variant + index * 3) % styles.length];
+    const spreadUnknown = isSpreadDarkNegativePolicy() && style.propKind === "unknown_banknote";
+    const partialOffcenter = spreadUnknown && style.negativeConfusionHardness === "partial";
+    const offcenterSign = variant % 2 === 0 ? -1 : 1;
     props.push({
       kind: "cover_card",
       propKind: style.propKind,
@@ -1996,14 +2015,26 @@ function negativeOccluders(variant) {
       layer: 20 + index,
       color: style.colors[randomInt(rng, style.colors.length)],
       position: [
-        isFullFrameUnknown ? randomBetween(rng, -0.14, 0.14) : randomBetween(rng, -0.62, 0.62),
-        isFullFrameUnknown ? randomBetween(rng, -0.12, 0.12) : randomBetween(rng, -0.42, 0.42),
+        isFullFrameUnknown
+          ? randomBetween(rng, -0.14, 0.14)
+          : partialOffcenter
+            ? offcenterSign * randomBetween(rng, 0.34, 0.74)
+            : spreadUnknown
+              ? randomBetween(rng, -0.76, 0.76)
+              : randomBetween(rng, -0.66, 0.66),
+        isFullFrameUnknown
+          ? randomBetween(rng, -0.12, 0.12)
+          : partialOffcenter
+            ? randomBetween(rng, -0.50, 0.50)
+            : spreadUnknown
+              ? randomBetween(rng, -0.52, 0.52)
+              : randomBetween(rng, -0.44, 0.44),
         0.05 + index * 0.01,
       ],
       rotation: [
         isFullFrameUnknown ? randomBetween(rng, -0.05, 0.07) : randomBetween(rng, -0.10, 0.10),
         isFullFrameUnknown ? randomBetween(rng, -0.06, 0.06) : randomBetween(rng, -0.10, 0.10),
-        isFullFrameUnknown ? randomBetween(rng, -1.30, 1.30) : randomBetween(rng, -1.55, 1.55),
+        isFullFrameUnknown ? randomBetween(rng, -1.30, 1.30) : spreadUnknown ? randomBetween(rng, -1.75, 1.75) : randomBetween(rng, -1.55, 1.55),
       ],
       width: randomBetween(rng, style.width[0], style.width[1]),
       height: randomBetween(rng, style.height[0], style.height[1]),

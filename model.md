@@ -566,8 +566,13 @@ Targeted branch status:
   (`2/130`), raises precision `0.0144 -> 0.0339`, and cuts FPs `137 -> 57`,
   full-frame FPs `102 -> 31`, and bg FPs `7/50 -> 5/50`. Read: use low-dose,
   diversified realistic near-negatives; blunt zero-label pressure suppresses
-  positives. Next step is synthetic/curated near-negatives that mimic these
-  hard real modes without depending on test leakage.
+  positives. The lightweight scorecard still rejects both mined-real doses for
+  promotion: spread-8 passes aggregate FP pressure but loses the lone `KHR_500`
+  TP at `conf=0.01` and has multi-class recall swaps at `conf=0.001`; top-25
+  loses both low-confidence TPs at `conf=0.01`. Treat mined negatives as a
+  teacher for FP shape, not a recipe. Next step is synthetic/curated
+  near-negatives that mimic these hard real modes without depending on test
+  leakage.
 - `webgl_unknown_currency_fullframe_negative_v1` is now the first synthetic
   attempt to mimic the mined near-negative failure: one dominant full-frame
   unknown banknote-like prop plus softer clutter, zero target assets, and a
@@ -622,6 +627,19 @@ Targeted branch status:
   even when visually plausible and soft. Do not run bounded real for these
   doses. Next step is matched dark positive support and/or negative-loss/sampling
   strategy, not more raw zero-label dark-negative variants.
+- Spread-dark WebGL negatives also failed the row-bank path. The new
+  `unknown_currency_spread_dark_v1` policy avoids one mandatory full-frame note
+  and spreads partial/off-center dark unknown notes among receipts, cards,
+  patterned paper, wallets, and coins. Its 16-image root passes hard-negative
+  diversity (`79` props, `21` unknown_banknote, `44` none, `10` partial,
+  `11` soft, `10` coin) and the mined-FP visual-gap audit is teacher-like on
+  luma (`crop luma_mean -0.068`, `p05 +0.023`, `p95 -0.025`), though saturation
+  variation is still low (`saturation_std -0.130`). Dose-1 fixed-step self-eval
+  fails almost identically to the other dark-negative rows (`0.003722` vs
+  `0.007368`, delta `-0.003646`, worst `KHR_5000 -0.015551`). Do not probe
+  dose-4 or bounded real for spread-dark. The blocker is not just dominant
+  full-frame semantics; raw dark zero-label near-currency pixels are still an
+  anti-curriculum in this balanced20 setup.
 - Matched dark positive support did not rescue the dark-domain path in the
   balanced20 self-eval. WebGL dark positives added at 1/class failed
   (`0.005075` vs `0.007368`, delta `-0.002293`, worst `KHR_5000 -0.013065`);
@@ -1222,6 +1240,10 @@ Key run artifacts:
 - `configs/webgl_ablation/cashsnap_target_anchor_transplant_alpha_contact_geoscale205_minshort190_webglsoftdark4_bal20_probe_puresynth_realval_v1.yaml`
 - `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_alpha_geoscale205_webglsoftdark1_b20_b1_s1000_i320_v1_summary.json`
 - `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_alpha_geoscale205_webglsoftdark4_b20_b1_s1000_i320_v1_summary.json`
+- `data/synthetic/cashsnap_webgl_unknown_currency_spread_dark_negative_probe_v1/`
+- `runs/cashsnap/negative_fp_visual_gap_alpha_geoscale_mined_vs_webglspreaddark_v1.json`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_alpha_contact_geoscale205_minshort190_webglspreaddark1_bal20_probe_puresynth_realval_v1.yaml`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_alpha_geoscale205_webglspreaddark1_b20_b1_s1000_i320_v1_summary.json`
 - `data/synthetic/cashsnap_webgl_clean_topdown_readable_dark_positive_support26_v1/`
 - `configs/webgl_ablation/cashsnap_target_anchor_transplant_alpha_contact_geoscale205_minshort190_webgldarkpos1_bal20_probe_puresynth_realval_v1.yaml`
 - `configs/webgl_ablation/cashsnap_target_anchor_transplant_alpha_contact_geoscale205_minshort190_webgldarkpos2_bal20_probe_puresynth_realval_v1.yaml`

@@ -621,6 +621,31 @@
       "current_blocker": "New hardness-ladder diagnostic; needs smoke/visual QA and a bounded fixed-step dose before any trainable-candidate use."
     },
     {
+      "id": "webgl_unknown_currency_spread_dark_negative_v1",
+      "target_condition_ids": ["hard_negatives_and_non_banknote_paper"],
+      "artifact_status": "diagnostic",
+      "scene_modes": ["negative"],
+      "asset_side_policy": "any",
+      "camera_profile": "phone_clean_base_topdown_readable_v1",
+      "camera_isp_policy": "mined_fp_dark_v1",
+      "negative_prop_policy": "unknown_currency_spread_dark_v1",
+      "render_pool_count": 16,
+      "diagnostic_gates": {
+        "hard_negative_diversity": {
+          "min_images": 16,
+          "min_total_props": 64,
+          "min_prop_kinds": 6,
+          "min_textured_props": 64,
+          "require_prop_kinds": ["unknown_banknote", "coin_cluster", "receipt"],
+          "require_confusion_hardness": ["partial", "soft", "coin", "none"],
+          "require_zero_assets": true
+        }
+      },
+      "intended_use": "Mined-FP-dark zero-label near-negative diagnostic that spreads partial/off-center unknown notes across receipts, cards, patterned paper, wallets, and coins instead of forcing one dominant full-frame banknote.",
+      "promotion_gate": "A low diversified dose must match the mined spread-8 teacher's FP reduction while preserving per-class bounded-real recall and synthetic self-eval.",
+      "current_blocker": "New spread-dark policy; needs smoke/visual QA, hard-negative diversity, mined-FP visual-gap audit, and bounded fixed-step dose before any trainable-candidate use."
+    },
+    {
       "id": "webgl_shared_lens_distortion_audit_v1",
       "target_condition_ids": ["clean_single_or_separated_notes", "loose_counter_stack_overlap"],
       "artifact_status": "diagnostic",
