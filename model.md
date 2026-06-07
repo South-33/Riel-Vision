@@ -572,6 +572,12 @@ Multi-instance replacement diagnostic status:
   balanced across all `13` classes, but still has visible paste boundaries and
   remains separable (`image/box/crop AUC=0.839/0.836/0.928`, edge color step
   `0.1015`).
+- Strict real-clean detector audit on that no-tiny branch is not clean but is
+  bounded: `1/40` suspect images, `1` unmatched prediction at `conf=0.05`,
+  `match_iou=0.1`, `min_prediction_coverage=0.5`
+  (`runs/cashsnap/unlabeled_prediction_audit_multi_instance_replacement_context_phone_balanced_poissonedge_inpainttone_scale100_notiny_strictcov50_v1.json`).
+  The suspect is a broad low-confidence `KHR_50000` prediction spanning two
+  labeled notes, not an obvious erased-source remnant.
 - Decision: keep multi-instance replacement as a mechanism branch, not a
   trainable package. Next work should add source-context quality gates and
   improve edge-weighted blending before any detector audit/model proof.
