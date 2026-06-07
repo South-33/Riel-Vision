@@ -15,20 +15,25 @@ Major history snapshots:
 Keep this shape simple and stable:
 
 1. Yardstick And Posture.
-2. Current Bet.
+2. Research Frame.
 3. Promotion Gates.
 4. Validation, Labels, And Scope.
 5. Repo Hygiene.
 
-Do not split the live plan into separate "current read", "current bet", "next
-move", and "evidence" sections. Those are one thing. If the direction changes,
-update `Current Bet` in one pass so future agents do not inherit contradictory
-stale fragments.
+Do not split the live context into separate "current read", "current bet",
+"next move", and "evidence" sections. Those are one thing. If the direction
+changes, update `Research Frame` in one pass so future agents do not inherit
+contradictory stale fragments.
 
 Do not use this file as an artifact index. Folder placement, archive folders,
 JSON registries, generated-list locations, and `rg` should answer "where is that
 file?" This file should answer what we believe, what is blocked, what not to
-repeat, what to try next, and what gates decide promotion.
+repeat without a new reason, which ideas look promising, and what gates decide
+promotion.
+
+This file is context, not a command queue. A future agent should read it,
+challenge it, inspect the current repo/results, and choose the best next step by
+their own judgment.
 
 ## Yardstick And Posture
 
@@ -51,7 +56,7 @@ Current reality:
 Distance to target is roughly `+0.68` to `+0.71` mAP50-95. Small gains under
 `0.25` are mechanism clues, not a trajectory toward done.
 
-A useful next move should answer at least one of these:
+A useful candidate direction should answer at least one of these:
 - Does it reduce real positive misses at usable confidence?
 - Does it reduce giant/full-frame or empty-frame false positives?
 - Does it protect weak/high-value classes instead of trading them away?
@@ -78,11 +83,13 @@ Working posture:
 - Do not chase pretty contact sheets, row-count comfort, or one-seed wins.
   Promotion is real/deploy utility under guardrails.
 
-## Current Bet
+## Research Frame
 
-The live bet is an obligation-driven sim-to-real rebuild for clean-visible note
-transfer. Start from real failure clusters, build candidate data that names which
-obligation it attacks, and promote only when real/deploy guardrails improve.
+The current working research frame is an obligation-driven sim-to-real rebuild
+for clean-visible note transfer. Treat this as a hypothesis to challenge, not a
+script to follow: start from real failure clusters when that still looks like a
+good use of time, build candidate data that names which obligation it attacks,
+and promote only when real/deploy guardrails improve.
 
 Current read:
 - Synthetic transfer is the bottleneck. Synthetic self-eval and package QA can
@@ -113,7 +120,7 @@ Mechanism clues:
   overcount and hallucinate more. They support staged curriculum thinking, not
   overlap promotion.
 
-Do not repeat as a main path:
+Directions that need a new reason before revisiting:
 - Broad stat matching or strict geometry matching without real-transfer proof.
 - Naive duplicated fusion of rejected/weak roots.
 - Dark negative row banks or target-like zero-label rows without positive-safe
@@ -122,12 +129,12 @@ Do not repeat as a main path:
 - Pretty contact-sheet work that does not attack real misses, FPs, or separable
   representation shortcuts.
 
-Next concrete work:
+Candidate directions to consider:
 - Diagnose and repair full-frame/extent/background hallucination alongside
   positive recall.
 - Use low-dose diversified realistic near-negatives as a teacher for synthetic
   negative design while avoiding val/test leakage.
-- Keep source-context replacement and multi-instance replacement as bounded
+- Treat source-context replacement and multi-instance replacement as bounded
   mechanism branches only after strict source-remnant audits pass.
 - Explore refiner/editor models only through the preservation-first harness.
 - If a candidate cannot plausibly close a meaningful part of the target gap,
