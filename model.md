@@ -367,6 +367,17 @@ Targeted branch status:
   predictions. The representation win is partly buying real-note leakage or
   detector-visible source remnants, so source-context must be filtered,
   re-erased, or gated before it can become training data.
+- Audit-clean sourcectx-singlebox:
+  `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_auditclean_puresynth_realval_v1.yaml`.
+  It excludes the `23` detector-suspect composites and keeps `237/260` images;
+  rerunning the same unlabeled-prediction audit gives `0` suspect images and
+  `0` unmatched predictions. The representation win mostly survives but is no
+  longer as extreme: layer `0=0.6846`, layer `1=0.7346`, layer `8=0.9077`,
+  layer `22=0.8346`, late MMD `0.0227`. Read: leakage helped the unfiltered
+  score, but source-context replacement is still materially closer to real than
+  inpaintctx (`layer22=0.8615`) and the current leader (`0.9385`). Treat this
+  as a safer diagnostic branch, not a trainable promotion, because USD_50 and
+  USD_100 are down to `13` images and USD_20/KHR_5000 to `16`.
 - Fixed-step model A/B is not completed. b64/b32/b16/b8 attempts hit the 95%
   RAM guard while RunLong/Codex were resident. Also, one failed b64 attempt
   reused the old leader run name with the wrapper's real-clean default before
@@ -380,12 +391,12 @@ Targeted branch status:
   setup, but b8 inpaintctx still hit the RAM guard mid-epoch and wrote no
   weights. No fair model A/B exists for inpaintctx/couplectx yet in this
   RunLong session.
-- Do not promote either branch yet. Next best synth-data move is a
-  label-safety loop around source-context replacement: exclude audit-suspect
-  composites or erase unmatched detector regions, then rerun representation and
-  visual/edge gates. Promote only after visual artifacts fall, unmatched-source
-  detections drop, representation separation stays lower, real positive recall
-  improves, and empty-frame FPs do not regress.
+- Do not promote either branch yet. Next best synth-data move is to refill the
+  audit-clean branch with label-safe source contexts: erase unmatched detector
+  regions, reject remaining suspects, and restore per-class exposure before a
+  fixed-step model A/B. Promote only after visual artifacts fall,
+  unmatched-source detections stay near zero, representation separation stays
+  lower, real positive recall improves, and empty-frame FPs do not regress.
 
 Success signal is not a prettier sheet. A real step-change branch should reduce
 early-layer domain separability, recover broad real positive recall, and avoid
@@ -543,6 +554,8 @@ Key configs:
 - `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_couplectx_feather08_puresynth_realval_v1.yaml`
 - `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_dyninpaint_puresynth_realval_v1.yaml`
 - `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_puresynth_realval_v1.yaml`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_auditclean_puresynth_realval_v1.yaml`
+- `configs/generated_lists/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_auditclean_v1_train.txt`
 - `configs/synthetic_recipes/cashsnap_external_negative_banks_v1.json`
 - `configs/synthetic_recipes/cashsnap_webgl_recipe_catalog_v1.json`
 - `configs/synthetic_recipes/cashsnap_synthetic_governance_v1.json`
@@ -646,6 +659,9 @@ Key run artifacts:
 - `runs/cashsnap/unlabeled_prediction_audit_rep_gap_inpaintctx_v1.jpg`
 - `runs/cashsnap/unlabeled_prediction_audit_rep_gap_sourcectx_singlebox_v1.json`
 - `runs/cashsnap/unlabeled_prediction_audit_rep_gap_sourcectx_singlebox_v1.jpg`
+- `runs/cashsnap/dataset_check_rep_gap_sourcectx_singlebox_auditclean_v1.json`
+- `runs/cashsnap/representation_gap_synthleader_rep_gap_sourcectx_singlebox_auditclean_test_v1/summary.json`
+- `runs/cashsnap/unlabeled_prediction_audit_rep_gap_sourcectx_singlebox_auditclean_v1.json`
 - `runs/cashsnap/fixed_step_target_anchor_latest_vs_rep_gap_inpaintctx_b8_s150_ctxprobe_v1_preflight.json`
 - `runs/cashsnap/system_profile_after_inpaintctx_b32_guard.json`
 - `runs/cashsnap/system_profile_after_b8_inpaintctx_guard_v1.json`
@@ -655,6 +671,7 @@ Key scripts:
 - `scripts/build_cashsnap_target_anchor_transplant.py`
 - `scripts/build_yolo_inpainted_background_bank.py`
 - `scripts/materialize_yolo_trainonly_data_yaml.py`
+- `scripts/materialize_yolo_unlabeled_audit_filtered_config.py`
 - `scripts/audit_synthetic_composite_edges.py`
 - `scripts/build_synthetic_obligation_ledger.py`
 - `scripts/build_webgl_hard_negative_dose_config.py`
