@@ -556,6 +556,18 @@ Targeted branch status:
   `0.7462`, precision `0.0018`, bg FP `50/50`. Do not promote it; keep it as
   evidence that scale/tone helps a little, while calibration/full-frame FP
   rejection remains the blocker.
+- FP-mined real-negative diagnostics prove the background-rejection lever but
+  not a trainable recipe yet. A concentrated top-25 alpha/geoscale dose from
+  train-split empty-label FPs improved synthetic self-eval slightly
+  (`+0.000180`) and cut `conf=0.01` bounded-real FPs (`137 -> 74`, full-frame
+  `102 -> 39`, bg FP `7/50 -> 4/50`), but erased the two real true positives
+  (`recall 0.0154 -> 0.0`). A diversified spread-8 dose is the better clue:
+  self-eval `+0.001666`, bounded-real `conf=0.01` keeps recall `0.0154`
+  (`2/130`), raises precision `0.0144 -> 0.0339`, and cuts FPs `137 -> 57`,
+  full-frame FPs `102 -> 31`, and bg FPs `7/50 -> 5/50`. Read: use low-dose,
+  diversified realistic near-negatives; blunt zero-label pressure suppresses
+  positives. Next step is synthetic/curated near-negatives that mimic these
+  hard real modes without depending on test leakage.
 - Earlier non-fallback fixed-step A/B attempts remain incomplete:
   b64/b32/b16/b8 runs hit the 95% RAM guard while RunLong/Codex were resident.
   Also, one failed b64 attempt reused the old leader run name with the
@@ -699,6 +711,11 @@ Current state:
 - Hardnegdiv8, realbgneg25, and unknownsoftfp8lowconf did not clear guardrails.
 - `configs/synthetic_recipes/cashsnap_external_negative_banks_v1.json` is
   planned/registry work, not an accepted trainable bank.
+- Train-split FP-mined real negatives are useful diagnostics. Top-25 is too
+  suppressive; spread-8 is the current best pressure shape because it reduces
+  giant/background FPs while preserving the tiny real-positive signal. Do not
+  treat mined real negatives as the final synthetic pipeline; use them to define
+  what realistic synthetic/curated near-negatives must reproduce.
 
 Next realistic bank should include reviewed foreign/unknown currencies,
 target-lookalike partial notes, receipts, cards, patterned paper, and retail
@@ -1052,6 +1069,15 @@ Key run artifacts:
 - `runs/cashsnap/light_eval_alpha_geoscale205_minshort190_b20_s1000_realtest_bal10_bg50_i320_conf005_iou50_v2.json`
 - `runs/cashsnap/light_eval_alpha_geoscale205_minshort190_b20_s1000_realtest_bal10_bg50_i320_conf01_iou50_v2.json`
 - `runs/cashsnap/light_eval_alpha_geoscale205_minshort190_b20_s1000_realtest_bal10_bg50_i320_conf001_iou50_v2.json`
+- `runs/cashsnap/background_fp_alpha_geoscale_trainval_conf001_v1.json`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_alpha_contact_geoscale205_minshort190_fpminedreal25_bal20_probe_puresynth_realval_v1.yaml`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_alpha_contact_geoscale205_minshort190_fpminedreal8spread_bal20_probe_puresynth_realval_v1.yaml`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_alpha_geoscale205_fpminedreal25_b20_b1_s1000_i320_v1_summary.json`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_alpha_geoscale205_fpminedreal8spread_b20_b1_s1000_i320_v1_summary.json`
+- `runs/cashsnap/light_eval_alpha_geoscale205_fpminedreal25_b20_s1000_realtest_bal10_bg50_i320_conf01_iou50_v2.json`
+- `runs/cashsnap/light_eval_alpha_geoscale205_fpminedreal8spread_b20_s1000_realtest_bal10_bg50_i320_conf01_iou50_v2.json`
+- `runs/cashsnap/background_fp_alpha_geoscale_fpminedreal25_trainval_conf001_v1.json`
+- `runs/cashsnap/background_fp_alpha_geoscale_fpminedreal8spread_trainval_conf001_v1.json`
 - `runs/cashsnap/dataset_check_rep_gap_detectorerasectx_v1.json`
 - `runs/cashsnap/unlabeled_prediction_audit_rep_gap_detectorerasectx_strictcov50_v1.json`
 - `runs/cashsnap/visual_qa_rep_gap_detectorerasectx_v1/per_class_sheet.jpg`
@@ -1110,7 +1136,8 @@ Script notes:
 - `build_webgl_hard_negative_dose_config.py` accepts directory train splits as
   well as `.txt` lists and supports `--filename-contains`.
 - `build_fp_mined_negative_dose_config.py` accepts directory train splits as
-  well as `.txt` lists.
+  well as `.txt` lists and supports `--selection top|spread|random` for
+  negative-dose shape probes.
 - `build_cashsnap_target_anchor_transplant.py` accepts
   `--geometry-manifest` with `--geometry-manifest-mode prefer|only`; `prefer`
   uses train-anchor geometry where present and falls back per missing class.
