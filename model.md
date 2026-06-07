@@ -297,6 +297,18 @@ Next engineering move:
 3. Run representation-gap, positive-error, background-FP, and fixed-step gates
    before any scale-up.
 
+Train-only analog mining status:
+- `scripts/mine_representation_gap_train_analogs.py` maps the top uncovered
+  real-test representation rows to same-class train-split anchors.
+- Current run:
+  `runs/cashsnap/representation_gap_synthleader_train_analogs_v1/summary.json`.
+- It found `151` unique train anchors for `40` uncovered test queries from a
+  `2,813`-image train-positive candidate pool, with visible analogs for
+  scan-like/multi-note USD/KHR, flat rotated notes, hand-held views, tiny dark
+  background shots, KHR backs, and weak rare-class views.
+- Use these train anchors as the next generator target/geometry context source;
+  do not use the uncovered test images themselves for training data.
+
 Success signal is not a prettier sheet. A real step-change branch should reduce
 early-layer domain separability, recover broad real positive recall, and avoid
 new empty-frame FPs. If domain accuracy stays above about `0.90` at mid/late
@@ -512,6 +524,9 @@ Key run artifacts:
 - `runs/cashsnap/positive_error_review_synthleader_real_test_v1/summary.json`
 - `runs/cashsnap/background_fp_synthleader_real_test_v1.json`
 - `runs/cashsnap/synthetic_obligation_ledger_synthleader_rep_gap_v1.md`
+- `runs/cashsnap/representation_gap_synthleader_train_analogs_v1/summary.json`
+- `runs/cashsnap/representation_gap_synthleader_train_analogs_v1/train_anchor_manifest.jsonl`
+- `runs/cashsnap/representation_gap_synthleader_train_analogs_v1/query_train_analog_pairs.jpg`
 - `runs/cashsnap/cyclegan_turbo_smoke_s1_128_noval_nolpips/`
 
 Key scripts:
@@ -530,6 +545,7 @@ Key scripts:
 - `scripts/apply_refiner_detail_lock.py`
 - `scripts/run_sd_turbo_img2img_refiner.py`
 - `scripts/probe_yolo_representation_domain_gap.py`
+- `scripts/mine_representation_gap_train_analogs.py`
 - `scripts/run_yolo_fixed_step_probe.py`
 - `scripts/probe_yolo_background_false_positives.py`
 - `scripts/check_yolo_transfer_guardrails.py`
@@ -584,6 +600,7 @@ rl python scripts\run_with_headroom.py --memory-action pause -- python .cache_ru
 rl python scripts\run_with_headroom.py --memory-action exit -- python .cache_runtime\third_party\img2img-turbo\src\train_cyclegan_turbo.py --dataset_folder runs\cashsnap\refiner_readiness_poisson_contact_v1\cut_unaligned_smoke --train_img_prep resize_128 --val_img_prep resize_128 --dataloader_num_workers 0 --train_batch_size 1 --max_train_steps 1 --max_train_epochs 1 --pretrained_model_name_or_path stabilityai/sd-turbo --output_dir runs\cashsnap\cyclegan_turbo_smoke_s1_128_noval_nolpips --report_to none --tracker_project_name cashsnap_cyclegan_turbo_smoke --validation_steps 0 --validation_num_images 0 --checkpointing_steps 1 --learning_rate 1e-5 --gradient_accumulation_steps 1 --allow_tf32 --gradient_checkpointing --lora_rank_unet 4 --lora_rank_vae 2 --lambda_gan 0.5 --lambda_idt 1 --lambda_cycle 1 --lambda_cycle_lpips 0 --lambda_idt_lpips 0
 rl python scripts\audit_synthetic_composite_edges.py --help
 rl python scripts\probe_yolo_representation_domain_gap.py --model runs\cashsnap\fixed_step_target_anchor_transplant_latest_v1_from_clean_e50_i416_b64_w0_auto_lr1e2_warmup3_amp_cachefalse_steps150_seed0\weights\best.pt --real-data data\cashsnap_v1\data.yaml --real-split test --synthetic-data configs\webgl_ablation\cashsnap_target_anchor_transplant_latest_puresynth_realval_v1.yaml --synthetic-split train --out-dir runs\cashsnap\representation_gap_synthleader_target_anchor_latest_test_v1 --imgsz 416 --batch 8 --device 0 --max-per-class 10 --top-k 40 --clean
+rl python scripts\mine_representation_gap_train_analogs.py --gap-summary runs\cashsnap\representation_gap_synthleader_target_anchor_latest_test_v1\summary.json --candidate-data data\cashsnap_v1\data.yaml --candidate-split train --out-dir runs\cashsnap\representation_gap_synthleader_train_analogs_v1 --batch 16 --device 0 --top-query 40 --per-query 4 --max-candidates-per-class 300 --clean
 rl python scripts\build_synthetic_obligation_ledger.py --no-default-evidence --positive-error-review runs\cashsnap\positive_error_review_synthleader_real_test_v1\summary.json --background-fp runs\cashsnap\background_fp_synthleader_real_test_v1.json --visual-failure "representation_gap|real_test|Current synthetic leader remains highly domain-separable after class balancing." --json-out runs\cashsnap\synthetic_obligation_ledger_synthleader_rep_gap_v1.json --md-out runs\cashsnap\synthetic_obligation_ledger_synthleader_rep_gap_v1.md
 rl python scripts\run_yolo_fixed_step_probe.py --help
 rl python scripts\check_yolo_transfer_guardrails.py --help
