@@ -20,6 +20,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+IMAGE_SHARPNESS_SIZE = (416, 416)
 IMAGE_STAT_KEYS = [
     "width",
     "height",
@@ -232,12 +233,17 @@ def split_source_records(dataset_root: Path, split_value: str | list[str]) -> li
 
 def label_path_for_image(image: Path) -> Path:
     parts = list(image.parts)
-    try:
-        index = parts.index("images")
-    except ValueError:
-        return image.with_suffix(".txt")
-    parts[index] = "labels"
-    return Path(*parts).with_suffix(".txt")
+    image_indexes = [index for index, part in enumerate(parts) if part == "images"]
+    for index in reversed(image_indexes):
+        candidate_parts = parts.copy()
+        candidate_parts[index] = "labels"
+        candidate = Path(*candidate_parts).with_suffix(".txt")
+        if candidate.exists():
+            return candidate
+    if image_indexes:
+        parts[image_indexes[-1]] = "labels"
+        return Path(*parts).with_suffix(".txt")
+    return image.with_suffix(".txt")
 
 
 def source_group(image: Path) -> str:
@@ -266,14 +272,21 @@ def image_stats(image: Path) -> dict[str, Any]:
     with Image.open(image) as handle:
         rgb = handle.convert("RGB")
         array = np.asarray(rgb, dtype=np.float32) / 255.0
+        sharpness_rgb = rgb.resize(IMAGE_SHARPNESS_SIZE, Image.Resampling.BILINEAR)
+        sharpness_array = np.asarray(sharpness_rgb, dtype=np.float32) / 255.0
 
     height, width = array.shape[:2]
     luma = 0.2126 * array[..., 0] + 0.7152 * array[..., 1] + 0.0722 * array[..., 2]
+    sharpness_luma = (
+        0.2126 * sharpness_array[..., 0]
+        + 0.7152 * sharpness_array[..., 1]
+        + 0.0722 * sharpness_array[..., 2]
+    )
     max_rgb = array.max(axis=2)
     min_rgb = array.min(axis=2)
     saturation = np.divide(max_rgb - min_rgb, np.maximum(max_rgb, 1e-6))
-    dx = np.diff(luma, axis=1)
-    dy = np.diff(luma, axis=0)
+    dx = np.diff(sharpness_luma, axis=1)
+    dy = np.diff(sharpness_luma, axis=0)
     sharpness = float(dx.var() + dy.var())
     return {
         "width": width,
@@ -293,6 +306,8 @@ def label_rows(image: Path, names: dict[Any, Any] | list[Any]) -> list[dict[str,
     label = label_path_for_image(image)
     if not label.exists():
         raise FileNotFoundError(f"missing label for {image}: {label}")
+    with Image.open(image) as handle:
+        image_w, image_h = handle.size
     rows = []
     for line_no, line in enumerate(label.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
@@ -303,6 +318,8 @@ def label_rows(image: Path, names: dict[Any, Any] | list[Any]) -> list[dict[str,
         class_id = int(parts[0])
         width = float(parts[3])
         height = float(parts[4])
+        width_px = width * image_w
+        height_px = height * image_h
         rows.append(
             {
                 "class_id": class_id,
@@ -312,7 +329,11 @@ def label_rows(image: Path, names: dict[Any, Any] | list[Any]) -> list[dict[str,
                 "box_width": width,
                 "box_height": height,
                 "box_area": width * height,
-                "box_aspect": width / height if height else None,
+                "box_width_px": width_px,
+                "box_height_px": height_px,
+                "box_area_px": width_px * height_px,
+                "box_aspect_normalized": width / height if height else None,
+                "box_aspect": width_px / height_px if height_px else None,
             }
         )
     return rows

@@ -542,6 +542,40 @@ Targeted branch status:
   detector pre-erase, e.g. multi-pass/segmentation/full-region source erasure
   plus final strict composite audit.
 
+Multi-instance replacement diagnostic status:
+- `scripts/build_cashsnap_multi_instance_replacement.py` is now the active
+  step-change probe for real scene context: it erases all known CashSnap source
+  boxes, inserts approved assets into the real geometry slots, writes visible
+  YOLO labels plus quad metadata, and supports source filename filters,
+  balanced class cycling, tone-reference modes, and Poisson variants.
+- Baseline medium Poisson replacement is useful but not trainable:
+  `cashsnap_multi_instance_replacement_medium_poisson_probe_v1` passes dataset
+  and visual QA, with edge `boundary=1.2286`, `color_step=0.0714`; against
+  positive real-train samples the separator is still high
+  `image/box/crop AUC=0.790/0.808/0.907`, and crops are too dark/saturated
+  (`luma_mean -0.140`, `saturation_mean +0.154`).
+- Full original-source tone plus stricter scale improves proxies but exposed a
+  false path: `scale120` reached `image/box/crop AUC=0.675/0.759/0.850` and
+  crop saturation gap `+0.086`, but its source pool includes stock/catalog
+  images and watermarks. Reject that as target-domain context despite the
+  prettier numbers.
+- Phone-context filtering (`--source-name-require-regex IMG_`) removes the
+  stock/watermark shortcut but makes same-class replacement too KHR-heavy and
+  too dark/saturated (`crop AUC=0.964` for full real-crop tone). Do not use
+  same-source-class phone replacement as a broad trainable root.
+- Balanced phone replacement fixes class coverage (`7-8` boxes per class in
+  40 images). Strong Poisson gives best edge color step (`0.0699`) but washes
+  note interiors and has `crop AUC=0.958`; light Poisson preserves note color
+  (`luma_mean -0.083`, `saturation_mean +0.088`) but edge color step explodes
+  to `0.1541`; edge-weighted Poisson is the current best direction but still
+  fails one tiny-visible QA row, has visible paste boundaries, and remains
+  separable (`image/box/crop AUC=0.858/0.822/0.930`, edge color step `0.1002`).
+- Decision: keep multi-instance replacement as a mechanism branch, not a
+  trainable package. Next work should add source-context quality gates, reject
+  or retry tiny visible remnants, and improve edge-weighted blending before any
+  detector audit/model proof. Detector/source-remnant audits still need RAM
+  headroom.
+
 Success signal is not a prettier sheet. A real step-change branch should reduce
 early-layer domain separability, recover broad real positive recall, and avoid
 new empty-frame FPs. If domain accuracy stays above about `0.90` at mid/late
@@ -767,6 +801,9 @@ Key configs:
 - `configs/synthetic_recipes/cashsnap_synthetic_governance_v1.json`
 - `configs/synthetic_recipes/cashsnap_data_lifecycle_registry_v1.json`
 - `configs/synthetic_recipes/cashsnap_webgl_approved_texture_bank_v1.json`
+- `configs/webgl_ablation/cashsnap_multi_instance_replacement_medium_poisson_probe_puresynth_realval_v1.yaml`
+- `configs/webgl_ablation/cashsnap_multi_instance_replacement_medium_poisson_realcrop_scale120_probe_puresynth_realval_v1.yaml`
+- `configs/webgl_ablation/cashsnap_multi_instance_replacement_context_phone_balanced_poissonedge_inpainttone_scale100_probe_puresynth_realval_v1.yaml`
 
 Key roots:
 - `data/synthetic/cashsnap_target_anchor_transplant_latest_v1/`
@@ -784,6 +821,9 @@ Key roots:
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen40_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen60_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_detectorerasectx_v1/`
+- `data/synthetic/cashsnap_multi_instance_replacement_medium_poisson_probe_v1/`
+- `data/synthetic/cashsnap_multi_instance_replacement_medium_poisson_realcrop_scale120_probe_v1/`
+- `data/synthetic/cashsnap_multi_instance_replacement_context_phone_balanced_poissonedge_inpainttone_scale100_probe_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_sourceclean_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_pad20_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_boxarea90_fallback_metagated_strict_v1/`
@@ -953,6 +993,7 @@ Key run artifacts:
 
 Key scripts:
 - `scripts/build_cashsnap_target_anchor_transplant.py`
+- `scripts/build_cashsnap_multi_instance_replacement.py`
 - `scripts/build_yolo_inpainted_background_bank.py`
 - `scripts/build_yolo_balanced_subset.py`
 - `scripts/materialize_yolo_trainonly_data_yaml.py`
@@ -964,6 +1005,8 @@ Key scripts:
 - `scripts/materialize_yolo_split_balanced_eval_subset.py`
 - `scripts/eval_yolo_lightweight_real_recall.py`
 - `scripts/audit_synthetic_composite_edges.py`
+- `scripts/audit_yolo_cross_dataset_visual_gap.py`
+- `scripts/audit_yolo_domain_separator.py`
 - `scripts/build_synthetic_obligation_ledger.py`
 - `scripts/build_webgl_hard_negative_dose_config.py`
 - `scripts/build_fp_mined_negative_dose_config.py`
@@ -997,6 +1040,10 @@ Script notes:
   `--couple-background-geometry`, `--geometry-size-jitter`,
   `--position-jitter-fraction`, and `--warp-alpha-feather-px` for train-anchor
   inpaint/context diagnostics.
+- `build_cashsnap_multi_instance_replacement.py` must remain diagnostic until
+  source-remnant/model proof exists. For phone-context probes, prefer explicit
+  `--source-name-require-regex IMG_` and balanced replacement; stock/catalog
+  sources can improve proxy metrics while being the wrong target domain.
 - `build_cashsnap_target_anchor_transplant.py` can use train-positive source
   images via `--background-manifest`, dynamic erase via
   `--inpaint-under-foreground-px`, and source-box erase via
