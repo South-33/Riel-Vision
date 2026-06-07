@@ -388,6 +388,23 @@ Targeted branch status:
   `13=0.8346`, `19=0.8000`, `22=0.8154`, late MMD `0.0205`. Read: source
   context is still the strongest measured mechanism after removing obvious
   source-note leakage and restoring class balance.
+- Strict coverage audit caught a second leakage mode: large leftover source
+  notes that overlap the intended label enough to pass the IoU-only audit. With
+  `--min-prediction-coverage 0.50`, the overgen40 balanced candidate still had
+  `18/260` suspect images and `24` unmatched predictions. Do not use IoU-only
+  unlabeled audits for source-context promotion.
+- Strict overgen60 sourcectx-singlebox:
+  `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen60_strictclean_balanced20_puresynth_realval_v1.yaml`.
+  Generated `780` images at `60/class`, strict-audited out `117` suspects, kept
+  `663` clean images, and selected a balanced `260` image, `20/class` train
+  list. Final strict audit is `0` suspect images and `0` unmatched predictions.
+  Visual sheet is improved on giant source-note remnants, but still shows
+  hard inpaint panels/context scars, so this is bounded-probe material, not a
+  perfect/done pipeline. Representation is label-safe but less dramatic than
+  the IoU-only branch: layer `0=0.7231`, `1=0.7654`, `8=0.9308`, `13=0.8769`,
+  `19=0.8231`, `22=0.8577`, late MMD `0.0293`. Read: strict source-context is
+  about tied with inpaintctx on late domain accuracy, better on late MMD, and
+  much safer on unlabeled-target leakage.
 - Fixed-step model A/B is not completed. b64/b32/b16/b8 attempts hit the 95%
   RAM guard while RunLong/Codex were resident. Also, one failed b64 attempt
   reused the old leader run name with the wrapper's real-clean default before
@@ -401,12 +418,12 @@ Targeted branch status:
   setup, but b8 inpaintctx still hit the RAM guard mid-epoch and wrote no
   weights. No fair model A/B exists for inpaintctx/couplectx yet in this
   RunLong session.
-- Do not promote either branch yet. Next best synth-data move is list-aware
-  visual/edge review for the balanced audit-clean config, then a clean
-  fixed-step model A/B under the train-only YAML helper. Promote only after
-  visual artifacts fall, unmatched-source detections stay near zero,
-  representation separation stays lower, real positive recall improves, and
-  empty-frame FPs do not regress.
+- Do not promote either branch yet. Next best move is a clean fixed-step model
+  A/B for the strict overgen60 balanced candidate under the train-only YAML
+  helper, plus empty-frame FP/positive-error checks if weights are produced.
+  If model transfer does not improve, stop treating source-context as a
+  curriculum answer and improve the generator itself by erasing all detector
+  source-note regions before compositing, not only the sampled YOLO box.
 
 Success signal is not a prettier sheet. A real step-change branch should reduce
 early-layer domain separability, recover broad real positive recall, and avoid
@@ -571,6 +588,11 @@ Key configs:
 - `configs/generated_lists/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen40_auditclean_v1_train.txt`
 - `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen40_auditclean_balanced20_puresynth_realval_v1.yaml`
 - `configs/generated_lists/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen40_auditclean_balanced20_v1_train.txt`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen60_puresynth_realval_v1.yaml`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen60_strictclean_puresynth_realval_v1.yaml`
+- `configs/generated_lists/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen60_strictclean_v1_train.txt`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen60_strictclean_balanced20_puresynth_realval_v1.yaml`
+- `configs/generated_lists/webgl_ablation/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen60_strictclean_balanced20_v1_train.txt`
 - `configs/synthetic_recipes/cashsnap_external_negative_banks_v1.json`
 - `configs/synthetic_recipes/cashsnap_webgl_recipe_catalog_v1.json`
 - `configs/synthetic_recipes/cashsnap_synthetic_governance_v1.json`
@@ -590,6 +612,7 @@ Key roots:
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_dyninpaint_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen40_v1/`
+- `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_singlebox_overgen60_v1/`
 - `data/synthetic/cashsnap_webgl_unknown_currency_soft_negative_smoke_v1/`
 - `data/processed/roboflow_khmer_us_currency_core13_bridge_v1/`
 - `data/processed/roboflow_khmer_us_currency_official21_partial_bridge_v1/`
@@ -684,6 +707,15 @@ Key run artifacts:
 - `runs/cashsnap/dataset_check_rep_gap_sourcectx_singlebox_overgen40_auditclean_balanced20_v1.json`
 - `runs/cashsnap/unlabeled_prediction_audit_rep_gap_sourcectx_singlebox_overgen40_auditclean_balanced20_v1.json`
 - `runs/cashsnap/representation_gap_synthleader_rep_gap_sourcectx_singlebox_overgen40_auditclean_balanced20_test_v1/summary.json`
+- `runs/cashsnap/unlabeled_prediction_audit_rep_gap_sourcectx_singlebox_overgen40_auditclean_balanced20_strictcov50_v1.json`
+- `runs/cashsnap/visual_qa_rep_gap_sourcectx_singlebox_overgen40_auditclean_balanced20_v1/per_class_sheet.jpg`
+- `runs/cashsnap/dataset_check_rep_gap_sourcectx_singlebox_overgen60_v1.json`
+- `runs/cashsnap/unlabeled_prediction_audit_rep_gap_sourcectx_singlebox_overgen60_strictcov50_v1.json`
+- `runs/cashsnap/dataset_check_rep_gap_sourcectx_singlebox_overgen60_strictclean_v1.json`
+- `runs/cashsnap/dataset_check_rep_gap_sourcectx_singlebox_overgen60_strictclean_balanced20_v1.json`
+- `runs/cashsnap/unlabeled_prediction_audit_rep_gap_sourcectx_singlebox_overgen60_strictclean_balanced20_strictcov50_v1.json`
+- `runs/cashsnap/visual_qa_rep_gap_sourcectx_singlebox_overgen60_strictclean_balanced20_v1/per_class_sheet.jpg`
+- `runs/cashsnap/representation_gap_synthleader_rep_gap_sourcectx_singlebox_overgen60_strictclean_balanced20_test_v1/summary.json`
 - `runs/cashsnap/fixed_step_target_anchor_latest_vs_rep_gap_inpaintctx_b8_s150_ctxprobe_v1_preflight.json`
 - `runs/cashsnap/system_profile_after_inpaintctx_b32_guard.json`
 - `runs/cashsnap/system_profile_after_b8_inpaintctx_guard_v1.json`
@@ -695,6 +727,7 @@ Key scripts:
 - `scripts/build_yolo_balanced_subset.py`
 - `scripts/materialize_yolo_trainonly_data_yaml.py`
 - `scripts/materialize_yolo_unlabeled_audit_filtered_config.py`
+- `scripts/build_yolo_split_visual_qa_sheet.py`
 - `scripts/audit_synthetic_composite_edges.py`
 - `scripts/build_synthetic_obligation_ledger.py`
 - `scripts/build_webgl_hard_negative_dose_config.py`

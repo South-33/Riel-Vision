@@ -49,6 +49,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="0")
     parser.add_argument("--conf", type=float, default=0.05)
     parser.add_argument("--match-iou", type=float, default=0.10)
+    parser.add_argument(
+        "--min-prediction-coverage",
+        type=float,
+        default=0.0,
+        help=(
+            "Require this fraction of the prediction area to be covered by a "
+            "declared label. Default 0 preserves the legacy IoU-only audit."
+        ),
+    )
     parser.add_argument("--max-images", type=int, default=0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--json-out", required=True, type=Path)
@@ -124,17 +133,45 @@ def read_labels(label_path: Path, image_size: tuple[int, int]) -> list[dict[str,
     return labels
 
 
-def iou(a: list[float], b: list[float]) -> float:
+def box_area(box: list[float]) -> float:
+    x1, y1, x2, y2 = box
+    return max(0.0, x2 - x1) * max(0.0, y2 - y1)
+
+
+def intersection_area(a: list[float], b: list[float]) -> float:
     ax1, ay1, ax2, ay2 = a
     bx1, by1, bx2, by2 = b
     ix1 = max(ax1, bx1)
     iy1 = max(ay1, by1)
     ix2 = min(ax2, bx2)
     iy2 = min(ay2, by2)
-    inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
-    area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
-    area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
-    union = area_a + area_b - inter
+    return max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+
+
+def overlap_metrics(prediction: list[float], label: list[float]) -> dict[str, float]:
+    inter = intersection_area(prediction, label)
+    prediction_area = box_area(prediction)
+    label_area = box_area(label)
+    union = prediction_area + label_area - inter
+    return {
+        "iou": inter / union if union > 0 else 0.0,
+        "prediction_coverage": inter / prediction_area if prediction_area > 0 else 0.0,
+        "label_coverage": inter / label_area if label_area > 0 else 0.0,
+    }
+
+
+def best_overlap(prediction: list[float], labels: list[dict[str, Any]]) -> dict[str, float]:
+    best = {"iou": 0.0, "prediction_coverage": 0.0, "label_coverage": 0.0}
+    for label in labels:
+        metrics = overlap_metrics(prediction, label["xyxy"])
+        if (metrics["iou"], metrics["prediction_coverage"]) > (best["iou"], best["prediction_coverage"]):
+            best = metrics
+    return best
+
+
+def iou(a: list[float], b: list[float]) -> float:
+    inter = intersection_area(a, b)
+    union = box_area(a) + box_area(b) - inter
     return inter / union if union > 0 else 0.0
 
 
@@ -210,9 +247,22 @@ def main() -> None:
                     )
             unmatched = []
             for prediction in predictions:
-                best_iou = max((iou(prediction["xyxy"], label["xyxy"]) for label in labels), default=0.0)
-                if best_iou < args.match_iou:
-                    unmatched.append({**prediction, "best_label_iou": best_iou})
+                best = best_overlap(prediction["xyxy"], labels)
+                reasons = []
+                if best["iou"] < args.match_iou:
+                    reasons.append("low_iou")
+                if best["prediction_coverage"] < args.min_prediction_coverage:
+                    reasons.append("low_prediction_coverage")
+                if reasons:
+                    unmatched.append(
+                        {
+                            **prediction,
+                            "best_label_iou": best["iou"],
+                            "best_prediction_coverage": best["prediction_coverage"],
+                            "best_label_coverage": best["label_coverage"],
+                            "unmatched_reasons": reasons,
+                        }
+                    )
                     unmatched_by_class[prediction["class_id"]] += 1
             total_predictions += len(predictions)
             total_unmatched += len(unmatched)
@@ -238,6 +288,7 @@ def main() -> None:
         "images": len(images),
         "conf": args.conf,
         "match_iou": args.match_iou,
+        "min_prediction_coverage": args.min_prediction_coverage,
         "total_predictions": total_predictions,
         "total_unmatched_predictions": total_unmatched,
         "images_with_unmatched_predictions": len(suspect_records),
