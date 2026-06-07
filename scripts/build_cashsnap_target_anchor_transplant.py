@@ -1091,6 +1091,7 @@ def render_one(
     inpaint_under_foreground_px: int,
     inpaint_under_foreground_radius: float,
     inpaint_source_box_pad_fraction: float | None,
+    inpaint_source_box_policy: str,
     couple_background_geometry: bool,
     pose_policy: str,
     min_render_short_px: float,
@@ -1161,6 +1162,7 @@ def render_one(
     source_box_xyxy = (
         sample_xyxy(sample, (width, height), pad_fraction=inpaint_source_box_pad_fraction)
         if inpaint_source_box_pad_fraction is not None
+        and (inpaint_source_box_policy == "always" or background.source_image_path is not None)
         else None
     )
     inpaint_metadata = inpaint_mask_metadata(alpha, inpaint_under_foreground_px, source_box_xyxy)
@@ -1233,6 +1235,7 @@ def render_one(
             if inpaint_source_box_pad_fraction is not None
             else None
         ),
+        "inpaint_source_box_policy": inpaint_source_box_policy,
         "pose_policy": pose_policy,
         "min_render_short_px": round(float(min_render_short_px), 3),
         "min_render_width_px": round(float(min_render_width_px), 3),
@@ -1341,6 +1344,22 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--background-split", default="train", help="Patch filename split suffix to use.")
     parser.add_argument(
+        "--fallback-background-root",
+        default="",
+        help="Optional no-note background patch directory used when a class lacks enough source-positive backgrounds.",
+    )
+    parser.add_argument(
+        "--fallback-background-split",
+        default="train",
+        help="Patch filename split suffix for --fallback-background-root.",
+    )
+    parser.add_argument(
+        "--min-class-source-backgrounds",
+        type=int,
+        default=1,
+        help="Minimum coupled source-positive backgrounds required before using source context for a class.",
+    )
+    parser.add_argument(
         "--canvas-size",
         default="640,640",
         help="Output canvas width,height. Empty string preserves source background dimensions.",
@@ -1431,6 +1450,12 @@ def parse_args() -> argparse.Namespace:
         help="Also inpaint the sampled source YOLO AABB, optionally padded by this fraction.",
     )
     parser.add_argument(
+        "--inpaint-source-box-policy",
+        default="always",
+        choices=("always", "source_background_only"),
+        help="Controls when --inpaint-source-box-pad-fraction applies; use source_background_only for mixed fallback roots.",
+    )
+    parser.add_argument(
         "--couple-background-geometry",
         action="store_true",
         help="Prefer geometry from each background manifest's source image when available.",
@@ -1514,6 +1539,7 @@ def main() -> None:
     cashsnap_root = repo_path(args.cashsnap_root)
     background_root = repo_path(args.background_root) if args.background_root else None
     background_manifest = repo_path(args.background_manifest) if args.background_manifest.strip() else None
+    fallback_background_root = repo_path(args.fallback_background_root) if args.fallback_background_root.strip() else None
     manifest_path = repo_path(args.asset_manifest)
     out_root = repo_path(args.out_root)
     out_config = repo_path(args.out_config)
@@ -1521,6 +1547,8 @@ def main() -> None:
         raise SystemExit("--per-class must be > 0")
     if args.background_max_source_boxes < 0:
         raise SystemExit("--background-max-source-boxes must be >= 0")
+    if args.min_class_source_backgrounds < 1:
+        raise SystemExit("--min-class-source-backgrounds must be >= 1")
     if args.clean:
         safe_clean(out_root)
     (out_root / "images" / "train").mkdir(parents=True, exist_ok=True)
@@ -1542,6 +1570,11 @@ def main() -> None:
         backgrounds = load_patch_backgrounds(background_root, args.background_split)
     else:
         backgrounds = cashsnap_empty_backgrounds
+    fallback_backgrounds = (
+        load_patch_backgrounds(fallback_background_root, args.fallback_background_split)
+        if fallback_background_root is not None
+        else []
+    )
     assets_by_class = load_assets(manifest_path, status, sides, args.asset_quality_policy)
     if args.min_class_geometry_samples < 1:
         raise SystemExit("--min-class-geometry-samples must be > 0")
@@ -1614,7 +1647,13 @@ def main() -> None:
             raise SystemExit("Too many failed transplant attempts; check geometry/asset/background inputs.")
         class_name = choose_class(rng, class_counts)
         class_backgrounds = backgrounds_by_class.get(class_name, [])
-        background = rng.choice(class_backgrounds if class_backgrounds else backgrounds)
+        if len(class_backgrounds) >= args.min_class_source_backgrounds:
+            background_pool = class_backgrounds
+        elif fallback_backgrounds:
+            background_pool = fallback_backgrounds
+        else:
+            background_pool = class_backgrounds if class_backgrounds else backgrounds
+        background = rng.choice(background_pool)
         asset = rng.choice(assets_by_class[class_name])
         rendered = render_one(
             background,
@@ -1637,6 +1676,7 @@ def main() -> None:
             args.inpaint_under_foreground_px,
             args.inpaint_under_foreground_radius,
             args.inpaint_source_box_pad_fraction,
+            args.inpaint_source_box_policy,
             args.couple_background_geometry,
             args.pose_policy,
             args.min_render_short_px,
@@ -1693,6 +1733,7 @@ def main() -> None:
         "images": len(records),
         "class_counts": dict(sorted(class_counts.items())),
         "background_source_images": len(backgrounds),
+        "fallback_background_source_images": len(fallback_backgrounds),
         "background_max_source_boxes": args.background_max_source_boxes,
         "background_root": (
             repo_rel(background_manifest)
@@ -1708,6 +1749,9 @@ def main() -> None:
             if background_root is not None
             else "cashsnap_empty_train"
         ),
+        "fallback_background_root": repo_rel(fallback_background_root) if fallback_background_root is not None else None,
+        "fallback_background_split": args.fallback_background_split if fallback_background_root is not None else None,
+        "min_class_source_backgrounds": args.min_class_source_backgrounds,
         "canvas_size": list(canvas_size) if canvas_size is not None else None,
         "unique_backgrounds_used": len(background_counts),
         "real_geometry_samples_by_class": {
@@ -1730,6 +1774,7 @@ def main() -> None:
         "inpaint_under_foreground_px": args.inpaint_under_foreground_px,
         "inpaint_under_foreground_radius": args.inpaint_under_foreground_radius,
         "inpaint_source_box_pad_fraction": args.inpaint_source_box_pad_fraction,
+        "inpaint_source_box_policy": args.inpaint_source_box_policy,
         "couple_background_geometry": args.couple_background_geometry,
         "background_source_classes": {
             class_name: len(backgrounds_by_class.get(class_name, [])) for class_name in CLASS_NAMES
