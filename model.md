@@ -712,6 +712,15 @@ Targeted branch status:
   setting, not a path to the `0.82-0.85` finish line. Stop tiny schedule
   chasing unless it directly supports a bigger real-failure curriculum or
   training-strategy change.
+- Mined-real stress scoring is now unblocked and exposes the real gap more
+  sharply than the bounded balanced10/bg50 subset. On the 17-image/35-box
+  diagnostic stress slice, target-anchor latest and `mosaic=0.75` both have
+  zero TPs at `conf=0.05` and `conf=0.01`; at `conf=0.001`, baseline finds
+  `19/35` boxes and `mosaic=0.75` finds `21/35`, but both are flood-threshold
+  signals, not usable detections. The stress scorecard still rejects
+  `mosaic=0.75` because `KHR_50000` drops from `4/5` to `3/5` at `conf=0.001`.
+  Read: the next step-change branch must make mined/real stress visible at
+  usable confidence, not just improve clean-ish bounded recall.
 - Earlier non-fallback fixed-step A/B attempts remain incomplete:
   b64/b32/b16/b8 runs hit the 95% RAM guard while RunLong/Codex were resident.
   Also, one failed b64 attempt reused the old leader run name with the
@@ -951,9 +960,11 @@ survives at least two seeds or a slow-promotion run.
   and `check_yolo_dataset.py` passes on it. Coverage is useful but narrow:
   dense overlap `3`, fan `2`, thin edge `6`, weak class `6`; classes are
   `KHR_500/KHR_1000/KHR_5000/KHR_20000/KHR_50000/USD_20` only.
-- Lightweight eval on the mined-real stress data is wired but currently
-  RAM-blocked: the headroom wrapper killed the first `320/b1` eval at the `95%`
-  RAM guard before writing metrics. Rerun when available RAM is above the guard.
+- Lightweight eval on the mined-real stress data now runs at `320/b1` and is a
+  required diagnostic warning slice for future serious candidates. Current
+  target-anchor latest and the best-shaped mosaic schedule still get zero TPs at
+  `conf>=0.01`, so this slice is not release-grade proof but it is a better
+  failure-cluster judge than proxy stats or clean-ish bounded subsets alone.
 - Own-photo capture bridge is empty. `scripts/check_capture_requirements.py`
   reports `0` inventory rows, `0` usable rows, and all `16` requirements
   missing; the inbox guides already exist under
@@ -1330,6 +1341,13 @@ Key run artifacts:
 - `runs/cashsnap/light_eval_target_anchor_latest_bal20_mosaic075_s1000_realtest_bal10_bg50_i320_conf01_iou50_v1.json`
 - `runs/cashsnap/light_eval_target_anchor_latest_bal20_mosaic075_s1000_realtest_bal10_bg50_i320_conf001_iou50_v1.json`
 - `runs/cashsnap/scorecard_target_anchor_latest_bal20_mosaic075_realtest_bal10_bg50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_s1000_minedrealstress_i320_conf005_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_s1000_minedrealstress_i320_conf01_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_s1000_minedrealstress_i320_conf001_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_mosaic075_s1000_minedrealstress_i320_conf005_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_mosaic075_s1000_minedrealstress_i320_conf01_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_mosaic075_s1000_minedrealstress_i320_conf001_iou50_v1.json`
+- `runs/cashsnap/scorecard_target_anchor_latest_bal20_mosaic075_minedrealstress_v1.json`
 - `runs/cashsnap/dataset_check_rep_gap_detectorerasectx_v1.json`
 - `runs/cashsnap/unlabeled_prediction_audit_rep_gap_detectorerasectx_strictcov50_v1.json`
 - `runs/cashsnap/visual_qa_rep_gap_detectorerasectx_v1/per_class_sheet.jpg`
