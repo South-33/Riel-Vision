@@ -159,6 +159,55 @@ def fmt_metric(value: float | None) -> str:
     return "none" if value is None else f"{value:.4f}"
 
 
+def source_group_for_image(image_path: Path) -> str:
+    name = image_path.name.lower()
+    prefixes = {
+        "asian_currency_": "asian_currency",
+        "billsbank_": "billsbank",
+        "cambodia_currency_project_": "cambodia_currency_project",
+        "cashcountingxl_": "cashcountingxl",
+        "khmer_us_currency_": "khmer_us_currency",
+        "usd_total_": "usd_total",
+    }
+    for prefix, group in prefixes.items():
+        if name.startswith(prefix):
+            return group
+    return name.split("_", 1)[0] if "_" in name else "unknown"
+
+
+def box_area_ratio(box: list[float], image_size: tuple[int, int]) -> float:
+    width, height = image_size
+    x1, y1, x2, y2 = box
+    x1 = min(max(0.0, x1), float(width))
+    x2 = min(max(0.0, x2), float(width))
+    y1 = min(max(0.0, y1), float(height))
+    y2 = min(max(0.0, y2), float(height))
+    area = max(0.0, x2 - x1) * max(0.0, y2 - y1)
+    total = max(1.0, float(width * height))
+    return area / total
+
+
+def update_area_stats(stats: dict[str, float | int], area_ratio: float) -> None:
+    stats["count"] = int(stats["count"]) + 1
+    stats["sum"] = float(stats["sum"]) + area_ratio
+    stats["max"] = max(float(stats["max"]), area_ratio)
+    if area_ratio >= 0.50:
+        stats["large_ge_50pct"] = int(stats["large_ge_50pct"]) + 1
+    if area_ratio >= 0.90:
+        stats["full_ge_90pct"] = int(stats["full_ge_90pct"]) + 1
+
+
+def finalize_area_stats(stats: dict[str, float | int]) -> dict[str, float | int]:
+    count = int(stats["count"])
+    return {
+        "count": count,
+        "mean_area_ratio": (float(stats["sum"]) / count) if count else None,
+        "max_area_ratio": float(stats["max"]) if count else None,
+        "large_ge_50pct": int(stats["large_ge_50pct"]),
+        "full_ge_90pct": int(stats["full_ge_90pct"]),
+    }
+
+
 def match_predictions(
     labels: list[dict[str, Any]],
     predictions: list[dict[str, Any]],
@@ -207,6 +256,30 @@ def main() -> None:
     images_with_fp = 0
     total_predictions = 0
     examples_with_fp: list[dict[str, Any]] = []
+    examples_with_fn: list[dict[str, Any]] = []
+    examples_with_large_fp: list[dict[str, Any]] = []
+    prediction_area_stats: dict[str, float | int] = {
+        "count": 0,
+        "sum": 0.0,
+        "max": 0.0,
+        "large_ge_50pct": 0,
+        "full_ge_90pct": 0,
+    }
+    fp_area_stats: dict[str, float | int] = {
+        "count": 0,
+        "sum": 0.0,
+        "max": 0.0,
+        "large_ge_50pct": 0,
+        "full_ge_90pct": 0,
+    }
+    source_images: Counter[str] = Counter()
+    source_background_images: Counter[str] = Counter()
+    source_background_fp_images: Counter[str] = Counter()
+    source_images_with_fp: Counter[str] = Counter()
+    source_gt: Counter[str] = Counter()
+    source_tp: Counter[str] = Counter()
+    source_fp: Counter[str] = Counter()
+    source_fn: Counter[str] = Counter()
 
     for batch in batched(images, max(1, args.batch)):
         results = model.predict(
@@ -221,28 +294,48 @@ def main() -> None:
             from PIL import Image
 
             with Image.open(image_path) as image:
-                labels = read_labels(label_path_for_image(image_path), image.size)
+                image_size = image.size
+                labels = read_labels(label_path_for_image(image_path), image_size)
+            source_group = source_group_for_image(image_path)
+            source_images[source_group] += 1
             for label in labels:
                 gt_by_class[int(label["class_id"])] += 1
+                source_gt[source_group] += 1
             if not labels:
                 background_images += 1
+                source_background_images[source_group] += 1
             predictions: list[dict[str, Any]] = []
             if result.boxes is not None:
                 xyxy = result.boxes.xyxy.cpu().numpy()
                 cls = result.boxes.cls.cpu().numpy()
                 conf = result.boxes.conf.cpu().numpy()
                 for box, class_id, score in zip(xyxy, cls, conf):
+                    xyxy_box = [float(value) for value in box.tolist()]
+                    area_ratio = box_area_ratio(xyxy_box, image_size)
+                    update_area_stats(prediction_area_stats, area_ratio)
                     predictions.append(
                         {
                             "class_id": int(class_id),
                             "confidence": float(score),
-                            "xyxy": [float(value) for value in box.tolist()],
+                            "xyxy": xyxy_box,
+                            "area_ratio": area_ratio,
                         }
                     )
             total_predictions += len(predictions)
             tp, fn, false_predictions = match_predictions(labels, predictions, args.iou)
             for prediction in false_predictions:
                 fp_by_class[int(prediction["class_id"])] += 1
+                source_fp[source_group] += 1
+                update_area_stats(fp_area_stats, float(prediction.get("area_ratio", 0.0)))
+                if float(prediction.get("area_ratio", 0.0)) >= 0.50 and len(examples_with_large_fp) < 30:
+                    examples_with_large_fp.append(
+                        {
+                            "image": repo_rel(image_path),
+                            "source_group": source_group,
+                            "labels": labels,
+                            "false_prediction": prediction,
+                        }
+                    )
             matched_by_class = Counter()
             for label in labels:
                 matched_by_class[int(label["class_id"])] += 1
@@ -267,18 +360,37 @@ def main() -> None:
                     per_class_fn[int(label["class_id"])] += 1
             tp_by_class.update(per_class_tp)
             fn_by_class.update(per_class_fn)
+            source_tp[source_group] += sum(per_class_tp.values())
+            source_fn[source_group] += sum(per_class_fn.values())
             if false_predictions:
                 images_with_fp += 1
+                source_images_with_fp[source_group] += 1
                 if not labels:
                     background_images_with_fp += 1
+                    source_background_fp_images[source_group] += 1
                 if len(examples_with_fp) < 30:
                     examples_with_fp.append(
                         {
                             "image": repo_rel(image_path),
+                            "source_group": source_group,
                             "labels": labels,
                             "false_predictions": false_predictions[:5],
                         }
                     )
+            if fn and len(examples_with_fn) < 30:
+                missed_labels = [
+                    label
+                    for index, label in enumerate(labels)
+                    if index not in matched_label_indices
+                ]
+                examples_with_fn.append(
+                    {
+                        "image": repo_rel(image_path),
+                        "source_group": source_group,
+                        "missed_labels": missed_labels,
+                        "predictions": predictions[:5],
+                    }
+                )
 
     per_class = {}
     for class_id in sorted(set(gt_by_class) | set(tp_by_class) | set(fp_by_class) | set(fn_by_class)):
@@ -298,8 +410,26 @@ def main() -> None:
     total_tp = sum(tp_by_class.values())
     total_fp = sum(fp_by_class.values())
     total_fn = sum(fn_by_class.values())
+    per_source = {}
+    for source_group in sorted(set(source_images) | set(source_gt) | set(source_fp) | set(source_fn)):
+        gt = int(source_gt[source_group])
+        tp = int(source_tp[source_group])
+        fp = int(source_fp[source_group])
+        fn = int(source_fn[source_group])
+        per_source[source_group] = {
+            "images": int(source_images[source_group]),
+            "background_images": int(source_background_images[source_group]),
+            "background_images_with_fp": int(source_background_fp_images[source_group]),
+            "images_with_fp": int(source_images_with_fp[source_group]),
+            "gt": gt,
+            "tp": tp,
+            "fp": fp,
+            "fn": fn,
+            "recall": tp / gt if gt else None,
+            "precision": tp / (tp + fp) if (tp + fp) else None,
+        }
     summary = {
-        "schema": "cashsnap_yolo_lightweight_recall_eval_v1",
+        "schema": "cashsnap_yolo_lightweight_recall_eval_v2",
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "model": repo_rel(resolve(args.model)),
         "data": repo_rel(data_path),
@@ -319,7 +449,12 @@ def main() -> None:
         "recall": total_tp / total_gt if total_gt else None,
         "precision": total_tp / (total_tp + total_fp) if (total_tp + total_fp) else None,
         "per_class": per_class,
+        "per_source": per_source,
+        "prediction_area_stats": finalize_area_stats(prediction_area_stats),
+        "fp_area_stats": finalize_area_stats(fp_area_stats),
         "fp_examples": examples_with_fp,
+        "fn_examples": examples_with_fn,
+        "large_fp_examples": examples_with_large_fp,
     }
     out_path = resolve(args.json_out)
     out_path.parent.mkdir(parents=True, exist_ok=True)

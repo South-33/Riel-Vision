@@ -512,22 +512,35 @@ Targeted branch status:
   `0.7615` and sourcectx `0.7385`, but both fire on all `50/50` backgrounds
   with precision about `0.0018`. Read: the low-res short probe is undertrained
   and uncalibrated; it does not prove strict sourcectx transfer.
-- Stronger `320/b1/1000` row-matched train was attempted next, but no weights
-  were produced: the headroom wrapper stopped before training because RAM was
-  already at `~96%`/`~0.7GB` free. This is a current-machine headroom blocker,
-  not a data/config failure.
-- Current fallback model-probe configs are ready but not run. Train-only YAMLs
-  and `320/b1/1000` preflights pass for both row-matched candidates:
-  `fixed_step_target_anchor_latest_bal20_vs_sourcectx_usd50100fallback_b20_b1_s1000_i320_v1_preflight.json`
-  and
-  `fixed_step_target_anchor_latest_bal20_vs_sourcectx_boxarea90fallback_b20_b1_s1000_i320_v1_preflight.json`.
-  Use these when RAM frees up; do not rebuild the candidate packages first.
-- Fixed-step model A/B is not completed. b64/b32/b16/b8 attempts hit the 95%
-  RAM guard while RunLong/Codex were resident. Also, one failed b64 attempt
-  reused the old leader run name with the wrapper's real-clean default before
-  this was caught; do not trust that run directory's current weights. Use the
-  previously written metrics JSONs as historical evidence or rerun clean with
-  explicit `--model yolo26n.pt` under lower memory pressure.
+- Stronger `320/b1/1000` row-matched sourcectx fallback probes completed under
+  recovered RAM. Both candidates beat the same reused latest-anchor baseline on
+  train-only synthetic self-eval, but neither shows trustworthy real transfer:
+  `usd50100fallback` self mAP50-95 `0.011406` vs baseline `0.007368`
+  (`+0.004038`), and `boxarea90fallback` `0.009140` (`+0.001773`).
+  On bounded real-test `cashsnap_v1_realtest_balanced10_bg50_v1`, all arms have
+  `0.0` recall at `conf=0.05`; at `conf=0.01`, both sourcectx candidates find
+  only `1/130` GT (`recall=0.0077`) while baseline finds `0`, with weak
+  precision (`0.0046` usd50100, `0.0110` boxarea90). At `conf=0.001`, baseline
+  recall is higher (`0.7692`) than usd50100 (`0.7308`) or boxarea90 (`0.7231`),
+  but all fire on `50/50` backgrounds with precision about `0.0018-0.0019`.
+  Read: representation/self-eval wins are not sufficient; keep both sourcectx
+  fallback branches diagnostic-only.
+- Lightweight real-eval v2 diagnostics show the transfer failure shape is
+  mostly extent/background rejection, not only class appearance. At `conf=0.01`
+  the false-positive mean area ratio is enormous (`0.856` baseline, `0.874`
+  usd50100, `0.839` boxarea90); most FPs cover at least half the image
+  (`155/188`, `185/215`, `76/90`), and many are near-full-frame (`139/188`,
+  `158/215`, `53/90`). Source-wise, `boxarea90` cuts `cashcountingxl` FPs
+  (`73 -> 19`) and background-hit families, but still gets only one true
+  positive. Next synth work should explicitly train/gate object extent and
+  empty-background rejection, not just push more realistic positive context.
+- Earlier non-fallback fixed-step A/B attempts remain incomplete:
+  b64/b32/b16/b8 runs hit the 95% RAM guard while RunLong/Codex were resident.
+  Also, one failed b64 attempt reused the old leader run name with the
+  wrapper's real-clean default before this was caught; do not trust that run
+  directory's current weights. Use the previously written metrics JSONs as
+  historical evidence or rerun clean with explicit `--model yolo26n.pt` under
+  lower memory pressure.
 - Latest model-side retry: b8 `target_anchor_latest_yolo_b8_s150_ctxprobe_v1`
   trained the baseline from `yolo26n.pt`, but candidate inpaintctx hit the 95%
   RAM guard; b4 and b2/no-AMP retries also hit the guard during setup/scanning.
@@ -535,12 +548,12 @@ Targeted branch status:
   setup, but b8 inpaintctx still hit the RAM guard mid-epoch and wrote no
   weights. No fair model A/B exists for inpaintctx/couplectx yet in this
   RunLong session.
-- Do not promote either branch yet. Next best move is a clean fixed-step model
-  A/B/eval for the strict overgen60 balanced candidate when memory headroom is
-  available, using original real test data for evaluation. While RAM is blocked,
-  the safer synth-data direction is stronger source-note removal than current
-  detector pre-erase, e.g. multi-pass/segmentation/full-region source erasure
-  plus final strict composite audit.
+- Do not promote either sourcectx fallback branch. Next best synth-data move is
+  to attack the real-transfer failure directly: diagnose the bounded-real false
+  positives/full-frame boxes and missing true positives, then add curriculum or
+  gating that penalizes background hallucination and improves real note
+  localization before spending more time on representation-only source-context
+  variants.
 
 Multi-instance replacement diagnostic status:
 - `scripts/build_cashsnap_multi_instance_replacement.py` is now the active
@@ -989,6 +1002,25 @@ Key run artifacts:
 - `runs/cashsnap/light_eval_target_anchor_latest_balanced20_realtest_bal10_bg50_i320_conf001_iou50_v1.json`
 - `runs/cashsnap/light_eval_sourcectx_strictclean_b20_realtest_bal10_bg50_i320_conf001_iou50_v1.json`
 - `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_sourcectx_strictclean_b20_b1_s1000_i320_v1_preflight.json`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_sourcectx_usd50100fallback_b20_b1_s1000_i320_v1_preflight.json`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_sourcectx_usd50100fallback_b20_b1_s1000_i320_v1_summary.json`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_sourcectx_boxarea90fallback_b20_b1_s1000_i320_v1_preflight.json`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_sourcectx_boxarea90fallback_b20_b1_s1000_i320_v1_summary.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_s1000_realtest_bal10_bg50_i320_conf005_iou50_v1.json`
+- `runs/cashsnap/light_eval_sourcectx_usd50100fallback_b20_s1000_realtest_bal10_bg50_i320_conf005_iou50_v1.json`
+- `runs/cashsnap/light_eval_sourcectx_boxarea90fallback_b20_s1000_realtest_bal10_bg50_i320_conf005_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_s1000_realtest_bal10_bg50_i320_conf01_iou50_v1.json`
+- `runs/cashsnap/light_eval_sourcectx_usd50100fallback_b20_s1000_realtest_bal10_bg50_i320_conf01_iou50_v1.json`
+- `runs/cashsnap/light_eval_sourcectx_boxarea90fallback_b20_s1000_realtest_bal10_bg50_i320_conf01_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_s1000_realtest_bal10_bg50_i320_conf001_iou50_v1.json`
+- `runs/cashsnap/light_eval_sourcectx_usd50100fallback_b20_s1000_realtest_bal10_bg50_i320_conf001_iou50_v1.json`
+- `runs/cashsnap/light_eval_sourcectx_boxarea90fallback_b20_s1000_realtest_bal10_bg50_i320_conf001_iou50_v1.json`
+- `runs/cashsnap/light_eval_diag_target_anchor_latest_bal20_s1000_realtest_bal10_bg50_i320_conf01_iou50_v2.json`
+- `runs/cashsnap/light_eval_diag_sourcectx_usd50100fallback_b20_s1000_realtest_bal10_bg50_i320_conf01_iou50_v2.json`
+- `runs/cashsnap/light_eval_diag_sourcectx_boxarea90fallback_b20_s1000_realtest_bal10_bg50_i320_conf01_iou50_v2.json`
+- `runs/cashsnap/light_eval_diag_target_anchor_latest_bal20_s1000_realtest_bal10_bg50_i320_conf001_iou50_v2.json`
+- `runs/cashsnap/light_eval_diag_sourcectx_usd50100fallback_b20_s1000_realtest_bal10_bg50_i320_conf001_iou50_v2.json`
+- `runs/cashsnap/light_eval_diag_sourcectx_boxarea90fallback_b20_s1000_realtest_bal10_bg50_i320_conf001_iou50_v2.json`
 - `runs/cashsnap/dataset_check_rep_gap_detectorerasectx_v1.json`
 - `runs/cashsnap/unlabeled_prediction_audit_rep_gap_detectorerasectx_strictcov50_v1.json`
 - `runs/cashsnap/visual_qa_rep_gap_detectorerasectx_v1/per_class_sheet.jpg`
