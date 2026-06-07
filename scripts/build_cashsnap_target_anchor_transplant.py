@@ -1360,6 +1360,12 @@ def parse_args() -> argparse.Namespace:
         help="Minimum coupled source-positive backgrounds required before using source context for a class.",
     )
     parser.add_argument(
+        "--source-background-exclude-class",
+        action="append",
+        default=None,
+        help="Class name that must use fallback backgrounds even when source-positive backgrounds exist. Repeatable.",
+    )
+    parser.add_argument(
         "--canvas-size",
         default="640,640",
         help="Output canvas width,height. Empty string preserves source background dimensions.",
@@ -1549,6 +1555,10 @@ def main() -> None:
         raise SystemExit("--background-max-source-boxes must be >= 0")
     if args.min_class_source_backgrounds < 1:
         raise SystemExit("--min-class-source-backgrounds must be >= 1")
+    source_background_exclude_classes = set(args.source_background_exclude_class or [])
+    unknown_exclude_classes = sorted(source_background_exclude_classes - set(CLASS_NAMES))
+    if unknown_exclude_classes:
+        raise SystemExit(f"Unknown --source-background-exclude-class values: {', '.join(unknown_exclude_classes)}")
     if args.clean:
         safe_clean(out_root)
     (out_root / "images" / "train").mkdir(parents=True, exist_ok=True)
@@ -1646,7 +1656,7 @@ def main() -> None:
         if attempts > target_count * 20:
             raise SystemExit("Too many failed transplant attempts; check geometry/asset/background inputs.")
         class_name = choose_class(rng, class_counts)
-        class_backgrounds = backgrounds_by_class.get(class_name, [])
+        class_backgrounds = [] if class_name in source_background_exclude_classes else backgrounds_by_class.get(class_name, [])
         if len(class_backgrounds) >= args.min_class_source_backgrounds:
             background_pool = class_backgrounds
         elif fallback_backgrounds:
@@ -1752,6 +1762,7 @@ def main() -> None:
         "fallback_background_root": repo_rel(fallback_background_root) if fallback_background_root is not None else None,
         "fallback_background_split": args.fallback_background_split if fallback_background_root is not None else None,
         "min_class_source_backgrounds": args.min_class_source_backgrounds,
+        "source_background_exclude_classes": sorted(source_background_exclude_classes),
         "canvas_size": list(canvas_size) if canvas_size is not None else None,
         "unique_backgrounds_used": len(background_counts),
         "real_geometry_samples_by_class": {
