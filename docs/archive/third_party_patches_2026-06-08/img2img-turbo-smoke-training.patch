@@ -1,0 +1,143 @@
+diff --git a/src/my_utils/training_utils.py b/src/my_utils/training_utils.py
+index f0819b7..30dc0e3 100644
+--- a/src/my_utils/training_utils.py
++++ b/src/my_utils/training_utils.py
+@@ -165,6 +165,7 @@ def parse_args_unpaired_training():
+     parser.add_argument("--lr_num_cycles", type=int, default=1, help="Number of hard resets of the lr in cosine_with_restarts scheduler.",)
+     parser.add_argument("--lr_power", type=float, default=1.0, help="Power factor of the polynomial scheduler.")
+     parser.add_argument("--gradient_accumulation_steps", type=int, default=1)
++    parser.add_argument("--mixed_precision", type=str, default=None, choices=["no", "fp16", "bf16"])
+ 
+     # memory saving options
+     parser.add_argument("--allow_tf32", action="store_true",
+@@ -202,6 +203,14 @@ def build_transform(image_prep):
+             transforms.RandomCrop((256, 256)),
+             transforms.RandomHorizontalFlip(),
+         ])
++    elif image_prep in ["resize_128", "resize_128x128"]:
++        T = transforms.Compose([
++            transforms.Resize((128, 128), interpolation=Image.LANCZOS)
++        ])
++    elif image_prep in ["resize_192", "resize_192x192"]:
++        T = transforms.Compose([
++            transforms.Resize((192, 192), interpolation=Image.LANCZOS)
++        ])
+     elif image_prep in ["resize_256", "resize_256x256"]:
+         T = transforms.Compose([
+             transforms.Resize((256, 256), interpolation=Image.LANCZOS)
+diff --git a/src/train_cyclegan_turbo.py b/src/train_cyclegan_turbo.py
+index 2e3143c..e095922 100644
+--- a/src/train_cyclegan_turbo.py
++++ b/src/train_cyclegan_turbo.py
+@@ -23,8 +23,16 @@ from my_utils.dino_struct import DinoStructureLoss
+ 
+ 
+ def main(args):
+-    accelerator = Accelerator(gradient_accumulation_steps=args.gradient_accumulation_steps, log_with=args.report_to)
++    log_with = None if str(args.report_to).lower() in {"", "none", "null", "false"} else args.report_to
++    mixed_precision = None if str(args.mixed_precision).lower() in {"", "none", "null", "false", "no"} else args.mixed_precision
++    accelerator = Accelerator(
++        gradient_accumulation_steps=args.gradient_accumulation_steps,
++        log_with=log_with,
++        mixed_precision=mixed_precision,
++    )
+     set_seed(args.seed)
++    do_validation = args.validation_steps > 0 and args.validation_num_images != 0
++    use_lpips = args.lambda_cycle_lpips > 0 or args.lambda_idt_lpips > 0
+ 
+     if accelerator.is_main_process:
+         os.makedirs(os.path.join(args.output_dir, "checkpoints"), exist_ok=True)
+@@ -36,6 +44,8 @@ def main(args):
+     unet, l_modules_unet_encoder, l_modules_unet_decoder, l_modules_unet_others = initialize_unet(args.lora_rank_unet, return_lora_module_names=True)
+     vae_a2b, vae_lora_target_modules = initialize_vae(args.lora_rank_vae, return_lora_module_names=True)
+ 
++    # Keep trainable weights in fp32. A real fp16 path needs an autocast-scoped
++    # loop; directly casting these LoRA/adapter params to fp16 trips GradScaler.
+     weight_dtype = torch.float32
+     vae_a2b.to(accelerator.device, dtype=weight_dtype)
+     text_encoder.to(accelerator.device, dtype=weight_dtype)
+@@ -87,7 +97,7 @@ def main(args):
+     l_images_src_test, l_images_tgt_test = sorted(l_images_src_test), sorted(l_images_tgt_test)
+ 
+     # make the reference FID statistics
+-    if accelerator.is_main_process:
++    if accelerator.is_main_process and do_validation:
+         feat_model = build_feature_extractor("clean", "cuda", use_dataparallel=False)
+         """
+         FID reference statistics for A -> B translation
+@@ -133,9 +143,11 @@ def main(args):
+         num_training_steps=args.max_train_steps * accelerator.num_processes,
+         num_cycles=args.lr_num_cycles, power=args.lr_power)
+ 
+-    net_lpips = lpips.LPIPS(net='vgg')
+-    net_lpips.cuda()
+-    net_lpips.requires_grad_(False)
++    net_lpips = None
++    if use_lpips:
++        net_lpips = lpips.LPIPS(net='vgg')
++        net_lpips.cuda()
++        net_lpips.requires_grad_(False)
+ 
+     fixed_a2b_tokens = tokenizer(fixed_caption_tgt, max_length=tokenizer.model_max_length, padding="max_length", truncation=True, return_tensors="pt").input_ids[0]
+     fixed_a2b_emb_base = text_encoder(fixed_a2b_tokens.cuda().unsqueeze(0))[0].detach()
+@@ -144,10 +156,15 @@ def main(args):
+     del text_encoder, tokenizer  # free up some memory
+ 
+     unet, vae_enc, vae_dec, net_disc_a, net_disc_b = accelerator.prepare(unet, vae_enc, vae_dec, net_disc_a, net_disc_b)
+-    net_lpips, optimizer_gen, optimizer_disc, train_dataloader, lr_scheduler_gen, lr_scheduler_disc = accelerator.prepare(
+-        net_lpips, optimizer_gen, optimizer_disc, train_dataloader, lr_scheduler_gen, lr_scheduler_disc
+-    )
+-    if accelerator.is_main_process:
++    if net_lpips is not None:
++        net_lpips, optimizer_gen, optimizer_disc, train_dataloader, lr_scheduler_gen, lr_scheduler_disc = accelerator.prepare(
++            net_lpips, optimizer_gen, optimizer_disc, train_dataloader, lr_scheduler_gen, lr_scheduler_disc
++        )
++    else:
++        optimizer_gen, optimizer_disc, train_dataloader, lr_scheduler_gen, lr_scheduler_disc = accelerator.prepare(
++            optimizer_gen, optimizer_disc, train_dataloader, lr_scheduler_gen, lr_scheduler_disc
++        )
++    if accelerator.is_main_process and log_with is not None:
+         accelerator.init_trackers(args.tracker_project_name, config=dict(vars(args)))
+ 
+     first_epoch = 0
+@@ -181,12 +198,14 @@ def main(args):
+                 cyc_fake_b = CycleGAN_Turbo.forward_with_networks(img_a, "a2b", vae_enc, unet, vae_dec, noise_scheduler_1step, timesteps, fixed_a2b_emb)
+                 cyc_rec_a = CycleGAN_Turbo.forward_with_networks(cyc_fake_b, "b2a", vae_enc, unet, vae_dec, noise_scheduler_1step, timesteps, fixed_b2a_emb)
+                 loss_cycle_a = crit_cycle(cyc_rec_a, img_a) * args.lambda_cycle
+-                loss_cycle_a += net_lpips(cyc_rec_a, img_a).mean() * args.lambda_cycle_lpips
++                if net_lpips is not None and args.lambda_cycle_lpips > 0:
++                    loss_cycle_a += net_lpips(cyc_rec_a, img_a).mean() * args.lambda_cycle_lpips
+                 # B -> fake A -> rec B
+                 cyc_fake_a = CycleGAN_Turbo.forward_with_networks(img_b, "b2a", vae_enc, unet, vae_dec, noise_scheduler_1step, timesteps, fixed_b2a_emb)
+                 cyc_rec_b = CycleGAN_Turbo.forward_with_networks(cyc_fake_a, "a2b", vae_enc, unet, vae_dec, noise_scheduler_1step, timesteps, fixed_a2b_emb)
+                 loss_cycle_b = crit_cycle(cyc_rec_b, img_b) * args.lambda_cycle
+-                loss_cycle_b += net_lpips(cyc_rec_b, img_b).mean() * args.lambda_cycle_lpips
++                if net_lpips is not None and args.lambda_cycle_lpips > 0:
++                    loss_cycle_b += net_lpips(cyc_rec_b, img_b).mean() * args.lambda_cycle_lpips
+                 accelerator.backward(loss_cycle_a + loss_cycle_b, retain_graph=False)
+                 if accelerator.sync_gradients:
+                     accelerator.clip_grad_norm_(params_gen, args.max_grad_norm)
+@@ -215,10 +234,12 @@ def main(args):
+                 """
+                 idt_a = CycleGAN_Turbo.forward_with_networks(img_b, "a2b", vae_enc, unet, vae_dec, noise_scheduler_1step, timesteps, fixed_a2b_emb)
+                 loss_idt_a = crit_idt(idt_a, img_b) * args.lambda_idt
+-                loss_idt_a += net_lpips(idt_a, img_b).mean() * args.lambda_idt_lpips
++                if net_lpips is not None and args.lambda_idt_lpips > 0:
++                    loss_idt_a += net_lpips(idt_a, img_b).mean() * args.lambda_idt_lpips
+                 idt_b = CycleGAN_Turbo.forward_with_networks(img_a, "b2a", vae_enc, unet, vae_dec, noise_scheduler_1step, timesteps, fixed_b2a_emb)
+                 loss_idt_b = crit_idt(idt_b, img_a) * args.lambda_idt
+-                loss_idt_b += net_lpips(idt_b, img_a).mean() * args.lambda_idt_lpips
++                if net_lpips is not None and args.lambda_idt_lpips > 0:
++                    loss_idt_b += net_lpips(idt_b, img_a).mean() * args.lambda_idt_lpips
+                 loss_g_idt = loss_idt_a + loss_idt_b
+                 accelerator.backward(loss_g_idt, retain_graph=False)
+                 if accelerator.sync_gradients:
+@@ -309,7 +330,7 @@ def main(args):
+                         torch.cuda.empty_cache()
+ 
+                     # compute val FID and DINO-Struct scores
+-                    if global_step % args.validation_steps == 1:
++                    if do_validation and global_step % args.validation_steps == 1:
+                         _timesteps = torch.tensor([noise_scheduler_1step.config.num_train_timesteps - 1] * 1, device="cuda").long()
+                         net_dino = DinoStructureLoss()
+                         """

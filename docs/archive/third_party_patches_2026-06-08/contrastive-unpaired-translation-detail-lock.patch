@@ -1,0 +1,108 @@
+diff --git a/data/unaligned_dataset.py b/data/unaligned_dataset.py
+index de3363c..5c7bd79 100644
+--- a/data/unaligned_dataset.py
++++ b/data/unaligned_dataset.py
+@@ -1,5 +1,5 @@
+ import os.path
+-from data.base_dataset import BaseDataset, get_transform
++from data.base_dataset import BaseDataset, get_params, get_transform
+ from data.image_folder import make_dataset
+ from PIL import Image
+ import random
+@@ -63,11 +63,23 @@ class UnalignedDataset(BaseDataset):
+         # do not perform resize-crop data augmentation of CycleGAN.
+         is_finetuning = self.opt.isTrain and self.current_epoch > self.opt.n_epochs
+         modified_opt = util.copyconf(self.opt, load_size=self.opt.crop_size if is_finetuning else self.opt.load_size)
+-        transform = get_transform(modified_opt)
+-        A = transform(A_img)
+-        B = transform(B_img)
++        params_A = get_params(modified_opt, A_img.size)
++        transform_A = get_transform(modified_opt, params=params_A)
++        transform_B = get_transform(modified_opt)
++        A = transform_A(A_img)
++        B = transform_B(B_img)
+ 
+-        return {'A': A, 'B': B, 'A_paths': A_path, 'B_paths': B_path}
++        result = {'A': A, 'B': B, 'A_paths': A_path, 'B_paths': B_path}
++        if getattr(self.opt, "lambda_detail_identity", 0.0) > 0:
++            mask_path = os.path.join(self.opt.dataroot, "masks", "detail_lock", os.path.splitext(os.path.basename(A_path))[0] + ".png")
++            if os.path.exists(mask_path):
++                mask_img = Image.open(mask_path).convert("L")
++            else:
++                mask_img = Image.new("L", A_img.size, 0)
++            mask_transform = get_transform(modified_opt, params=params_A, grayscale=True, method=Image.NEAREST)
++            result["A_detail_mask"] = mask_transform(mask_img)
++
++        return result
+ 
+     def __len__(self):
+         """Return the total number of images in the dataset.
+diff --git a/models/cut_model.py b/models/cut_model.py
+index 61e7f55..5f26ff8 100644
+--- a/models/cut_model.py
++++ b/models/cut_model.py
+@@ -19,10 +19,11 @@ class CUTModel(BaseModel):
+     def modify_commandline_options(parser, is_train=True):
+         """  Configures options specific for CUT model
+         """
+-        parser.add_argument('--CUT_mode', type=str, default="CUT", choices='(CUT, cut, FastCUT, fastcut)')
++        parser.add_argument('--CUT_mode', type=str, default="CUT", choices=("CUT", "cut", "FastCUT", "fastcut"))
+ 
+         parser.add_argument('--lambda_GAN', type=float, default=1.0, help='weight for GAN loss：GAN(G(X))')
+         parser.add_argument('--lambda_NCE', type=float, default=1.0, help='weight for NCE loss: NCE(G(X), X)')
++        parser.add_argument('--lambda_detail_identity', type=float, default=0.0, help='weight for masked identity loss on protected source-note details')
+         parser.add_argument('--nce_idt', type=util.str2bool, nargs='?', const=True, default=False, help='use NCE loss for identity mapping: NCE(G(Y), Y))')
+         parser.add_argument('--nce_layers', type=str, default='0,4,8,12,16', help='compute NCE loss on which layers')
+         parser.add_argument('--nce_includes_all_negatives_from_minibatch',
+@@ -66,6 +67,9 @@ class CUTModel(BaseModel):
+             self.loss_names += ['NCE_Y']
+             self.visual_names += ['idt_B']
+ 
++        if self.isTrain and opt.lambda_detail_identity > 0:
++            self.loss_names += ['Detail_ID']
++
+         if self.isTrain:
+             self.model_names = ['G', 'F', 'D']
+         else:  # during test time, only load G
+@@ -102,6 +106,8 @@ class CUTModel(BaseModel):
+         self.set_input(data)
+         self.real_A = self.real_A[:bs_per_gpu]
+         self.real_B = self.real_B[:bs_per_gpu]
++        if hasattr(self, 'detail_mask_A'):
++            self.detail_mask_A = self.detail_mask_A[:bs_per_gpu]
+         self.forward()                     # compute fake images: G(A)
+         if self.opt.isTrain:
+             self.compute_D_loss().backward()                  # calculate gradients for D
+@@ -141,6 +147,10 @@ class CUTModel(BaseModel):
+         AtoB = self.opt.direction == 'AtoB'
+         self.real_A = input['A' if AtoB else 'B'].to(self.device)
+         self.real_B = input['B' if AtoB else 'A'].to(self.device)
++        if self.opt.lambda_detail_identity > 0 and AtoB and 'A_detail_mask' in input:
++            self.detail_mask_A = input['A_detail_mask'].to(self.device)
++        elif hasattr(self, 'detail_mask_A'):
++            del self.detail_mask_A
+         self.image_paths = input['A_paths' if AtoB else 'B_paths']
+ 
+     def forward(self):
+@@ -192,7 +202,20 @@ class CUTModel(BaseModel):
+         else:
+             loss_NCE_both = self.loss_NCE
+ 
+-        self.loss_G = self.loss_G_GAN + loss_NCE_both
++        if self.opt.lambda_detail_identity > 0 and hasattr(self, 'detail_mask_A'):
++            detail_mask = (self.detail_mask_A > 0).float()
++            detail_src = self.real_A
++            if self.opt.flip_equivariance and getattr(self, 'flipped_for_equivariance', False):
++                detail_src = torch.flip(detail_src, [3])
++                detail_mask = torch.flip(detail_mask, [3])
++
++            masked_diff = torch.abs(self.fake_B - detail_src) * detail_mask
++            mask_area = detail_mask.mean().clamp_min(1e-6)
++            self.loss_Detail_ID = (masked_diff.mean() / mask_area) * self.opt.lambda_detail_identity
++        else:
++            self.loss_Detail_ID = torch.zeros((), device=self.device)
++
++        self.loss_G = self.loss_G_GAN + loss_NCE_both + self.loss_Detail_ID
+         return self.loss_G
+ 
+     def calculate_NCE_loss(self, src, tgt):
