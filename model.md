@@ -680,6 +680,15 @@ survives at least two seeds or a slow-promotion run.
   same-denomination fan, KHR_5000/KHR_20000 thin slices, KHR_5000 face+number
   overlap, KHR_50000 hard positives, mixed USD+KHR stack, no-note backgrounds,
   and non-banknote paper props.
+- Mission readiness remains false: `10` required conditions, `9` with active
+  suite packages, real role coverage `1/5`, candidate hints `5/7`, and usable
+  captures `0`. The mixed rare/common USD+KHR stack now has a rendered
+  diagnostic root,
+  `data/synthetic/cashsnap_webgl_mixed_rare_common_cross_currency_stack_diagnostic_v1/`,
+  with `12` balanced images and `54` boxes (`9` each for
+  `USD_50/USD_20/KHR_1000/KHR_5000/KHR_20000/KHR_50000`); dataset, label-view,
+  class-distribution, and note-print-tone gates pass. Do not add it to the
+  trainable suite until real mixed USD+KHR rare/common captures exist.
 
 ## Label And Class Policy
 
