@@ -673,6 +673,13 @@ survives at least two seeds or a slow-promotion run.
 - Lightweight eval on the mined-real stress data is wired but currently
   RAM-blocked: the headroom wrapper killed the first `320/b1` eval at the `95%`
   RAM guard before writing metrics. Rerun when available RAM is above the guard.
+- Own-photo capture bridge is empty. `scripts/check_capture_requirements.py`
+  reports `0` inventory rows, `0` usable rows, and all `16` requirements
+  missing; the inbox guides already exist under
+  `data/inbox/real_partial_photos/`. Highest P1 gaps are hand fan,
+  same-denomination fan, KHR_5000/KHR_20000 thin slices, KHR_5000 face+number
+  overlap, KHR_50000 hard positives, mixed USD+KHR stack, no-note backgrounds,
+  and non-banknote paper props.
 
 ## Label And Class Policy
 
