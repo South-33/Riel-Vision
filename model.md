@@ -450,6 +450,10 @@ Targeted branch status:
   `0.7615` and sourcectx `0.7385`, but both fire on all `50/50` backgrounds
   with precision about `0.0018`. Read: the low-res short probe is undertrained
   and uncalibrated; it does not prove strict sourcectx transfer.
+- Stronger `320/b1/1000` row-matched train was attempted next, but no weights
+  were produced: the headroom wrapper stopped before training because RAM was
+  already at `~96%`/`~0.7GB` free. This is a current-machine headroom blocker,
+  not a data/config failure.
 - Fixed-step model A/B is not completed. b64/b32/b16/b8 attempts hit the 95%
   RAM guard while RunLong/Codex were resident. Also, one failed b64 attempt
   reused the old leader run name with the wrapper's real-clean default before
@@ -783,6 +787,7 @@ Key run artifacts:
 - `runs/cashsnap/light_eval_sourcectx_strictclean_b20_realtest_bal10_bg50_i320_conf01_iou50_v1.json`
 - `runs/cashsnap/light_eval_target_anchor_latest_balanced20_realtest_bal10_bg50_i320_conf001_iou50_v1.json`
 - `runs/cashsnap/light_eval_sourcectx_strictclean_b20_realtest_bal10_bg50_i320_conf001_iou50_v1.json`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_sourcectx_strictclean_b20_b1_s1000_i320_v1_preflight.json`
 - `runs/cashsnap/dataset_check_rep_gap_detectorerasectx_v1.json`
 - `runs/cashsnap/unlabeled_prediction_audit_rep_gap_detectorerasectx_strictcov50_v1.json`
 - `runs/cashsnap/visual_qa_rep_gap_detectorerasectx_v1/per_class_sheet.jpg`
