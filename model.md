@@ -622,6 +622,18 @@ Targeted branch status:
   even when visually plausible and soft. Do not run bounded real for these
   doses. Next step is matched dark positive support and/or negative-loss/sampling
   strategy, not more raw zero-label dark-negative variants.
+- Matched dark positive support did not rescue the dark-domain path in the
+  balanced20 self-eval. WebGL dark positives added at 1/class failed
+  (`0.005075` vs `0.007368`, delta `-0.002293`, worst `KHR_5000 -0.013065`);
+  2/class failed harder (`0.004289`, delta `-0.003079`, worst `KHR_5000
+  -0.015307`). A label-preserving trusted-source style-copy probe also failed:
+  one mined-FP-dark transform per class from the alpha/contact positives scored
+  `0.004265` (delta `-0.003103`, worst `KHR_5000 -0.014746`). Read: this is
+  not just WebGL geometry or negative-only labels; raw dark-domain row insertion
+  destabilizes the tiny balanced20 curriculum. Do not combine dark positives
+  with dark negatives yet. The next path is a calibrated style ladder,
+  augmentation schedule, or loss/sampling curriculum that proves self-eval
+  preservation before bounded real transfer.
 - Earlier non-fallback fixed-step A/B attempts remain incomplete:
   b64/b32/b16/b8 runs hit the 95% RAM guard while RunLong/Codex were resident.
   Also, one failed b64 attempt reused the old leader run name with the
@@ -786,6 +798,13 @@ Current state:
   dark mined-FP visual domain, but dose-1/4 still fail self-eval. That changes
   the active bet: add matched dark positive examples or curriculum/loss controls
   before testing more dark zero-label near-negatives.
+- Matched dark positives were tested and rejected too: WebGL dark support
+  1/class and 2/class both failed, and a label-preserving dark-style copy from
+  trusted alpha/contact positives failed by a similar amount. The lesson is to
+  stop treating "dark currency-like pixels" as a row-bank problem. Build a
+  mild-to-strong style ladder and/or training augmentation/curriculum gate that
+  preserves the alpha/geoscale self-eval first, with `KHR_5000` watched as the
+  recurring worst-class canary.
 
 Next realistic bank should include reviewed foreign/unknown currencies,
 target-lookalike partial notes, receipts, cards, patterned paper, and retail
@@ -1169,6 +1188,14 @@ Key run artifacts:
 - `configs/webgl_ablation/cashsnap_target_anchor_transplant_alpha_contact_geoscale205_minshort190_webglsoftdark4_bal20_probe_puresynth_realval_v1.yaml`
 - `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_alpha_geoscale205_webglsoftdark1_b20_b1_s1000_i320_v1_summary.json`
 - `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_alpha_geoscale205_webglsoftdark4_b20_b1_s1000_i320_v1_summary.json`
+- `data/synthetic/cashsnap_webgl_clean_topdown_readable_dark_positive_support26_v1/`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_alpha_contact_geoscale205_minshort190_webgldarkpos1_bal20_probe_puresynth_realval_v1.yaml`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_alpha_contact_geoscale205_minshort190_webgldarkpos2_bal20_probe_puresynth_realval_v1.yaml`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_alpha_geoscale205_webgldarkpos1_b20_b1_s1000_i320_v1_summary.json`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_alpha_geoscale205_webgldarkpos2_b20_b1_s1000_i320_v1_summary.json`
+- `data/synthetic/cashsnap_target_anchor_alpha_contact_geoscale205_minshort190_darkstyle_pos1_v1/`
+- `configs/webgl_ablation/cashsnap_target_anchor_transplant_alpha_contact_geoscale205_minshort190_darkstylepos1_bal20_probe_puresynth_realval_v1.yaml`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_alpha_geoscale205_darkstylepos1_b20_b1_s1000_i320_v1_summary.json`
 - `runs/cashsnap/dataset_check_rep_gap_detectorerasectx_v1.json`
 - `runs/cashsnap/unlabeled_prediction_audit_rep_gap_detectorerasectx_strictcov50_v1.json`
 - `runs/cashsnap/visual_qa_rep_gap_detectorerasectx_v1/per_class_sheet.jpg`
@@ -1204,6 +1231,8 @@ Key scripts:
 - `scripts/audit_yolo_domain_separator.py`
 - `scripts/build_synthetic_obligation_ledger.py`
 - `scripts/build_webgl_hard_negative_dose_config.py`
+- `scripts/build_webgl_targeted_support_config.py`
+- `scripts/build_yolo_style_positive_support_config.py`
 - `scripts/build_fp_mined_negative_dose_config.py`
 - `scripts/build_external_negative_dose_config.py`
 - `scripts/build_synthetic_visual_qa_pack.py`
