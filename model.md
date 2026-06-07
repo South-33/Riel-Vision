@@ -675,17 +675,23 @@ Targeted branch status:
   bg-hit images `+4`; `conf=0.001` recall `-0.0462`, FP `+6`). Next
   curriculum work needs FP-aware tuning or seed-repeat proof, not a direct
   `hsv_v=0.7` promotion.
-- Candidate-only `mosaic=0.0` is the first better-shaped curriculum clue, but
-  still not a promotion. It improves fixed-step synthetic self-eval
-  (`0.011476` vs `0.007368`, delta `+0.004108`, worst `KHR_5000 -0.012462`)
-  and bounded real at `conf=0.01` finds `3/130` GT with fewer FPs/background
-  hits than baseline (`188 -> 186` FPs, `7/50 -> 6/50` bg-hit images). At
-  `conf=0.001`, recall rises slightly (`100/130 -> 102/130`) with unchanged
-  background flood, but per-class recall swaps fail the scorecard
-  (`KHR_2000 -0.20`, `KHR_1000/KHR_20000/KHR_50000 -0.10`). At `conf=0.05`,
-  it adds `28` FPs, mostly `cashcountingxl`/`USD_50`/`KHR_2000`. Read: mosaic
-  likely contributes to the full-frame/extent failure, but zero-mosaic needs an
-  FP-aware schedule, class guard, and seed repeat before any recipe change.
+- Candidate-only `mosaic=0.0` is the strongest current curriculum clue, but
+  still not a promotion. Seed 0 improves fixed-step synthetic self-eval
+  (`0.011476` vs `0.007368`, delta `+0.004108`, worst `KHR_5000 -0.012462`);
+  seed 1 repeats the gain (`0.013898` vs `0.007670`, delta `+0.006228`, worst
+  `USD_10 -0.001699`). Bounded real at `conf=0.01` is better-shaped in both
+  seeds: seed 0 finds `3/130` GT with fewer FPs/background hits than baseline
+  (`188 -> 186` FPs, `7/50 -> 6/50` bg-hit images), and seed 1 preserves
+  `2/130` recall while reducing FPs/background hits (`253 -> 163` FPs,
+  `12/50 -> 5/50`). The blocker is high-confidence/background safety and
+  protected-class swaps: seed 0 adds `28` FPs at `conf=0.05`; seed 1 adds `45`
+  FPs and `1` bg-hit image at `conf=0.05`; `conf=0.001` improves aggregate
+  recall/FPs but still has per-class recall drops. Turning `erasing=0.0` off on
+  top of no-mosaic gives the same self-eval and identical `conf=0.01` bounded
+  real result, so erasing is not the current lever. Read: mosaic likely
+  contributes to the full-frame/extent failure, but hard zero-mosaic needs a
+  partial-mosaic schedule (`0.25`/`0.5`), FP-aware guard, and class guard before
+  any recipe change.
 - Earlier non-fallback fixed-step A/B attempts remain incomplete:
   b64/b32/b16/b8 runs hit the 95% RAM guard while RunLong/Codex were resident.
   Also, one failed b64 attempt reused the old leader run name with the
@@ -860,9 +866,11 @@ Current state:
 - The first style ladder confirms the row-bank lesson: even mild dark-style
   positive copies fail self-eval. Candidate-only `hsv_v=0.7` passes self-eval
   and gets two low-confidence bounded-real TPs at `conf=0.01`, but it worsens
-  background FPs and loses recall at `conf=0.001`. Treat augmentation as the
-  next controllable curriculum axis, but require FP-aware bounded-real and
-  seed-repeat proof before it changes the trainable recipe.
+  background FPs and loses recall at `conf=0.001`. No-mosaic now has seed-repeat
+  self-eval proof and useful `conf=0.01` bounded-real shape, but it still fails
+  high-confidence/background and per-class guards. Treat augmentation/curriculum
+  as the next controllable axis; the next probe should tune mosaic schedule
+  before changing trainable recipes.
 
 Next realistic bank should include reviewed foreign/unknown currencies,
 target-lookalike partial notes, receipts, cards, patterned paper, and retail
@@ -1282,6 +1290,16 @@ Key run artifacts:
 - `runs/cashsnap/light_eval_target_anchor_latest_bal20_nomosaic_s1000_realtest_bal10_bg50_i320_conf01_iou50_v1.json`
 - `runs/cashsnap/light_eval_target_anchor_latest_bal20_nomosaic_s1000_realtest_bal10_bg50_i320_conf001_iou50_v1.json`
 - `runs/cashsnap/scorecard_target_anchor_latest_bal20_nomosaic_realtest_bal10_bg50_v1.json`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_nomosaic_noerase_b20_b1_s1000_i320_v1_summary.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_nomosaic_noerase_s1000_realtest_bal10_bg50_i320_conf01_iou50_v1.json`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_nomosaic_b20_b1_s1000_i320_seed1_v1_summary.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_seed1_s1000_realtest_bal10_bg50_i320_conf005_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_seed1_s1000_realtest_bal10_bg50_i320_conf01_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_seed1_s1000_realtest_bal10_bg50_i320_conf001_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_nomosaic_seed1_s1000_realtest_bal10_bg50_i320_conf005_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_nomosaic_seed1_s1000_realtest_bal10_bg50_i320_conf01_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_nomosaic_seed1_s1000_realtest_bal10_bg50_i320_conf001_iou50_v1.json`
+- `runs/cashsnap/scorecard_target_anchor_latest_bal20_nomosaic_seed1_realtest_bal10_bg50_v1.json`
 - `runs/cashsnap/dataset_check_rep_gap_detectorerasectx_v1.json`
 - `runs/cashsnap/unlabeled_prediction_audit_rep_gap_detectorerasectx_strictcov50_v1.json`
 - `runs/cashsnap/visual_qa_rep_gap_detectorerasectx_v1/per_class_sheet.jpg`
