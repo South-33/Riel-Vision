@@ -449,9 +449,10 @@ Targeted branch status:
   inpaint metadata gates. Strict detector audit still removed `64/780` suspect
   rows; the audit-clean set kept `716`, with weakest classes USD_50 `35` and
   USD_100 `39`, then balanced cleanly to `260` (`20/class`). Final strict audit
-  on the balanced package is `0/260` suspect, `0` unmatched. Edge audit:
-  boundary ratio `1.3089`, edge color step `0.0876`. Representation is safer but
-  mixed vs previous strict sourcectx: layer22 domain accuracy improves
+  on the balanced package is `0/260` suspect, `0` unmatched, and exact split
+  inpaint metadata gate passes on the list-backed config. Edge audit: boundary
+  ratio `1.3089`, edge color step `0.0876`. Representation is safer but mixed
+  vs previous strict sourcectx: layer22 domain accuracy improves
   `0.8577 -> 0.8269`, but layer22 MMD worsens `0.0293 -> 0.0332` and early
   covariance/MMD is worse from fallback no-note rows. Treat as a better
   label-safe bounded-probe branch, not transfer proof or done data.
@@ -820,6 +821,7 @@ Key run artifacts:
 - `runs/cashsnap/unlabeled_prediction_audit_rep_gap_sourcectx_boxarea90_fallback_metagated_strict_strictcov50_v1.json`
 - `runs/cashsnap/dataset_check_rep_gap_sourcectx_boxarea90_fallback_metagated_strict_auditclean_v1.json`
 - `runs/cashsnap/dataset_check_rep_gap_sourcectx_boxarea90_fallback_metagated_strict_auditclean_balanced20_v1.json`
+- `runs/cashsnap/target_anchor_inpaint_metadata_rep_gap_sourcectx_boxarea90_fallback_metagated_strict_auditclean_balanced20_gate_v1.json`
 - `runs/cashsnap/unlabeled_prediction_audit_rep_gap_sourcectx_boxarea90_fallback_metagated_strict_auditclean_balanced20_strictcov50_v1.json`
 - `runs/cashsnap/visual_qa_rep_gap_sourcectx_boxarea90_fallback_metagated_strict_auditclean_balanced20_v1/per_class_sheet.jpg`
 - `runs/cashsnap/composite_edge_audit_rep_gap_sourcectx_boxarea90_fallback_metagated_strict_v1.json`

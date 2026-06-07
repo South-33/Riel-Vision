@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,6 +48,8 @@ def parse_args() -> argparse.Namespace:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--metadata", type=Path, help="Path to metadata/train.jsonl.")
     source.add_argument("--synthetic-root", type=Path, help="Synthetic root containing metadata/train.jsonl.")
+    source.add_argument("--data", type=Path, help="YOLO data YAML; gates the exact selected split rows.")
+    parser.add_argument("--split", default="train", help="Split key to use with --data.")
     parser.add_argument("--json-out", type=Path, required=True)
     parser.add_argument(
         "--profile",
@@ -104,6 +107,102 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not rows:
         raise SystemExit(f"empty metadata: {repo_rel(path)}")
     return rows
+
+
+def data_root(config_path: Path, config: dict[str, Any]) -> Path:
+    root_value = config.get("path", ".")
+    root = Path(str(root_value)).expanduser()
+    return root if root.is_absolute() else (config_path.parent / root).resolve()
+
+
+def split_root(dataset_root: Path, split_path: str) -> Path:
+    path = Path(split_path)
+    return path if path.is_absolute() else dataset_root / path
+
+
+def read_split_list(dataset_root: Path, split_path: str) -> list[Path]:
+    list_path = split_root(dataset_root, split_path)
+    images: list[Path] = []
+    for raw_line in list_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        path = Path(line)
+        images.append(path if path.is_absolute() else dataset_root / path)
+    return images
+
+
+def iter_split_images(dataset_root: Path, split_paths: str | list[str]) -> list[Path]:
+    paths = split_paths if isinstance(split_paths, list) else [split_paths]
+    images: list[Path] = []
+    for split_path in paths:
+        resolved = split_root(dataset_root, split_path)
+        if resolved.suffix.lower() == ".txt":
+            images.extend(read_split_list(dataset_root, split_path))
+        else:
+            images.extend(
+                sorted(
+                    path
+                    for path in resolved.glob("*")
+                    if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
+                )
+            )
+    return images
+
+
+def synthetic_root_for_image(image_path: Path) -> Path:
+    parts = list(image_path.resolve().parts)
+    try:
+        index = parts.index("images")
+    except ValueError as exc:
+        raise SystemExit(f"cannot infer synthetic root from image path without images/ segment: {image_path}") from exc
+    return Path(*parts[:index])
+
+
+def metadata_index_for_root(synthetic_root: Path) -> dict[Path, dict[str, Any]]:
+    metadata_path = synthetic_root / "metadata" / "train.jsonl"
+    rows = read_jsonl(metadata_path)
+    index: dict[Path, dict[str, Any]] = {}
+    for row in rows:
+        image_value = row.get("image")
+        if not image_value:
+            continue
+        image_path = (synthetic_root / str(image_value)).resolve()
+        index[image_path] = row
+    return index
+
+
+def read_yolo_split_metadata(data_path: Path, split: str) -> list[dict[str, Any]]:
+    if not data_path.exists():
+        raise SystemExit(f"missing data YAML: {repo_rel(data_path)}")
+    config = yaml.safe_load(data_path.read_text(encoding="utf-8"))
+    if not isinstance(config, dict):
+        raise SystemExit(f"expected YAML mapping: {repo_rel(data_path)}")
+    if split not in config:
+        raise SystemExit(f"{repo_rel(data_path)} has no split key: {split}")
+    root = data_root(data_path, config)
+    images = iter_split_images(root, config[split])
+    if not images:
+        raise SystemExit(f"{repo_rel(data_path)} split {split} selected no images")
+
+    indexes: dict[Path, dict[Path, dict[str, Any]]] = {}
+    selected_rows: list[dict[str, Any]] = []
+    missing: list[str] = []
+    for image in images:
+        resolved = image.resolve()
+        synthetic_root = synthetic_root_for_image(resolved)
+        if synthetic_root not in indexes:
+            indexes[synthetic_root] = metadata_index_for_root(synthetic_root)
+        row = indexes[synthetic_root].get(resolved)
+        if row is None:
+            missing.append(repo_rel(resolved))
+            continue
+        selected_rows.append(dict(row))
+    if missing:
+        sample = ", ".join(missing[:5])
+        suffix = "" if len(missing) <= 5 else f", ... {len(missing) - 5} more"
+        raise SystemExit(f"missing metadata for {len(missing)} split image(s): {sample}{suffix}")
+    return selected_rows
 
 
 def quantiles(values: list[float]) -> dict[str, float | int | None]:
@@ -201,8 +300,14 @@ def add_p95_violation(
 
 def main() -> None:
     args = parse_args()
-    metadata_path = metadata_path_from_args(args)
-    rows = read_jsonl(metadata_path)
+    if args.data is not None:
+        data_path = resolve_repo_path(args.data)
+        rows = read_yolo_split_metadata(data_path, args.split)
+        source_label = f"{repo_rel(data_path)}#{args.split}"
+    else:
+        metadata_path = metadata_path_from_args(args)
+        rows = read_jsonl(metadata_path)
+        source_label = repo_rel(metadata_path)
     missing_fields = [
         {"line": row.get("_line"), "image": row.get("image"), "field": key}
         for row in rows
@@ -290,7 +395,8 @@ def main() -> None:
         "schema": "target_anchor_inpaint_metadata_check_v1",
         "status": status,
         "profile": args.profile,
-        "metadata": repo_rel(metadata_path),
+        "metadata": source_label,
+        "split": args.split if args.data is not None else None,
         "rows": len(rows),
         "missing_fields": missing_fields[: args.max_row_violations],
         "missing_field_count": len(missing_fields),
