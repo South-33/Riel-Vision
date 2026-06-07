@@ -74,6 +74,12 @@ Do not blindly scale synthetic yet. Scaling target-anchor latest, realfgstyle,
 poseclose, SD-Turbo note-edge, or the existing negative roots as-is is very
 unlikely to close the gap to `0.82-0.85`.
 
+Yardstick check: the current synthetic-only real leader is `0.144740` against
+the `0.82-0.85` target, leaving roughly `+0.68` to `+0.71` mAP50-95. Treat
+small local gains as mechanism clues only; if a line of work could not plausibly
+scale into a step-change, convert the lesson into a guardrail and move back to
+real-failure curriculum, validation bridge, refiner, or training-strategy work.
+
 Representation-gap read:
 - The current `0.144740` synthetic leader is still easy to separate from real
   positives after class-balanced sampling: layer `0` domain accuracy `0.823`,
@@ -692,6 +698,20 @@ Targeted branch status:
   contributes to the full-frame/extent failure, but hard zero-mosaic needs a
   partial-mosaic schedule (`0.25`/`0.5`), FP-aware guard, and class guard before
   any recipe change.
+- Partial-mosaic confirms the curriculum clue but also shows the cap of tiny
+  schedule sweeps. `mosaic=0.5` passes self-eval (`0.010276` vs `0.007368`,
+  delta `+0.002908`) and passes bounded real at `conf=0.01` (`0/130 -> 2/130`,
+  FPs `188 -> 149`, bg-hit images `7/50 -> 6/50`), but fails `conf=0.05`
+  from a concentrated `cashcountingxl` FP spike and fails `conf=0.001` on a
+  `KHR_2000` recall drop. `mosaic=0.75` is better-shaped: self-eval
+  `0.015328` (delta `+0.007960`), `conf=0.05` passes (FP `4 -> 3`),
+  `conf=0.01` passes (`0/130 -> 1/130`, FPs `188 -> 136`, bg-hit images
+  `7/50 -> 5/50`), but `conf=0.001` still fails protected/important class
+  swaps (`KHR_2000 6/10 -> 3/10`, plus `KHR_1000`, `KHR_5000`, `USD_10`).
+  Verdict: reduced mosaic is a training-shortcut clue and likely guardrail
+  setting, not a path to the `0.82-0.85` finish line. Stop tiny schedule
+  chasing unless it directly supports a bigger real-failure curriculum or
+  training-strategy change.
 - Earlier non-fallback fixed-step A/B attempts remain incomplete:
   b64/b32/b16/b8 runs hit the 95% RAM guard while RunLong/Codex were resident.
   Also, one failed b64 attempt reused the old leader run name with the
@@ -1300,6 +1320,16 @@ Key run artifacts:
 - `runs/cashsnap/light_eval_target_anchor_latest_bal20_nomosaic_seed1_s1000_realtest_bal10_bg50_i320_conf01_iou50_v1.json`
 - `runs/cashsnap/light_eval_target_anchor_latest_bal20_nomosaic_seed1_s1000_realtest_bal10_bg50_i320_conf001_iou50_v1.json`
 - `runs/cashsnap/scorecard_target_anchor_latest_bal20_nomosaic_seed1_realtest_bal10_bg50_v1.json`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_mosaic05_b20_b1_s1000_i320_v1_summary.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_mosaic05_s1000_realtest_bal10_bg50_i320_conf005_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_mosaic05_s1000_realtest_bal10_bg50_i320_conf01_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_mosaic05_s1000_realtest_bal10_bg50_i320_conf001_iou50_v1.json`
+- `runs/cashsnap/scorecard_target_anchor_latest_bal20_mosaic05_realtest_bal10_bg50_v1.json`
+- `runs/cashsnap/fixed_step_target_anchor_latest_bal20_vs_mosaic075_b20_b1_s1000_i320_v1_summary.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_mosaic075_s1000_realtest_bal10_bg50_i320_conf005_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_mosaic075_s1000_realtest_bal10_bg50_i320_conf01_iou50_v1.json`
+- `runs/cashsnap/light_eval_target_anchor_latest_bal20_mosaic075_s1000_realtest_bal10_bg50_i320_conf001_iou50_v1.json`
+- `runs/cashsnap/scorecard_target_anchor_latest_bal20_mosaic075_realtest_bal10_bg50_v1.json`
 - `runs/cashsnap/dataset_check_rep_gap_detectorerasectx_v1.json`
 - `runs/cashsnap/unlabeled_prediction_audit_rep_gap_detectorerasectx_strictcov50_v1.json`
 - `runs/cashsnap/visual_qa_rep_gap_detectorerasectx_v1/per_class_sheet.jpg`
