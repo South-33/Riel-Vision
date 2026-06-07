@@ -567,14 +567,15 @@ Multi-instance replacement diagnostic status:
   40 images). Strong Poisson gives best edge color step (`0.0699`) but washes
   note interiors and has `crop AUC=0.958`; light Poisson preserves note color
   (`luma_mean -0.083`, `saturation_mean +0.088`) but edge color step explodes
-  to `0.1541`; edge-weighted Poisson is the current best direction but still
-  fails one tiny-visible QA row, has visible paste boundaries, and remains
-  separable (`image/box/crop AUC=0.858/0.822/0.930`, edge color step `0.1002`).
+  to `0.1541`; edge-weighted Poisson is the current best direction. The
+  no-tiny visible gate variant passes dataset and visual QA with `95` boxes
+  balanced across all `13` classes, but still has visible paste boundaries and
+  remains separable (`image/box/crop AUC=0.839/0.836/0.928`, edge color step
+  `0.1015`).
 - Decision: keep multi-instance replacement as a mechanism branch, not a
-  trainable package. Next work should add source-context quality gates, reject
-  or retry tiny visible remnants, and improve edge-weighted blending before any
-  detector audit/model proof. Detector/source-remnant audits still need RAM
-  headroom.
+  trainable package. Next work should add source-context quality gates and
+  improve edge-weighted blending before any detector audit/model proof.
+  Detector/source-remnant audits still need RAM headroom.
 
 Success signal is not a prettier sheet. A real step-change branch should reduce
 early-layer domain separability, recover broad real positive recall, and avoid
@@ -804,6 +805,7 @@ Key configs:
 - `configs/webgl_ablation/cashsnap_multi_instance_replacement_medium_poisson_probe_puresynth_realval_v1.yaml`
 - `configs/webgl_ablation/cashsnap_multi_instance_replacement_medium_poisson_realcrop_scale120_probe_puresynth_realval_v1.yaml`
 - `configs/webgl_ablation/cashsnap_multi_instance_replacement_context_phone_balanced_poissonedge_inpainttone_scale100_probe_puresynth_realval_v1.yaml`
+- `configs/webgl_ablation/cashsnap_multi_instance_replacement_context_phone_balanced_poissonedge_inpainttone_scale100_notiny_probe_puresynth_realval_v1.yaml`
 
 Key roots:
 - `data/synthetic/cashsnap_target_anchor_transplant_latest_v1/`
@@ -824,6 +826,7 @@ Key roots:
 - `data/synthetic/cashsnap_multi_instance_replacement_medium_poisson_probe_v1/`
 - `data/synthetic/cashsnap_multi_instance_replacement_medium_poisson_realcrop_scale120_probe_v1/`
 - `data/synthetic/cashsnap_multi_instance_replacement_context_phone_balanced_poissonedge_inpainttone_scale100_probe_v1/`
+- `data/synthetic/cashsnap_multi_instance_replacement_context_phone_balanced_poissonedge_inpainttone_scale100_notiny_probe_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_sourceclean_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_pad20_v1/`
 - `data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_boxarea90_fallback_metagated_strict_v1/`

@@ -92,6 +92,12 @@ def parse_args() -> argparse.Namespace:
         default=0.0,
         help="Reject source images if any known source box would be smaller than this short side at --imgsz.",
     )
+    parser.add_argument(
+        "--min-visible-short-at-imgsz",
+        type=float,
+        default=0.0,
+        help="Reject generated images if any final visible label is smaller than this short side at --imgsz.",
+    )
     parser.add_argument("--imgsz", type=int, default=416, help="Training image size used by --min-source-box-short-at-imgsz.")
     parser.add_argument("--box-pad-fraction", type=float, default=0.035)
     parser.add_argument("--warp-alpha-feather-px", type=float, default=0.8)
@@ -227,7 +233,7 @@ def choose_sources(args: argparse.Namespace, rng: random.Random) -> list[tuple[P
     if not candidates:
         raise SystemExit("no multi-instance source images selected")
     rng.shuffle(candidates)
-    return candidates[: args.max_images] if args.max_images > 0 else candidates
+    return candidates
 
 
 def build_replacement_plans(
@@ -502,6 +508,7 @@ def build_replacement(
     labels_reversed: list[str] = []
     instances_reversed: list[dict[str, Any]] = []
     visible_area_by_class: Counter[str] = Counter()
+    visible_quality_failures: list[dict[str, Any]] = []
     for class_name, source_class_name, layer, quad in reversed(layers):
         visible = (layer[:, :, 3] > 18) & ~covered_later
         covered_later |= layer[:, :, 3] > 18
@@ -510,6 +517,17 @@ def build_replacement(
         label = mask_to_label(visible, class_name)
         if label is None:
             continue
+        parts = label.split()
+        visible_short_at_imgsz = min(float(parts[3]), float(parts[4])) * float(args.imgsz)
+        if args.min_visible_short_at_imgsz > 0 and visible_short_at_imgsz < args.min_visible_short_at_imgsz:
+            visible_quality_failures.append(
+                {
+                    "class_name": class_name,
+                    "source_class_name": source_class_name,
+                    "visible_short_at_imgsz": round(float(visible_short_at_imgsz), 3),
+                    "threshold": float(args.min_visible_short_at_imgsz),
+                }
+            )
         labels_reversed.append(label)
         instances_reversed.append(
             {
@@ -518,6 +536,7 @@ def build_replacement(
                 "label": label,
                 "quad_xy": [[round(float(x), 3), round(float(y), 3)] for x, y in quad.tolist()],
                 "visible_area_px": int(visible.sum()),
+                "visible_short_at_imgsz": round(float(visible_short_at_imgsz), 3),
                 "composite_policy": args.composite_policy,
                 "shadow_policy": args.shadow_policy,
                 "tone_reference": args.tone_reference,
@@ -537,6 +556,7 @@ def build_replacement(
         "source_classes": dict(Counter(box.class_name for box in boxes)),
         "replacement_classes": dict(Counter(replacement_classes)),
         "tone_reference": args.tone_reference,
+        "visible_quality_failures": visible_quality_failures,
         "visible_area_by_class": dict(sorted(visible_area_by_class.items())),
     }
     return Image.fromarray(base_rgb, "RGB"), labels, metadata
@@ -584,7 +604,10 @@ def main() -> int:
     edge_records: list[dict[str, Any]] = []
     class_counts: Counter[str] = Counter()
     source_box_count = 0
+    skipped_visible_quality = 0
     for index, ((source_image, boxes), replacement_classes) in enumerate(zip(sources, replacement_plans, strict=True)):
+        if args.max_images > 0 and len(records) >= args.max_images:
+            break
         image, labels, metadata = build_replacement(
             source_image=source_image,
             boxes=boxes,
@@ -593,6 +616,9 @@ def main() -> int:
             rng=rng,
             args=args,
         )
+        if metadata.get("visible_quality_failures"):
+            skipped_visible_quality += 1
+            continue
         if not labels:
             continue
         stem = f"cashsnap_multi_replace_{len(records):06d}_{source_image.stem}"
@@ -657,6 +683,7 @@ def main() -> int:
             "max_side": args.max_side,
             "imgsz": args.imgsz,
             "min_source_box_short_at_imgsz": args.min_source_box_short_at_imgsz,
+            "min_visible_short_at_imgsz": args.min_visible_short_at_imgsz,
             "box_pad_fraction": args.box_pad_fraction,
             "warp_alpha_feather_px": args.warp_alpha_feather_px,
             "composite_policy": args.composite_policy,
@@ -665,6 +692,7 @@ def main() -> int:
             "tone_blend_original_weight": args.tone_blend_original_weight,
             "seed": args.seed,
         },
+        "skipped_visible_quality": skipped_visible_quality,
         "records": records,
     }
     (out_root / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
