@@ -45,13 +45,17 @@ mechanism, not a trajectory toward done. Stay in step-change mode.
 ## Current Decision
 
 Stop iterating small negative doses around the same Poisson/contact candidate.
-The best next synth-data bet is a regime-change branch:
+The best next synth-data bet is no longer "prettier background/refiner" alone.
+It is an obligation-driven sim-to-real rebuild:
 
 1. Keep Poisson/contact as the current image-formation base.
-2. Add a bounded label-preserving learned/AI refiner smoke on top of it.
-3. Build or source a realistic target-domain near-negative bank, not more
+2. Drive new recipes from real failure clusters and detector-representation
+   gaps, not from renderer knobs that only improve proxy stats.
+3. Add a bounded label-preserving learned/AI refiner only when it reduces the
+   representation gap and transfer failures, not just visual surface style.
+4. Build or source a realistic target-domain near-negative bank, not more
    stylized WebGL line-prop negatives.
-4. Promote only through real-transfer, background-FP, per-class, and seed-repeat
+5. Promote only through real-transfer, background-FP, per-class, and seed-repeat
    guardrails.
 
 Refiner contract: raw learned outputs are not trainable data. Any learned/AI
@@ -66,8 +70,24 @@ Qwen/FLUX prompt editing: currency labels and security details are too easy to
 mutate, and this laptop has only an RTX 4060 Laptop 8GB VRAM with about 16GB RAM.
 
 Do not blindly scale synthetic yet. Scaling target-anchor latest, realfgstyle,
-poseclose, or the existing negative roots as-is is very unlikely to close the
-gap to `0.82-0.85`.
+poseclose, SD-Turbo note-edge, or the existing negative roots as-is is very
+unlikely to close the gap to `0.82-0.85`.
+
+Representation-gap read:
+- The current `0.144740` synthetic leader is still easy to separate from real
+  positives after class-balanced sampling: layer `0` domain accuracy `0.823`,
+  layer `8` `0.950`, layer `22` `0.938`.
+- Source Poisson/contact m260 is worse through a real-trained lens: layer `0`
+  `0.869`, layer `8` `0.977`, layer `22` `0.950`.
+- SD-Turbo note-edge did not reduce the gap; it was equal or worse than source
+  m260 in most layers (`0.869/0.981/0.965` at layers `0/8/22`).
+- Research-grounded diagnostics now available: proxy A-distance/domain
+  classifier, MMD, and CORAL-style covariance gap. Treat them as warning
+  lights tied to real errors, not standalone promotion metrics.
+- Top uncovered real modes are multi-note/scan-like bills, tiny notes in deep
+  clutter, flat full-frame rotated note captures, weak KHR back/rare-class
+  views, and realistic empty-frame near-negatives. The current generator
+  over-represents one-note-on-surface scenes.
 
 Current refiner-readiness status:
 - `scripts/build_refiner_readiness_pack.py` prepares the first controlled
@@ -191,6 +211,13 @@ Current refiner-readiness status:
 
 - Renderer mechanics and package QA are strong enough for bounded probes, but
   renderer gates are not transfer proof.
+- The current `0.144740` synthetic leader misses `669/817` real-test GT boxes
+  at `conf=0.05` (`81.88%` miss rate) and still fires on `174/748` empty test
+  images (`292` detections). This is not close; it is a distribution failure.
+- The detector can identify synthetic-vs-real positives from internal
+  activations even after class balancing. The gap appears immediately at early
+  layers, so camera/image-formation statistics and context modes are major
+  suspects, not only late denomination semantics.
 - The main blocker is real transfer: target-domain foreground/camera pixels,
   pasted-edge/contact/focus consistency, realistic target-vs-non-target
   banknote pressure, rare-class/capture gaps, and validation obligations tied to
@@ -247,7 +274,35 @@ Key isolated Poisson/contact details:
 - Model read: useful image formation, not promotable without realistic negative
   pressure and stronger proof.
 
-## Next Bet: Refiner Smoke
+## Next Bet: Representation-Guided Synthesis
+
+Goal: rebuild the synthetic curriculum around real modes that the detector says
+are uncovered, then prove the new branch reduces both real errors and
+representation separability.
+
+Immediate obligations from the current leader:
+- Broad positive recall: `669/817` missed real-test GTs at `conf=0.05`.
+- Weak classes: `USD_5`, `USD_50`, `USD_100`, `KHR_1000`, `KHR_2000`,
+  `KHR_5000`, `KHR_10000`, `KHR_20000`.
+- Empty-frame pressure: `174/748` empty test images with FPs, dominated by
+  `USD_20`, `USD_10`, `KHR_50000`, `KHR_2000`, `KHR_500`, and `USD_1`.
+- Image-formation modes: multi-note scan-like bills, tiny notes in deep clutter,
+  flat full-frame rotated captures, weak KHR backs, and rare-class views.
+
+Next engineering move:
+1. Mine train-only real analogs for those modes; never use val/test images as
+   training anchors.
+2. Generate a small targeted synthetic branch from those train-only anchors with
+   paired class-contrast cases and realistic near-negatives.
+3. Run representation-gap, positive-error, background-FP, and fixed-step gates
+   before any scale-up.
+
+Success signal is not a prettier sheet. A real step-change branch should reduce
+early-layer domain separability, recover broad real positive recall, and avoid
+new empty-frame FPs. If domain accuracy stays above about `0.90` at mid/late
+layers and real misses stay broad, the branch is still teaching shortcuts.
+
+## Refiner Smoke
 
 Goal: test whether a label-preserving learned/refiner path can remove the
 remaining composited-camera shortcut without mutating denomination evidence.
@@ -293,10 +348,10 @@ Required gates before any refined dataset is trainable:
 - Per-class guard.
 - At least one seed repeat before serious promotion.
 
-Immediate next concrete step: add source-background visual triage/rejects for
-speckled/blocky backgrounds, then run a small fixed-step source-vs-SD-Turbo
-transfer comparison only if the m260 visual reject slice stays bounded. In
-parallel, research/bake off one newer controlled editor through the same gates.
+Immediate next concrete step: keep the refiner harness available, but do not
+spend more runs on SD-Turbo prompt/strength tweaks until a candidate reduces the
+representation gap or directly attacks the obligation ledger. The current
+note-edge SD-Turbo m260 candidate is a harness proof, not a promotion path.
 
 Kill criteria:
 - Denomination text, portraits, numerals, colors, or security details mutate.
@@ -451,6 +506,12 @@ Key run artifacts:
 - `runs/cashsnap/refiner_yolo_candidates/sd_turbo_note_edge_s025_steps4_m260/qa/random_blend.png`
 - `runs/cashsnap/fixed_step_source_vs_sd_turbo_m260_b4_e50_s150_seed0_summary.json`
 - `runs/cashsnap/fixed_step_source_poisson_contact_m260_vs_sd_turbo_note_edge_s025_m260_steps150/summary.json`
+- `runs/cashsnap/representation_gap_synthleader_target_anchor_latest_test_v1/summary.json`
+- `runs/cashsnap/representation_gap_realclean_source_poisson_m260_test_v1/summary.json`
+- `runs/cashsnap/representation_gap_realclean_sd_turbo_note_edge_m260_test_v1/summary.json`
+- `runs/cashsnap/positive_error_review_synthleader_real_test_v1/summary.json`
+- `runs/cashsnap/background_fp_synthleader_real_test_v1.json`
+- `runs/cashsnap/synthetic_obligation_ledger_synthleader_rep_gap_v1.md`
 - `runs/cashsnap/cyclegan_turbo_smoke_s1_128_noval_nolpips/`
 
 Key scripts:
@@ -468,6 +529,7 @@ Key scripts:
 - `scripts/materialize_refiner_yolo_candidate.py`
 - `scripts/apply_refiner_detail_lock.py`
 - `scripts/run_sd_turbo_img2img_refiner.py`
+- `scripts/probe_yolo_representation_domain_gap.py`
 - `scripts/run_yolo_fixed_step_probe.py`
 - `scripts/probe_yolo_background_false_positives.py`
 - `scripts/check_yolo_transfer_guardrails.py`
@@ -521,6 +583,8 @@ rl python scripts\run_with_headroom.py --memory-action pause -- python <refiner_
 rl python scripts\run_with_headroom.py --memory-action pause -- python .cache_runtime\third_party\contrastive-unpaired-translation\train.py --dataroot runs\cashsnap\refiner_readiness_poisson_contact_v1\cut_unaligned_smoke --name cashsnap_fastcut_poisson_smoke_e1_m8_128 --CUT_mode FastCUT --gpu_ids 0 --checkpoints_dir runs\cashsnap\refiner_checkpoints --dataset_mode unaligned --direction AtoB --batch_size 1 --num_threads 0 --load_size 128 --crop_size 128 --preprocess resize_and_crop --max_dataset_size 8 --n_epochs 1 --n_epochs_decay 0 --netG resnet_6blocks --ngf 32 --ndf 32 --display_id -1 --no_html --print_freq 4 --save_latest_freq 100 --save_epoch_freq 1 --no_flip
 rl python scripts\run_with_headroom.py --memory-action exit -- python .cache_runtime\third_party\img2img-turbo\src\train_cyclegan_turbo.py --dataset_folder runs\cashsnap\refiner_readiness_poisson_contact_v1\cut_unaligned_smoke --train_img_prep resize_128 --val_img_prep resize_128 --dataloader_num_workers 0 --train_batch_size 1 --max_train_steps 1 --max_train_epochs 1 --pretrained_model_name_or_path stabilityai/sd-turbo --output_dir runs\cashsnap\cyclegan_turbo_smoke_s1_128_noval_nolpips --report_to none --tracker_project_name cashsnap_cyclegan_turbo_smoke --validation_steps 0 --validation_num_images 0 --checkpointing_steps 1 --learning_rate 1e-5 --gradient_accumulation_steps 1 --allow_tf32 --gradient_checkpointing --lora_rank_unet 4 --lora_rank_vae 2 --lambda_gan 0.5 --lambda_idt 1 --lambda_cycle 1 --lambda_cycle_lpips 0 --lambda_idt_lpips 0
 rl python scripts\audit_synthetic_composite_edges.py --help
+rl python scripts\probe_yolo_representation_domain_gap.py --model runs\cashsnap\fixed_step_target_anchor_transplant_latest_v1_from_clean_e50_i416_b64_w0_auto_lr1e2_warmup3_amp_cachefalse_steps150_seed0\weights\best.pt --real-data data\cashsnap_v1\data.yaml --real-split test --synthetic-data configs\webgl_ablation\cashsnap_target_anchor_transplant_latest_puresynth_realval_v1.yaml --synthetic-split train --out-dir runs\cashsnap\representation_gap_synthleader_target_anchor_latest_test_v1 --imgsz 416 --batch 8 --device 0 --max-per-class 10 --top-k 40 --clean
+rl python scripts\build_synthetic_obligation_ledger.py --no-default-evidence --positive-error-review runs\cashsnap\positive_error_review_synthleader_real_test_v1\summary.json --background-fp runs\cashsnap\background_fp_synthleader_real_test_v1.json --visual-failure "representation_gap|real_test|Current synthetic leader remains highly domain-separable after class balancing." --json-out runs\cashsnap\synthetic_obligation_ledger_synthleader_rep_gap_v1.json --md-out runs\cashsnap\synthetic_obligation_ledger_synthleader_rep_gap_v1.md
 rl python scripts\run_yolo_fixed_step_probe.py --help
 rl python scripts\check_yolo_transfer_guardrails.py --help
 rl python scripts\probe_yolo_background_false_positives.py --help
