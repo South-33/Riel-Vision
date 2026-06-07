@@ -10,6 +10,10 @@ from pathlib import Path
 from PIL import Image
 
 
+class SmokeOutputError(RuntimeError):
+    """Raised when a rendered WebGL smoke output fails validation."""
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -44,46 +48,51 @@ def parse_args() -> argparse.Namespace:
 
 def load_rgb(path: Path) -> Image.Image:
     if not path.exists():
-        raise SystemExit(f"missing required file: {path}")
-    return Image.open(path).convert("RGB")
+        raise SmokeOutputError(f"missing required file: {path}")
+    with Image.open(path) as image:
+        return image.convert("RGB")
 
 
 def read_json(path: Path) -> dict:
     if not path.exists():
-        raise SystemExit(f"missing required file: {path}")
+        raise SmokeOutputError(f"missing required file: {path}")
     return json.loads(path.read_text(encoding="utf-8"))
 
 
 def read_labels(path: Path) -> list[list[float]]:
     if not path.exists():
-        raise SystemExit(f"missing required file: {path}")
+        raise SmokeOutputError(f"missing required file: {path}")
     rows: list[list[float]] = []
     for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
             continue
         parts = line.split()
         if len(parts) != 5:
-            raise SystemExit(f"{path}:{line_no}: expected 5 YOLO columns, got {len(parts)}")
+            raise SmokeOutputError(f"{path}:{line_no}: expected 5 YOLO columns, got {len(parts)}")
         try:
             class_index = int(parts[0])
             values = [float(value) for value in parts[1:]]
         except ValueError as exc:
-            raise SystemExit(f"{path}:{line_no}: invalid numeric label: {line}") from exc
+            raise SmokeOutputError(f"{path}:{line_no}: invalid numeric label: {line}") from exc
         if any(value < 0.0 or value > 1.0 for value in values):
-            raise SystemExit(f"{path}:{line_no}: normalized coordinates out of range: {line}")
+            raise SmokeOutputError(f"{path}:{line_no}: normalized coordinates out of range: {line}")
         rows.append([float(class_index), *values])
     return rows
 
 
 def assert_close(left: float, right: float, label: str, tolerance: float = 1e-6) -> None:
     if abs(left - right) > tolerance:
-        raise SystemExit(f"{label}: expected {right:.6f}, got {left:.6f}")
+        raise SmokeOutputError(f"{label}: expected {right:.6f}, got {left:.6f}")
 
 
-def main() -> int:
-    args = parse_args()
-    out_dir = args.out_dir
-
+def validate_smoke_output(
+    out_dir: Path,
+    *,
+    min_visual_colors: int = 1000,
+    allow_no_occluder: bool = False,
+    allow_no_overlap: bool = False,
+    allow_no_boxes: bool = False,
+) -> str:
     visual = load_rgb(out_dir / "visual.png")
     id_image = load_rgb(out_dir / "id.png")
     boxes_doc = read_json(out_dir / "visible_boxes.json")
@@ -92,50 +101,65 @@ def main() -> int:
     labels = read_labels(out_dir / "labels_visible.txt")
 
     visual_colors = visual.getcolors(maxcolors=10_000_000)
-    min_visual_colors = min(args.min_visual_colors, 50) if args.allow_no_boxes else args.min_visual_colors
-    if visual_colors is None or len(visual_colors) < min_visual_colors:
+    color_floor = min(min_visual_colors, 50) if allow_no_boxes else min_visual_colors
+    if visual_colors is None or len(visual_colors) < color_floor:
         count = 0 if visual_colors is None else len(visual_colors)
-        raise SystemExit(f"visual render looks blank or posterized: {count} colors")
+        raise SmokeOutputError(f"visual render looks blank or posterized: {count} colors")
 
     boxes = boxes_doc.get("boxes", [])
-    if not boxes and not args.allow_no_boxes:
-        raise SystemExit("visible_boxes.json has no boxes")
+    if not boxes and not allow_no_boxes:
+        raise SmokeOutputError("visible_boxes.json has no boxes")
     if len(labels) != len(boxes):
-        raise SystemExit(f"label count mismatch: {len(labels)} labels for {len(boxes)} boxes")
+        raise SmokeOutputError(f"label count mismatch: {len(labels)} labels for {len(boxes)} boxes")
 
     expected_colors = {tuple(asset["idColor"]) for asset in metadata.get("assets", [])}
     allowed_colors = expected_colors | {(0, 0, 0)}
     id_colors = id_image.getcolors(maxcolors=10_000_000)
     if id_colors is None:
-        raise SystemExit("ID pass has too many colors to be an exact instance mask")
+        raise SmokeOutputError("ID pass has too many colors to be an exact instance mask")
     actual_colors = {color for _, color in id_colors}
     unexpected_colors = actual_colors - allowed_colors
     if unexpected_colors:
         preview = sorted(unexpected_colors)[:8]
-        raise SystemExit(f"ID pass has unexpected colors, likely antialiasing or tone mapping: {preview}")
+        raise SmokeOutputError(f"ID pass has unexpected colors, likely antialiasing or tone mapping: {preview}")
 
     for box, label in zip(boxes, labels):
         class_index = int(box["classIndex"])
         if int(label[0]) != class_index:
-            raise SystemExit(f"class mismatch for {box['className']}: label={int(label[0])} box={class_index}")
+            raise SmokeOutputError(f"class mismatch for {box['className']}: label={int(label[0])} box={class_index}")
         if box["pixels"] <= 0:
-            raise SystemExit(f"empty visible mask for {box['className']}")
+            raise SmokeOutputError(f"empty visible mask for {box['className']}")
         for idx, (got, expected) in enumerate(zip(label[1:], box["yolo"]), start=1):
             assert_close(got, float(expected), f"{box['className']} yolo[{idx}]")
 
     if layer_audit.get("violations") != 0:
-        raise SystemExit(f"layer-order audit has violations: {layer_audit}")
-    if layer_audit.get("overlapPixels", 0) <= 0 and not args.allow_no_overlap:
-        raise SystemExit("layer-order audit did not exercise any overlapping pixels")
-    if layer_audit.get("occluderPixels", 0) <= 0 and not args.allow_no_occluder:
-        raise SystemExit("layer-order audit did not exercise any occluder pixels")
+        raise SmokeOutputError(f"layer-order audit has violations: {layer_audit}")
+    if layer_audit.get("overlapPixels", 0) <= 0 and not allow_no_overlap:
+        raise SmokeOutputError("layer-order audit did not exercise any overlapping pixels")
+    if layer_audit.get("occluderPixels", 0) <= 0 and not allow_no_occluder:
+        raise SmokeOutputError("layer-order audit did not exercise any occluder pixels")
 
-    print(
+    return (
         f"ok: {visual.size[0]}x{visual.size[1]} visual, "
         f"{len(actual_colors)} exact ID colors, {len(boxes)} boxes, "
         f"{layer_audit['overlapPixels']} audited overlap pixels, "
         f"{layer_audit['occluderPixels']} occluder pixels"
     )
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        summary = validate_smoke_output(
+            args.out_dir,
+            min_visual_colors=args.min_visual_colors,
+            allow_no_occluder=args.allow_no_occluder,
+            allow_no_overlap=args.allow_no_overlap,
+            allow_no_boxes=args.allow_no_boxes,
+        )
+    except SmokeOutputError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(summary)
     return 0
 
 

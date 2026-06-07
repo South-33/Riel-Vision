@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from local_runtime import configure_project_cache
+from hardware_profile import parse_auto_int, recommended_device, recommended_val_batch, recommended_workers
 from yolo_data_config import resolve_ultralytics_data_yaml
 
 configure_project_cache()
@@ -39,12 +40,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", required=True, help="YOLO weights path or model name.")
     parser.add_argument("--data", required=True, help="YOLO dataset YAML path.")
     parser.add_argument("--imgsz", type=int, default=416)
-    parser.add_argument("--batch", type=int, default=4)
-    parser.add_argument("--workers", type=int, default=0)
+    parser.add_argument("--batch", default="auto", help="Integer batch size or 'auto' for the local hardware profile.")
+    parser.add_argument("--workers", default="auto", help="Integer worker count or 'auto' for the local hardware profile.")
     parser.add_argument("--split", default="val", choices=["val", "test"], help="Dataset split to evaluate.")
     parser.add_argument("--project", default=str(ROOT / "runs" / "cashsnap"))
     parser.add_argument("--name", required=True)
-    parser.add_argument("--device", default=None, help="Ultralytics device selector, e.g. cpu, 0, or 0,1.")
+    parser.add_argument("--device", default="auto", help="Ultralytics device selector, e.g. cpu, 0, 0,1, or auto.")
     parser.add_argument("--conf", type=float, default=None, help="Confidence threshold override.")
     parser.add_argument("--iou", type=float, default=None, help="NMS IoU threshold override.")
     parser.add_argument("--no-plots", action="store_true", help="Skip Ultralytics validation plots.")
@@ -170,6 +171,13 @@ def main() -> None:
     if not data_path.exists():
         raise FileNotFoundError(f"Dataset config not found: {data_path}")
     data_path = resolve_ultralytics_data_yaml(data_path)
+    args.batch = parse_auto_int(args.batch, recommended_val_batch(args.imgsz), "batch", allow_zero=False)
+    args.workers = parse_auto_int(args.workers, recommended_workers("val"), "workers")
+    args.device = recommended_device(args.device)
+    print(
+        f"[hardware] val device={args.device} batch={args.batch} workers={args.workers} imgsz={args.imgsz}",
+        flush=True,
+    )
 
     project_path = resolve_from_root(args.project)
     val_args = {
@@ -184,8 +192,7 @@ def main() -> None:
         "exist_ok": args.exist_ok,
         "verbose": not args.quiet,
     }
-    if args.device is not None:
-        val_args["device"] = args.device
+    val_args["device"] = args.device
     if args.conf is not None:
         val_args["conf"] = args.conf
     if args.iou is not None:

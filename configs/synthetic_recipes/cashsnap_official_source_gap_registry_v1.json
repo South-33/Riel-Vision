@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "name": "cashsnap_official_source_gap_registry_v1",
+  "purpose": "Track official-denomination source gaps that block full-taxonomy synthetic rendering without silently promoting stale, watermarked, or rights-unclear assets.",
+  "sources_checked_at": "2026-06-07",
+  "numista_cambodia_catalogue_url": "https://en.numista.com/catalogue/index.php?e=cambodia_section&r=&st=148&cat=y&im1=&im2=&ru=&ie=&no=&v=&cu=&a=&dg=&i=&b=&m=&f=&t=&t2=&w=&mt=&u=&p=1",
+  "entries": [
+    {
+      "class_name": "KHR_50",
+      "denomination": "50 Riels",
+      "official_status": "listed_by_nbc_banknotes_in_circulation",
+      "practical_circulation_status": "unconfirmed_or_low_frequency_in_2026_retail_use",
+      "operational_scope_recommendation": "exclude_from_v1_retail_detector_until_real_2026_retail_or_bank_capture_evidence_shows_it_matters",
+      "issued_on": "2002-08-29",
+      "note_size": "130mm x 60mm",
+      "source_page": "https://www.nbc.gov.kh/english/about_the_bank/banknotes_in_circulation.php",
+      "official_face_url": "https://www.nbc.gov.kh/images/banknotes_and_coins/banknotes/currently/big/50_front_new_2002.jpg",
+      "official_back_url": "https://www.nbc.gov.kh/images/banknotes_and_coins/banknotes/currently/big/50_reverse_new_2002.jpg",
+      "source_rights_note": "NBC page footer says All Rights Reserved; do not train/render from these URLs until rights and allowed-use policy are resolved.",
+      "blocked_candidate_assets": [
+        {
+          "asset_path": "data/asset_candidates/numista_official_fullscope_any_status_cutout_bank_probe_v1/KHR_50/KHR_50_1993-1999_front.png",
+          "reason": "out_of_circulation_1993_1999_and_watermarked_source"
+        },
+        {
+          "asset_path": "data/asset_candidates/numista_official_fullscope_any_status_cutout_bank_probe_v1/KHR_50/KHR_50_1993-1999_back.png",
+          "reason": "out_of_circulation_1993_1999_and_watermarked_source"
+        }
+      ],
+      "next_action": "Do not promote for v1 retail counting. Only revisit if real 2026 retail/bank captures or a user/business requirement proves KHR_50 should be operational scope; then acquire a rights-clear current front/back source, build cutouts, and review texture fidelity."
+    }
+  ]
+}

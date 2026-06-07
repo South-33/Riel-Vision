@@ -102,6 +102,7 @@ def main() -> int:
                 "--workers",
                 "0",
                 "--quiet",
+                "--no-val",
                 "--exist-ok",
             ],
             args.dry_run,

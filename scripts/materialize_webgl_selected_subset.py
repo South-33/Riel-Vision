@@ -88,10 +88,13 @@ def source_render_defaults(variant_dirs: list[tuple[int, Path]]) -> dict[str, An
     asset_selection = first.get("assetSelection", {}) if isinstance(first, dict) else {}
     camera = scene_config.get("camera", {}) if isinstance(scene_config, dict) else {}
     asset_side_policy_counts: Counter[str] = Counter()
+    asset_quality_policy_counts: Counter[str] = Counter()
     camera_profile_counts: Counter[str] = Counter()
+    clean_orientation_policy_counts: Counter[str] = Counter()
     note_print_tone_policy_counts: Counter[str] = Counter()
     occluder_policy_counts: Counter[str] = Counter()
     stack_pose_policy_counts: Counter[str] = Counter()
+    texture_qa_effects_counts: Counter[str] = Counter()
     for row in metadata_rows:
         if not isinstance(row, dict):
             continue
@@ -100,9 +103,12 @@ def source_render_defaults(variant_dirs: list[tuple[int, Path]]) -> dict[str, An
         row_camera = row_scene.get("camera", {}) if isinstance(row_scene, dict) else {}
         if isinstance(row_asset, dict):
             asset_side_policy_counts[str(row_asset.get("sidePolicy", "any"))] += 1
+            asset_quality_policy_counts[str(row_asset.get("assetQualityPolicy", "latest_design"))] += 1
             stack_pose_policy_counts[str(row_asset.get("stackPosePolicy", "default"))] += 1
         if isinstance(row_scene, dict):
+            clean_orientation_policy_counts[str(row_scene.get("cleanOrientationPolicy", "default"))] += 1
             note_print_tone_policy_counts[str(row_scene.get("notePrintTonePolicy", "off"))] += 1
+            texture_qa_effects_counts[str(row_scene.get("textureQaEffects", "none"))] += 1
         occluder_policy_counts[str(row.get("occluderPolicy", "scene_default"))] += 1
         if isinstance(row_camera, dict):
             camera_profile_counts[str(row_camera.get("profileRequested", "phone_closeup_clean_like"))] += 1
@@ -120,9 +126,17 @@ def source_render_defaults(variant_dirs: list[tuple[int, Path]]) -> dict[str, An
             asset_side_policy_counts,
             str(asset_selection.get("sidePolicy", "any")) if isinstance(asset_selection, dict) else "any",
         ),
+        "asset_quality_policy": selected_policy(
+            asset_quality_policy_counts,
+            str(asset_selection.get("assetQualityPolicy", "latest_design")) if isinstance(asset_selection, dict) else "latest_design",
+        ),
         "camera_profile": selected_policy(
             camera_profile_counts,
             str(camera.get("profileRequested", "phone_closeup_clean_like")) if isinstance(camera, dict) else "phone_closeup_clean_like",
+        ),
+        "clean_orientation_policy": selected_policy(
+            clean_orientation_policy_counts,
+            str(scene_config.get("cleanOrientationPolicy", "default")) if isinstance(scene_config, dict) else "default",
         ),
         "note_print_tone_policy": selected_policy(
             note_print_tone_policy_counts,
@@ -130,12 +144,16 @@ def source_render_defaults(variant_dirs: list[tuple[int, Path]]) -> dict[str, An
         ),
         "occluder_policy": selected_policy(occluder_policy_counts, "scene_default"),
         "stack_pose_policy": selected_policy(stack_pose_policy_counts, "default"),
+        "texture_qa_effects": selected_policy(texture_qa_effects_counts, "none"),
         "source_policy_counts": {
             "asset_side_policy": dict(sorted(asset_side_policy_counts.items())),
+            "asset_quality_policy": dict(sorted(asset_quality_policy_counts.items())),
             "camera_profile": dict(sorted(camera_profile_counts.items())),
+            "clean_orientation_policy": dict(sorted(clean_orientation_policy_counts.items())),
             "note_print_tone_policy": dict(sorted(note_print_tone_policy_counts.items())),
             "occluder_policy": dict(sorted(occluder_policy_counts.items())),
             "stack_pose_policy": dict(sorted(stack_pose_policy_counts.items())),
+            "texture_qa_effects": dict(sorted(texture_qa_effects_counts.items())),
         },
     }
     return render
@@ -166,12 +184,18 @@ def recipe_args(args: argparse.Namespace, selection: dict[str, Any], variant_dir
         height=render["height"],
         visual_scale=render["visual_scale"],
         browser_executable=None,
+        shared_browser=False,
+        browser_start_timeout=0.0,
+        renderer_batch_size=0,
         note_condition_policy="mixed",
         lens_distortion_policy="off",
         note_print_tone_policy=render["note_print_tone_policy"],
+        texture_qa_effects=render["texture_qa_effects"],
         occluder_policy=render["occluder_policy"],
         stack_pose_policy=render["stack_pose_policy"],
+        clean_orientation_policy=render["clean_orientation_policy"],
         asset_side_policy=render["asset_side_policy"],
+        asset_quality_policy=render["asset_quality_policy"],
         camera_profile=render["camera_profile"],
         class_sequence="",
         balanced_subset_count=len(variants),

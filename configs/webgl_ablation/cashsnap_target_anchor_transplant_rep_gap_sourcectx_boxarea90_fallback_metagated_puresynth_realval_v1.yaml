@@ -1,0 +1,249 @@
+path: ../..
+train: data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_boxarea90_fallback_metagated_v1/images/train
+val: data/cashsnap_v1/images/val
+test: data/cashsnap_v1/images/test
+names:
+  0: USD_1
+  1: USD_5
+  2: USD_10
+  3: USD_20
+  4: USD_50
+  5: USD_100
+  6: KHR_500
+  7: KHR_1000
+  8: KHR_2000
+  9: KHR_5000
+  10: KHR_10000
+  11: KHR_20000
+  12: KHR_50000
+cashsnap_policy:
+  intended_use: pure-synth target-anchored transplant TSTR probe using train-only
+    CashSnap no-note background patches and synthetic cutout-bank note labels
+  phase: target-domain anchor regime-change MVP
+  source_dataset: data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_boxarea90_fallback_metagated_v1
+  promotion_rule: reject unless fixed-step full real transfer jumps materially over
+    filtered185/repair baselines without worse empty-frame behavior
+  schema: cashsnap_target_anchor_transplant_summary_v1
+  seed: 907
+  per_class: 60
+  images: 780
+  class_counts:
+    KHR_1000: 60
+    KHR_10000: 60
+    KHR_2000: 60
+    KHR_20000: 60
+    KHR_500: 60
+    KHR_5000: 60
+    KHR_50000: 60
+    USD_1: 60
+    USD_10: 60
+    USD_100: 60
+    USD_20: 60
+    USD_5: 60
+    USD_50: 60
+  background_source_images: 140
+  fallback_background_source_images: 25
+  background_max_source_boxes: 1
+  background_root: runs/cashsnap/representation_gap_synthleader_train_analogs_v1/train_anchor_manifest_boxarea90_v1.jsonl
+  background_split: manifest_train_anchor_positive
+  fallback_background_root: data/backgrounds/cashsnap_v1_no_note_patches_strict_v1
+  fallback_background_split: train
+  min_class_source_backgrounds: 4
+  canvas_size:
+  - 640
+  - 640
+  unique_backgrounds_used: 158
+  real_geometry_samples_by_class:
+    USD_1: 3
+    USD_5: 15
+    USD_10: 16
+    USD_20: 22
+    USD_50: 24
+    USD_100: 18
+    KHR_500: 14
+    KHR_1000: 4
+    KHR_2000: 4
+    KHR_5000: 614
+    KHR_10000: 20
+    KHR_20000: 17
+    KHR_50000: 18
+  geometry_manifest:
+    path: runs/cashsnap/representation_gap_synthleader_train_analogs_v1/train_anchor_manifest_boxarea90_v1.jsonl
+    mode: prefer
+    images: 140
+    selected_boxes_by_class:
+      USD_1: 3
+      USD_5: 15
+      USD_10: 16
+      USD_20: 22
+      USD_50: 24
+      USD_100: 18
+      KHR_500: 14
+      KHR_1000: 4
+      KHR_2000: 4
+      KHR_10000: 20
+    fallback_classes:
+    - KHR_5000
+    - KHR_20000
+    - KHR_50000
+  unique_geometry_sources_used: 219
+  assets_by_class:
+    USD_1: 2
+    USD_5: 2
+    USD_10: 2
+    USD_20: 2
+    USD_50: 2
+    USD_100: 2
+    KHR_500: 2
+    KHR_1000: 2
+    KHR_2000: 2
+    KHR_5000: 2
+    KHR_10000: 2
+    KHR_20000: 2
+    KHR_50000: 2
+  unique_assets_used: 26
+  cashsnap_root: data/cashsnap_v1
+  asset_manifest: data/asset_candidates/numista_current_cutout_bank_v1/manifest.csv
+  asset_quality_policy: latest_design
+  composite_policy: poisson_mixed
+  shadow_policy: contact
+  box_scale: 1.1
+  box_scale_jitter: 0.03
+  geometry_size_jitter: 0.04
+  position_jitter_fraction: 0.006
+  warp_alpha_feather_px: 0.0
+  inpaint_under_foreground_px: 8
+  inpaint_under_foreground_radius: 5.0
+  inpaint_source_box_pad_fraction: 0.02
+  inpaint_source_box_policy: source_background_only
+  couple_background_geometry: true
+  background_source_classes:
+    USD_1: 3
+    USD_5: 15
+    USD_10: 16
+    USD_20: 22
+    USD_50: 24
+    USD_100: 18
+    KHR_500: 14
+    KHR_1000: 4
+    KHR_2000: 4
+    KHR_5000: 0
+    KHR_10000: 20
+    KHR_20000: 0
+    KHR_50000: 0
+  coupled_geometry_records: 540
+  pose_policy: aabb_aspect_repair
+  min_render_short_px: 0.0
+  min_render_width_px: 0.0
+  min_render_height_px: 0.0
+  min_render_area_px: 0.0
+  inpaint_metadata_limits:
+    inpaint_source_box_fraction: 0.95
+    inpaint_mask_fraction: 0.95
+    inpaint_mask_to_foreground_area_ratio: 10.0
+    inpaint_mask_outside_foreground_to_foreground_ratio: 9.0
+    source_box_outside_foreground_fraction: 0.92
+  foreground_style_policy: real_crop_stats
+  foreground_style_min_class_samples: 8
+  foreground_style_max_class_samples: 256
+  foreground_style_samples_by_class:
+    USD_1: 3
+    USD_5: 15
+    USD_10: 16
+    USD_20: 22
+    USD_50: 24
+    USD_100: 18
+    KHR_500: 14
+    KHR_1000: 4
+    KHR_2000: 4
+    KHR_5000: 256
+    KHR_10000: 20
+    KHR_20000: 17
+    KHR_50000: 18
+  foreground_style_sharpness_quantiles:
+    sharpness_p25: 1351.698486328125
+    sharpness_p50: 2692.2041015625
+    sharpness_p75: 4450.60107421875
+  inpaint_metadata_quantiles:
+    foreground_visible_fraction:
+      count: 780
+      min: 0.036382000893354416
+      p05: 0.057083748281002045
+      p25: 0.09752774983644485
+      p50: 0.1612119972705841
+      p75: 0.23472075164318085
+      p95: 0.3842546045780182
+      max: 0.544064998626709
+    inpaint_source_box_fraction:
+      count: 780
+      min: 0.0
+      p05: 0.0
+      p25: 0.0
+      p50: 0.3052929937839508
+      p75: 0.48361799120903015
+      p95: 0.6968749761581421
+      max: 0.875
+    source_box_covered_by_foreground_fraction:
+      count: 540
+      min: 0.10507699847221375
+      p05: 0.13934685289859772
+      p25: 0.2427627444267273
+      p50: 0.37833449244499207
+      p75: 0.5996959805488586
+      p95: 0.8277400732040405
+      max: 0.9958419799804688
+    source_box_outside_foreground_fraction:
+      count: 540
+      min: 0.004157999996095896
+      p05: 0.17225989699363708
+      p25: 0.40030401945114136
+      p50: 0.6216654777526855
+      p75: 0.7572372555732727
+      p95: 0.8606531620025635
+      max: 0.8949229717254639
+    foreground_inside_source_box_fraction:
+      count: 780
+      min: 0.0
+      p05: 0.0
+      p25: 0.0
+      p50: 0.9732165336608887
+      p75: 1.0
+      p95: 1.0
+      max: 1.0
+    inpaint_mask_fraction:
+      count: 780
+      min: 0.05155299976468086
+      p05: 0.10087079554796219
+      p25: 0.2463184893131256
+      p50: 0.3661249876022339
+      p75: 0.5267969965934753
+      p95: 0.7247971296310425
+      max: 0.8968750238418579
+    inpaint_mask_to_foreground_area_ratio:
+      count: 780
+      min: 1.0792620182037354
+      p05: 1.125956416130066
+      p25: 1.2130805253982544
+      p50: 1.8484139442443848
+      p75: 3.5069591999053955
+      p95: 7.294486999511719
+      max: 9.913643836975098
+    inpaint_mask_outside_foreground_fraction:
+      count: 780
+      min: 0.013202999718487263
+      p05: 0.018699301406741142
+      p25: 0.03334924951195717
+      p50: 0.18132200837135315
+      p75: 0.33863699436187744
+      p95: 0.5668632984161377
+      max: 0.8064060211181641
+    inpaint_mask_outside_foreground_to_foreground_ratio:
+      count: 780
+      min: 0.07926200330257416
+      p05: 0.12595650553703308
+      p25: 0.213080495595932
+      p50: 0.8484139442443848
+      p75: 2.5069591999053955
+      p95: 6.294486999511719
+      max: 8.913643836975098
+  metadata: data/synthetic/cashsnap_target_anchor_transplant_rep_gap_sourcectx_boxarea90_fallback_metagated_v1/metadata/train.jsonl

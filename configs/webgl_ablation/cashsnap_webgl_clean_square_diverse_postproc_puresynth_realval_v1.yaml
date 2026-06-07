@@ -1,0 +1,27 @@
+path: ../..
+train: data/synthetic/cashsnap_webgl_clean_base_square_diverse_postproc_geometry_selected96_v1/images/train
+val: data/cashsnap_v1/images/val
+test: data/cashsnap_v1/images/test
+names:
+  0: USD_1
+  1: USD_5
+  2: USD_10
+  3: USD_20
+  4: USD_50
+  5: USD_100
+  6: KHR_500
+  7: KHR_1000
+  8: KHR_2000
+  9: KHR_5000
+  10: KHR_10000
+  11: KHR_20000
+  12: KHR_50000
+cashsnap_sources:
+  synthetic_train: data/synthetic/cashsnap_webgl_clean_base_square_diverse_postproc_geometry_selected96_v1
+  real_val: data/cashsnap_v1/images/val
+  real_test: data/cashsnap_v1/images/test
+cashsnap_policy:
+  intended_use: pure-synth square-canvas clean visible-note TSTR probe after geometry, camera, condition, and postprocess diversity selection
+  phase: easy single-note base before overlap/fan/hand/HDRI curricula
+  promotion_rule: reject unless synthetic-only training improves real-val/test transfer over the 768x640 v2 and rejected square-mixcam controls
+  known_limit: 13-class operational subset, intentionally not full 21-class USD/KHR scope

@@ -98,6 +98,8 @@ def check_existing(row: dict, out_root: Path, train_views: list[str]) -> None:
     ]
     if bool(row.get("allow_zero_visible")):
         cmd.append("--allow-zero-visible")
+    if bool(row.get("require_visual_note_quality")):
+        cmd.append("--require-visual-note-quality")
     subprocess.run(cmd, cwd=ROOT, check=True)
 
     recipe = read_json(out_root / "recipe.json")

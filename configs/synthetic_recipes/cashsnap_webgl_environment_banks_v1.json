@@ -7,12 +7,69 @@
     {
       "id": "polyhaven_cashsnap_environment_v1",
       "path": "data/environment_maps/polyhaven_cashsnap_environment_v1",
-      "review_status": "planned",
-      "allowed_artifact_statuses": [],
-      "assets": [],
+      "review_status": "proof_only",
+      "allowed_artifact_statuses": ["smoke", "diagnostic"],
+      "assets": [
+        {
+          "file": "phone_shop_1k.hdr",
+          "source_url": "https://polyhaven.com/a/phone_shop",
+          "license": "CC0",
+          "license_url": "https://polyhaven.com/license",
+          "credit": "Poly Haven; authors: Philip Modin"
+        },
+        {
+          "file": "comfy_cafe_1k.hdr",
+          "source_url": "https://polyhaven.com/a/comfy_cafe",
+          "license": "CC0",
+          "license_url": "https://polyhaven.com/license",
+          "credit": "Poly Haven; authors: Sergej Majboroda"
+        },
+        {
+          "file": "leadenhall_market_1k.hdr",
+          "source_url": "https://polyhaven.com/a/leadenhall_market",
+          "license": "CC0",
+          "license_url": "https://polyhaven.com/license",
+          "credit": "Poly Haven; authors: Andreas Mischok"
+        },
+        {
+          "file": "poly_haven_studio_1k.hdr",
+          "source_url": "https://polyhaven.com/a/poly_haven_studio",
+          "license": "CC0",
+          "license_url": "https://polyhaven.com/license",
+          "credit": "Poly Haven; authors: Greg Zaal"
+        },
+        {
+          "file": "small_empty_room_2_1k.hdr",
+          "source_url": "https://polyhaven.com/a/small_empty_room_2",
+          "license": "CC0",
+          "license_url": "https://polyhaven.com/license",
+          "credit": "Poly Haven; authors: Sergej Majboroda"
+        },
+        {
+          "file": "small_workshop_1k.hdr",
+          "source_url": "https://polyhaven.com/a/small_workshop",
+          "license": "CC0",
+          "license_url": "https://polyhaven.com/license",
+          "credit": "Poly Haven; authors: Dimitrios Savva, Jarod Guest"
+        },
+        {
+          "file": "urban_street_03_1k.hdr",
+          "source_url": "https://polyhaven.com/a/urban_street_03",
+          "license": "CC0",
+          "license_url": "https://polyhaven.com/license",
+          "credit": "Poly Haven; authors: Andreas Mischok"
+        },
+        {
+          "file": "modern_evening_street_1k.hdr",
+          "source_url": "https://polyhaven.com/a/modern_evening_street",
+          "license": "CC0",
+          "license_url": "https://polyhaven.com/license",
+          "credit": "Poly Haven; authors: Grzegorz Wronkowski"
+        }
+      ],
       "source_policy": "CC0 equirectangular HDR/LDR environment maps only; record source_url, license, license_url, and credit per asset before use.",
       "bootstrap_command": "python scripts/download_polyhaven_environment_bank.py --review-status proof_only",
-      "blocker": "No environment maps have been downloaded, reviewed, or registered into this project config yet."
+      "blocker": "Proof-only HDRI bank is registered for smoke/diagnostic lighting ablations; trainable-candidate use remains blocked until visual review and real-transfer ablations show benefit."
     }
   ]
 }

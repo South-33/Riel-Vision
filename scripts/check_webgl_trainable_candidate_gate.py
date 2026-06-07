@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from webgl_constants import WEBGL_ASSET_SIDE_POLICIES, WEBGL_CAMERA_PROFILES
+from webgl_constants import WEBGL_ASSET_QUALITY_POLICIES, WEBGL_ASSET_SIDE_POLICIES, WEBGL_CAMERA_PROFILES
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,6 +24,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-recipe", default="")
     parser.add_argument("--require-scene-mode", default="")
     parser.add_argument("--require-asset-side-policy", default="")
+    parser.add_argument("--require-asset-quality-policy", default="")
+    parser.add_argument("--require-reviewed-textures", action="store_true")
     parser.add_argument("--require-camera-profile", default="")
     parser.add_argument("--train-views", default="detect", help="Comma-separated views intended for training: detect,fragment,obb.")
     parser.add_argument(
@@ -36,9 +38,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-trainable-width", type=int, default=1280, help="Minimum visual width for trainable-candidate packages.")
     parser.add_argument("--min-trainable-height", type=int, default=960, help="Minimum visual height for trainable-candidate packages.")
     parser.add_argument(
+        "--require-visual-note-quality",
+        action="store_true",
+        help="Run the readable-note pixel/softness gate for clean/base trainable packages.",
+    )
+    parser.add_argument("--visual-qa-imgsz", type=int, default=416, help="Model input size used by the visual note-quality gate.")
+    parser.add_argument("--visual-qa-out-dir", type=Path, default=None, help="Optional output directory for visual QA sheets.")
+    parser.add_argument("--visual-qa-max-tiny-fraction", type=float, default=0.03)
+    parser.add_argument("--visual-qa-max-small-fraction", type=float, default=0.45)
+    parser.add_argument("--visual-qa-max-soft-fraction", type=float, default=0.15)
+    parser.add_argument("--visual-qa-min-p05-short-px", type=float, default=55.0)
+    parser.add_argument("--visual-qa-min-p50-short-px", type=float, default=88.0)
+    parser.add_argument(
         "--skip-count-contract",
         action="store_true",
         help="Skip counts/summary.json and counts/targets.jsonl fusion-contract checks for legacy debug artifacts.",
+    )
+    parser.add_argument(
+        "--skip-data-lifecycle",
+        action="store_true",
+        help="Skip global data lifecycle registry validation for one-off local debugging.",
     )
     return parser.parse_args()
 
@@ -151,9 +170,41 @@ def check_count_contract(dataset_root: Path, qa_summary: dict, images: int) -> d
     }
 
 
+def check_visual_note_quality(dataset_root: Path, args: argparse.Namespace) -> None:
+    out_dir = resolve(args.visual_qa_out_dir) if args.visual_qa_out_dir else ROOT / "runs" / "cashsnap" / "visual_qa" / f"{dataset_root.name}_gate"
+    cmd = [
+        sys.executable,
+        "scripts/build_synthetic_visual_qa_pack.py",
+        "--root",
+        str(dataset_root),
+        "--out-dir",
+        str(out_dir),
+        "--imgsz",
+        str(args.visual_qa_imgsz),
+        "--items-per-sheet",
+        "6",
+        "--thumb-width",
+        "520",
+        "--max-tiny-fraction",
+        str(args.visual_qa_max_tiny_fraction),
+        "--max-small-fraction",
+        str(args.visual_qa_max_small_fraction),
+        "--max-soft-fraction",
+        str(args.visual_qa_max_soft_fraction),
+        "--min-p05-short-px",
+        str(args.visual_qa_min_p05_short_px),
+        "--min-p50-short-px",
+        str(args.visual_qa_min_p50_short_px),
+        "--fail-on-quality",
+    ]
+    subprocess.run(cmd, cwd=ROOT, check=True)
+
+
 def main() -> int:
     args = parse_args()
     dataset_root = resolve(args.root)
+    if not args.skip_data_lifecycle:
+        subprocess.run([sys.executable, "scripts/check_data_lifecycle_registry.py"], cwd=ROOT, check=True)
     subprocess.run([sys.executable, "scripts/check_webgl_label_views.py", "--root", str(dataset_root)], cwd=ROOT, check=True)
     appearance_cmd = [
         sys.executable,
@@ -165,6 +216,8 @@ def main() -> int:
     ]
     if args.require_camera_profile and args.require_camera_profile != "phone_auto":
         appearance_cmd.extend(["--min-camera-profiles", "1"])
+    if args.require_visual_note_quality:
+        appearance_cmd.extend(["--min-focus-blur-range", "0.04", "--min-view-angle-range", "5"])
     subprocess.run(appearance_cmd, cwd=ROOT, check=True)
     subprocess.run(
         [
@@ -215,6 +268,8 @@ def main() -> int:
     require(isinstance(scene_modes, dict) and scene_modes, "qa summary must name scene_modes")
     if args.require_scene_mode:
         require(scene_modes == {args.require_scene_mode: images}, f"unexpected scene_modes: {scene_modes}")
+    if args.require_visual_note_quality:
+        check_visual_note_quality(dataset_root, args)
     if args.require_asset_side_policy:
         require(
             args.require_asset_side_policy in WEBGL_ASSET_SIDE_POLICIES,
@@ -240,6 +295,27 @@ def main() -> int:
             require(isinstance(side_counts, dict), "asset_selection.side_counts must be an object")
             require(int(side_counts.get("front", 0)) > 0, "front_back_mix rendered no fronts")
             require(int(side_counts.get("back", 0)) > 0, "front_back_mix rendered no backs")
+    if args.require_asset_quality_policy:
+        require(
+            args.require_asset_quality_policy in WEBGL_ASSET_QUALITY_POLICIES,
+            f"--require-asset-quality-policy must be one of {sorted(WEBGL_ASSET_QUALITY_POLICIES)}",
+        )
+    if args.require_asset_quality_policy or args.require_reviewed_textures:
+        texture_cmd = [
+            sys.executable,
+            "scripts/check_webgl_texture_asset_policy.py",
+            "--root",
+            str(dataset_root),
+            "--min-images",
+            str(args.min_images),
+        ]
+        if args.require_asset_quality_policy:
+            texture_cmd.extend(["--require-asset-quality-policy", args.require_asset_quality_policy])
+        else:
+            texture_cmd.extend(["--require-asset-quality-policy", ""])
+        if not args.require_reviewed_textures:
+            texture_cmd.extend(["--require-reviewed-status", ""])
+        subprocess.run(texture_cmd, cwd=ROOT, check=True)
     if args.require_camera_profile:
         require(
             args.require_camera_profile in WEBGL_CAMERA_PROFILES,

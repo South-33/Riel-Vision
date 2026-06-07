@@ -9,11 +9,16 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from webgl_constants import (
+    WEBGL_ASSET_QUALITY_POLICIES,
     WEBGL_ASSET_SIDE_POLICIES,
+    WEBGL_CAMERA_ISP_POLICIES,
     WEBGL_CAMERA_PROFILES,
+    WEBGL_NEGATIVE_PROP_POLICIES,
+    WEBGL_NOTE_CONDITION_POLICIES,
     WEBGL_NOTE_PRINT_TONE_POLICIES,
     WEBGL_OCCLUDER_POLICIES,
     WEBGL_STACK_POSE_POLICIES,
+    WEBGL_TEXTURE_QA_EFFECTS,
 )
 
 
@@ -44,7 +49,7 @@ VALID_RECIPE_STATUSES = {
     "promoted",
     "rejected_probe",
 }
-NOTE_CONDITION_POLICIES = {"mixed", "pristine_only", "heavy_wear", "wet_stress"}
+NOTE_CONDITION_POLICIES = WEBGL_NOTE_CONDITION_POLICIES
 LENS_DISTORTION_POLICIES = {"off", "phone_mild"}
 DOMAIN_GAP_STAT_KEYS = {
     "image": {
@@ -241,6 +246,18 @@ def validate_diagnostic_gates(recipe_id: str, gates: object) -> None:
                 type(hard_negative_diversity["require_zero_assets"]) is bool,
                 f"{recipe_id}: hard_negative_diversity.require_zero_assets must be boolean",
             )
+        if "require_prop_kinds" in hard_negative_diversity:
+            required = hard_negative_diversity["require_prop_kinds"]
+            require(
+                isinstance(required, list) and all(str(item).strip() for item in required),
+                f"{recipe_id}: hard_negative_diversity.require_prop_kinds must be a non-empty string list",
+            )
+        if "require_confusion_hardness" in hard_negative_diversity:
+            required = hard_negative_diversity["require_confusion_hardness"]
+            require(
+                isinstance(required, list) and all(str(item).strip() for item in required),
+                f"{recipe_id}: hard_negative_diversity.require_confusion_hardness must be a non-empty string list",
+            )
 
     domain_gap = gates.get("domain_gap")
     if domain_gap is not None:
@@ -312,8 +329,18 @@ def main() -> int:
         require(str(row.get("current_blocker", "")).strip(), f"{recipe_id}: missing current_blocker")
         asset_side_policy = str(row.get("asset_side_policy", ""))
         require(asset_side_policy in WEBGL_ASSET_SIDE_POLICIES, f"{recipe_id}: invalid asset_side_policy {asset_side_policy!r}")
+        asset_quality_policy = str(row.get("asset_quality_policy", "latest_design"))
+        require(
+            asset_quality_policy in WEBGL_ASSET_QUALITY_POLICIES,
+            f"{recipe_id}: invalid asset_quality_policy {asset_quality_policy!r}",
+        )
         camera_profile = str(row.get("camera_profile", ""))
         require(camera_profile in WEBGL_CAMERA_PROFILES, f"{recipe_id}: invalid camera_profile {camera_profile!r}")
+        camera_isp_policy = str(row.get("camera_isp_policy", "default"))
+        require(
+            camera_isp_policy in WEBGL_CAMERA_ISP_POLICIES,
+            f"{recipe_id}: invalid camera_isp_policy {camera_isp_policy!r}",
+        )
         stack_pose_policy = str(row.get("stack_pose_policy", "default"))
         require(
             stack_pose_policy in WEBGL_STACK_POSE_POLICIES,
@@ -334,10 +361,20 @@ def main() -> int:
             note_print_tone_policy in WEBGL_NOTE_PRINT_TONE_POLICIES,
             f"{recipe_id}: invalid note_print_tone_policy {note_print_tone_policy!r}",
         )
+        texture_qa_effects = str(row.get("texture_qa_effects", "flat"))
+        require(
+            texture_qa_effects in WEBGL_TEXTURE_QA_EFFECTS,
+            f"{recipe_id}: invalid texture_qa_effects {texture_qa_effects!r}",
+        )
         occluder_policy = str(row.get("occluder_policy", "scene_default"))
         require(
             occluder_policy in WEBGL_OCCLUDER_POLICIES,
             f"{recipe_id}: invalid occluder_policy {occluder_policy!r}",
+        )
+        negative_prop_policy = str(row.get("negative_prop_policy", "classic"))
+        require(
+            negative_prop_policy in WEBGL_NEGATIVE_PROP_POLICIES,
+            f"{recipe_id}: invalid negative_prop_policy {negative_prop_policy!r}",
         )
         validate_diagnostic_gates(recipe_id, row.get("diagnostic_gates"))
         for target_id in target_ids:

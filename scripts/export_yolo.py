@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 
 from local_runtime import configure_project_cache
+from hardware_profile import recommended_device
 
 configure_project_cache()
 
@@ -25,7 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", required=True, help="YOLO checkpoint path.")
     parser.add_argument("--format", required=True, help="Ultralytics export format, e.g. onnx, ncnn, tflite.")
     parser.add_argument("--imgsz", type=int, default=416)
-    parser.add_argument("--device", default=None, help="Ultralytics device selector, e.g. cpu or 0.")
+    parser.add_argument("--device", default="auto", help="Ultralytics device selector, e.g. cpu, 0, or auto.")
     parser.add_argument("--opset", type=int, default=None, help="ONNX opset when applicable.")
     parser.add_argument("--dynamic", action="store_true", help="Use dynamic input shape when supported.")
     parser.add_argument("--simplify", action="store_true", help="Simplify exported graph when supported.")
@@ -44,6 +45,8 @@ def main() -> None:
     model_path = resolve_from_root(args.model)
     if not model_path.exists():
         raise FileNotFoundError(f"Model checkpoint not found: {model_path}")
+    args.device = recommended_device(args.device)
+    print(f"[hardware] export device={args.device} imgsz={args.imgsz} format={args.format}", flush=True)
 
     export_args = {
         "format": args.format,
@@ -55,8 +58,7 @@ def main() -> None:
         "half": args.half,
         "int8": args.int8,
     }
-    if args.device is not None:
-        export_args["device"] = args.device
+    export_args["device"] = args.device
     if args.opset is not None:
         export_args["opset"] = args.opset
     if args.conf is not None:

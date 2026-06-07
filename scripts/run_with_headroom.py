@@ -8,6 +8,18 @@ from dataclasses import dataclass
 
 import psutil
 
+from local_runtime import configure_project_cache
+from hardware_profile import (
+    HEADROOM_MAX_GPU_MEM_PERCENT,
+    HEADROOM_MAX_PERCENT,
+    HEADROOM_MAX_RAM_PERCENT,
+    HEADROOM_MIN_FREE_RAM_GB,
+    HEADROOM_RESUME_PERCENT,
+)
+
+
+configure_project_cache()
+
 
 @dataclass
 class LoadSample:
@@ -25,31 +37,31 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-percent",
         type=float,
-        default=90.0,
-        help="Suspend at or above this active CPU/GPU load.",
+        default=HEADROOM_MAX_PERCENT,
+        help="Suspend at or above this active CPU load. GPU utilization is included only with --throttle-gpu-util.",
     )
     parser.add_argument(
         "--resume-percent",
         type=float,
-        default=82.0,
-        help="Resume at or below this active CPU/GPU load.",
+        default=HEADROOM_RESUME_PERCENT,
+        help="Resume at or below this active CPU load. GPU utilization is included only with --throttle-gpu-util.",
     )
     parser.add_argument(
         "--max-ram-percent",
         type=float,
-        default=90.0,
+        default=HEADROOM_MAX_RAM_PERCENT,
         help="Terminate the child if system RAM reaches this percent.",
     )
     parser.add_argument(
         "--max-gpu-mem-percent",
         type=float,
-        default=90.0,
+        default=HEADROOM_MAX_GPU_MEM_PERCENT,
         help="Terminate the child if GPU memory reaches this percent.",
     )
     parser.add_argument(
         "--min-free-ram-gb",
         type=float,
-        default=2.0,
+        default=HEADROOM_MIN_FREE_RAM_GB,
         help=(
             "Wait before launch below this available-GB floor and warn during the run. "
             "Use 0 to disable. Runtime pausing still follows --max-ram-percent."
@@ -62,6 +74,11 @@ def parse_args() -> argparse.Namespace:
         help="Pause on memory pressure, or exit with code 70 so a wrapper can relaunch smaller.",
     )
     parser.add_argument("--interval", type=float, default=2.0, help="Seconds between load checks.")
+    parser.add_argument(
+        "--throttle-gpu-util",
+        action="store_true",
+        help="Include GPU utilization in the active-load throttle. GPU memory is always guarded separately.",
+    )
     parser.add_argument(
         "--preflight-timeout",
         type=float,
@@ -127,9 +144,9 @@ def sample_load() -> LoadSample:
     )
 
 
-def throttle_load(sample: LoadSample) -> float:
+def throttle_load(sample: LoadSample, *, include_gpu: bool) -> float:
     values = [sample.cpu_percent]
-    if sample.gpu_percent is not None:
+    if include_gpu and sample.gpu_percent is not None:
         values.append(sample.gpu_percent)
     # Pausing a process does not release RAM or CUDA VRAM, so memory is reported
     # for visibility but not used as a resume gate.
@@ -220,7 +237,7 @@ def wait_for_initial_headroom(args: argparse.Namespace) -> int | None:
     last_print = 0.0
     while True:
         sample = sample_load()
-        load = throttle_load(sample)
+        load = throttle_load(sample, include_gpu=args.throttle_gpu_util)
         memory_high = memory_over_limit(
             sample,
             args.max_ram_percent,
@@ -260,7 +277,7 @@ def main() -> int:
         while child.poll() is None:
             time.sleep(args.interval)
             sample = sample_load()
-            load = throttle_load(sample)
+            load = throttle_load(sample, include_gpu=args.throttle_gpu_util)
             memory_high = hard_memory_over_limit(
                 sample,
                 args.max_ram_percent,

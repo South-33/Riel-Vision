@@ -49,6 +49,7 @@
     "visual_review_rules",
     "background_bank_registry",
     "environment_bank_registry",
+    "external_negative_bank_registry",
     "cutout_bank_audit",
     "blocked_source_leads",
     "real_capture_inventory",
@@ -101,6 +102,14 @@
       "kind": "file",
       "path": "configs/synthetic_recipes/cashsnap_webgl_environment_banks_v1.json",
       "purpose": "Environment-map registry, source/license requirements, and acceptance state.",
+      "rights_status": "project_config",
+      "release_policy": "may_publish_project_config"
+    },
+    {
+      "id": "external_negative_bank_registry",
+      "kind": "file",
+      "path": "configs/synthetic_recipes/cashsnap_external_negative_banks_v1.json",
+      "purpose": "External label-empty negative image registry for licensed/reviewed stock or public images of non-target currency and clutter.",
       "rights_status": "project_config",
       "release_policy": "may_publish_project_config"
     },

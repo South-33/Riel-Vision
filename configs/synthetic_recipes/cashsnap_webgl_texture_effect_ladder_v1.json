@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "name": "cashsnap_webgl_texture_effect_ladder_v1",
+  "reviewed_at": "2026-06-06",
+  "purpose": "Track controlled texture-QA effect probes after full approved-bank raw-vs-render baseline review.",
+  "baseline": {
+    "status": "manual_pass",
+    "scope": "all 26 latest-design approved class/side textures",
+    "front_root": "data/synthetic/cashsnap_webgl_texture_qa_front_v1",
+    "back_root": "data/synthetic/cashsnap_webgl_texture_qa_back_v1",
+    "front_pairs": "runs/cashsnap/texture_fidelity_review/texture_qa_front_v1/pairs",
+    "back_pairs": "runs/cashsnap/texture_fidelity_review/texture_qa_back_v1/pairs"
+  },
+  "targeted_probe_classes": [
+    "KHR_1000",
+    "KHR_2000",
+    "USD_20",
+    "USD_50",
+    "USD_100"
+  ],
+  "stages": [
+    {
+      "texture_qa_effects": "lit_material",
+      "status": "targeted_manual_pass",
+      "front_root": "data/synthetic/cashsnap_webgl_texture_qa_lit_material_probe_front_v1",
+      "back_root": "data/synthetic/cashsnap_webgl_texture_qa_lit_material_probe_back_v1",
+      "notes": "Initial fixed lighting was too dim; calibrated neutral top-down texture-QA lighting before pass."
+    },
+    {
+      "texture_qa_effects": "backing_plane",
+      "status": "targeted_manual_pass",
+      "front_root": "data/synthetic/cashsnap_webgl_texture_qa_backing_plane_probe_front_v1",
+      "back_root": "data/synthetic/cashsnap_webgl_texture_qa_backing_plane_probe_back_v1",
+      "notes": "No beige backing leak or hard edge appeared in targeted front/back cards."
+    },
+    {
+      "texture_qa_effects": "postprocess",
+      "status": "targeted_manual_pass",
+      "front_root": "data/synthetic/cashsnap_webgl_texture_qa_postprocess_probe_front_v1",
+      "back_root": "data/synthetic/cashsnap_webgl_texture_qa_postprocess_probe_back_v1",
+      "notes": "Mild tone/exposure variation appears, especially on USD backs, but no border or fake ridge."
+    },
+    {
+      "texture_qa_effects": "condition",
+      "note_condition_policy": "handled_clean",
+      "status": "targeted_manual_pass_too_subtle_for_stress",
+      "front_root": "data/synthetic/cashsnap_webgl_texture_qa_condition_probe_front_v1",
+      "back_root": "data/synthetic/cashsnap_webgl_texture_qa_condition_probe_back_v1",
+      "notes": "Handled-clean condition stayed texture-faithful but too subtle for handled-bill stress; clean scenes still forbid edge wear, creases, and stains."
+    },
+    {
+      "texture_qa_effects": "condition",
+      "note_condition_policy": "handled_3d",
+      "status": "single_probe_manual_pass",
+      "root": "data/synthetic/cashsnap_webgl_texture_qa_handled_3d_probe_v2",
+      "pairs": "runs/cashsnap/texture_fidelity_review/texture_qa_handled_3d_probe_v2/pairs",
+      "notes": "USD_20 front probe shows physical mesh bends and ridge/valley shading with texture crease strokes disabled; use as a targeted stress knob, not as clean-base default scale."
+    }
+  ],
+  "next_review_policy": "Use targeted/random stress cards for new knobs unless a stage visibly fails; full all-texture QA is reserved for source-bank or renderer-path changes."
+}

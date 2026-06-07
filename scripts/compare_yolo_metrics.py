@@ -9,6 +9,18 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_METRIC = "metrics/mAP50-95(B)"
+RESULT_METRIC_ALIASES = {
+    "metrics/precision(B)": ("box.precision",),
+    "metrics/recall(B)": ("box.recall",),
+    "metrics/mAP50(B)": ("box.map50",),
+    "metrics/mAP50-95(B)": ("box.map50_95",),
+    "metrics/mAP75(B)": ("box.map75",),
+}
+PER_CLASS_METRIC_ALIASES = {
+    "mAP50": "map50",
+    "mAP50-95": "map50_95",
+    "mAP75": "map75",
+}
 
 
 def resolve(path_value: str) -> Path:
@@ -27,7 +39,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Compare two val_yolo.py metrics JSON files.")
     parser.add_argument("--baseline", required=True, help="Baseline metrics JSON.")
     parser.add_argument("--candidate", required=True, help="Candidate metrics JSON.")
-    parser.add_argument("--metric", default=DEFAULT_METRIC, help="Metric key under the JSON 'results' object.")
+    parser.add_argument(
+        "--metric",
+        default=DEFAULT_METRIC,
+        help="Metric key under 'results' or a dotted path such as box.map50_95.",
+    )
     parser.add_argument("--min-delta", type=float, default=None, help="Require candidate - baseline >= this value.")
     parser.add_argument("--max-drop", type=float, default=0.0, help="Allow at most this much negative delta.")
     parser.add_argument(
@@ -76,11 +92,37 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def clean_metric_name(metric: str) -> str:
+    return metric.strip().strip("\"'")
+
+
+def dotted_value(document: dict, path: str) -> object:
+    value: object = document
+    for part in path.split("."):
+        if not isinstance(value, dict) or part not in value:
+            raise KeyError(path)
+        value = value[part]
+    return value
+
+
+def metric_candidates(metric: str) -> list[str]:
+    clean_metric = clean_metric_name(metric)
+    candidates = [clean_metric]
+    candidates.extend(RESULT_METRIC_ALIASES.get(clean_metric, ()))
+    return candidates
+
+
 def result_metric(document: dict, metric: str) -> float:
     results = document.get("results", {})
-    if not isinstance(results, dict) or metric not in results:
-        raise KeyError(f"missing results metric {metric!r}")
-    return float(results[metric])
+    for candidate in metric_candidates(metric):
+        if isinstance(results, dict) and candidate in results:
+            return float(results[candidate])
+        if "." in candidate:
+            try:
+                return float(dotted_value(document, candidate))
+            except KeyError:
+                pass
+    raise KeyError(f"missing metric {metric!r}; tried {metric_candidates(metric)!r}")
 
 
 def per_class_by_name(document: dict) -> dict[str, dict]:
@@ -112,6 +154,7 @@ def compare_per_class(
     metric_name: str = "map50_95",
     only_classes: set[str] | None = None,
 ) -> list[dict]:
+    metric_name = PER_CLASS_METRIC_ALIASES.get(clean_metric_name(metric_name), clean_metric_name(metric_name))
     baseline_rows = per_class_by_name(baseline)
     candidate_rows = per_class_by_name(candidate)
     rows = []

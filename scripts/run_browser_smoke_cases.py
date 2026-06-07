@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import csv
 import hashlib
 import json
@@ -24,8 +25,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--timeout-ms", default="120000")
+    parser.add_argument(
+        "--subprocess-grace-seconds",
+        type=float,
+        default=30.0,
+        help="Extra seconds beyond --timeout-ms before Python kills a stuck Node/Edge smoke subprocess.",
+    )
     parser.add_argument("--port-base", type=int, default=8877, help="First local HTTP port for smoke cases.")
     parser.add_argument("--debug-port-base", type=int, default=9323, help="First Edge DevTools port for smoke cases.")
+    parser.add_argument("--jobs", type=int, default=1, help="Browser smoke subprocesses to run concurrently.")
+    parser.add_argument(
+        "--retry-failed-sequential",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="When --jobs > 1, rerun no-summary infrastructure failures sequentially before reporting.",
+    )
     parser.add_argument("--edge", default="", help="Optional Edge executable path forwarded to the node smoke script.")
     parser.add_argument("--proposal-conf", default="", help="Optional browser detector proposal confidence override.")
     parser.add_argument("--detector-override", default="", help="Optional detector-vs-fragment fusion threshold override.")
@@ -212,6 +226,7 @@ def browser_stress_report(args: argparse.Namespace, summaries: list[dict], failu
         "input_fingerprints": browser_input_fingerprints(args),
         "settings": {
             "timeout_ms": int(args.timeout_ms),
+            "subprocess_grace_seconds": args.subprocess_grace_seconds,
             "edge": args.edge,
             "proposal_conf": args.proposal_conf,
             "detector_override": args.detector_override,
@@ -225,6 +240,8 @@ def browser_stress_report(args: argparse.Namespace, summaries: list[dict], failu
             "unclassified_min_conf": args.unclassified_min_conf,
             "nms_iou": args.nms_iou,
             "crop_padding": args.crop_padding,
+            "jobs": args.jobs,
+            "retry_failed_sequential": args.retry_failed_sequential,
         },
         "failures": failures,
         "cases": summaries,
@@ -291,6 +308,54 @@ def command_for_case(case: dict[str, str], args: argparse.Namespace, index: int)
     return command
 
 
+def run_case(index: int, case: dict[str, str], args: argparse.Namespace) -> tuple[int, dict | None, str | None, str, str]:
+    case_id = case["case_id"]
+    command = command_for_case(case, args, index)
+    timeout_seconds = int(args.timeout_ms) / 1000.0 + max(0.0, args.subprocess_grace_seconds)
+    print(
+        f"{case_id}: starting browser smoke port={args.port_base + index} "
+        f"debug_port={args.debug_port_base + index}",
+        flush=True,
+    )
+    try:
+        result = subprocess.run(
+            command,
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        stdout = exc.stdout if isinstance(exc.stdout, str) else (exc.stdout or b"").decode("utf-8", errors="replace")
+        stderr = exc.stderr if isinstance(exc.stderr, str) else (exc.stderr or b"").decode("utf-8", errors="replace")
+        return index, None, f"{case_id}: subprocess timeout after {timeout_seconds:.0f}s", stdout, stderr
+    try:
+        summary = parse_summary(result.stdout)
+    except ValueError as exc:
+        failure = f"{case_id}: exit {result.returncode}" if result.returncode else f"{case_id}: {exc}"
+        return index, None, failure, result.stdout, result.stderr
+    summary["caseId"] = case_id
+    summary["notes"] = case.get("notes", "")
+    summary["smokeExitCode"] = result.returncode
+    if result.stderr.strip():
+        summary["smokeError"] = result.stderr.strip()
+    failure = f"{case_id}: exit {result.returncode}" if result.returncode else None
+    return index, summary, failure, result.stdout, result.stderr
+
+
+def print_case_summary(summary: dict) -> None:
+    evaluation = summary.get("evaluation") or {}
+    print(
+        f"{summary.get('caseId')}: count={summary.get('totalCount')} "
+        f"khr={summary.get('khrValue')} usd={summary.get('usdValue')} "
+        f"same={evaluation.get('matchedSameClass')}/{evaluation.get('gtCount')} "
+        f"any={evaluation.get('matchedAnyClass')}/{evaluation.get('gtCount')} "
+        f"count_error={evaluation.get('countError')} "
+        f"khr_error={evaluation.get('khrValueError')} usd_error={evaluation.get('usdValueError')}"
+    )
+
+
 def main() -> None:
     args = parse_args()
     for value, label in [
@@ -310,39 +375,41 @@ def main() -> None:
     if not args.no_artifacts:
         resolve(args.out_dir).mkdir(parents=True, exist_ok=True)
 
+    if args.jobs < 1:
+        raise SystemExit("--jobs must be at least 1")
+
     failures: list[str] = []
-    summaries: list[dict] = []
-    for index, case in enumerate(cases):
-        case_id = case["case_id"]
-        command = command_for_case(case, args, index)
-        result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
-        try:
-            summary = parse_summary(result.stdout)
-        except ValueError as exc:
-            print(result.stdout, end="")
-            print(result.stderr, end="")
-            failures.append(f"{case_id}: exit {result.returncode}" if result.returncode else f"{case_id}: {exc}")
+    summaries_by_index: dict[int, dict] = {}
+    if args.jobs == 1:
+        results = [run_case(index, case, args) for index, case in enumerate(cases)]
+    else:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as executor:
+            futures = [executor.submit(run_case, index, case, args) for index, case in enumerate(cases)]
+            results = [future.result() for future in concurrent.futures.as_completed(futures)]
+        retry_indexes = [index for index, summary, _failure, _stdout, _stderr in results if summary is None]
+        if args.retry_failed_sequential and retry_indexes:
+            print(f"retrying {len(retry_indexes)} browser smoke infrastructure failure(s) sequentially")
+            replacements = {index: run_case(index, cases[index], args) for index in retry_indexes}
+            fixed_results = []
+            for row in results:
+                fixed_results.append(replacements.get(row[0], row))
+            results = fixed_results
+
+    for index, summary, failure, stdout, stderr in sorted(results, key=lambda row: row[0]):
+        if summary is None:
+            print(stdout, end="")
+            print(stderr, end="")
+            if failure:
+                failures.append(failure)
             continue
-        summary["caseId"] = case_id
-        summary["notes"] = case.get("notes", "")
-        summary["smokeExitCode"] = result.returncode
-        if result.stderr.strip():
-            summary["smokeError"] = result.stderr.strip()
-        summaries.append(summary)
-        evaluation = summary.get("evaluation") or {}
-        print(
-            f"{case_id}: count={summary.get('totalCount')} "
-            f"khr={summary.get('khrValue')} usd={summary.get('usdValue')} "
-            f"same={evaluation.get('matchedSameClass')}/{evaluation.get('gtCount')} "
-            f"any={evaluation.get('matchedAnyClass')}/{evaluation.get('gtCount')} "
-            f"count_error={evaluation.get('countError')} "
-            f"khr_error={evaluation.get('khrValueError')} usd_error={evaluation.get('usdValueError')}"
-        )
-        if result.returncode:
-            if result.stderr:
-                print(result.stderr, end="")
-            failures.append(f"{case_id}: exit {result.returncode}")
-            continue
+        summaries_by_index[index] = summary
+        print_case_summary(summary)
+        if failure:
+            if stderr:
+                print(stderr, end="")
+            failures.append(failure)
+
+    summaries = [summaries_by_index[index] for index in sorted(summaries_by_index)]
     summary_json = args.summary_json
     if summary_json is None and not args.no_artifacts:
         summary_json = resolve(args.out_dir) / "summary.json"

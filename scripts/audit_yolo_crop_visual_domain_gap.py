@@ -18,6 +18,7 @@ import audit_yolo_domain_gap as domain_gap
 
 
 ROOT = Path(__file__).resolve().parents[1]
+CROP_SHARPNESS_SIZE = (128, 128)
 CROP_STAT_KEYS = [
     "crop_width_px",
     "crop_height_px",
@@ -33,6 +34,18 @@ CROP_STAT_KEYS = [
     "green_mean",
     "blue_mean",
 ]
+CROP_VISUAL_GAP_PRESETS = {
+    "clean_dynamic_range_v1": {
+        "crop": {
+            "luma_std": 0.07,
+            "luma_p05": 0.10,
+            "luma_p95": 0.08,
+            "saturation_std": 0.06,
+            "sharpness_grad_var": 0.015,
+        },
+        "class_crop": {},
+    }
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,11 +58,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-crop-pixels", type=int, default=16, help="Skip degenerate tiny crops below this area.")
     parser.add_argument("--top-class-deltas", type=int, default=8)
     parser.add_argument(
+        "--gate-preset",
+        default="",
+        choices=["", *sorted(CROP_VISUAL_GAP_PRESETS)],
+        help="Named crop visual gap limit set. Explicit threshold flags override preset values.",
+    )
+    parser.add_argument(
         "--class-name",
         action="append",
         default=[],
         metavar="CLASS[,CLASS...]",
         help="Restrict rows and gate checks to specific classes. Repeatable or comma-separated.",
+    )
+    parser.add_argument(
+        "--max-abs-crop-delta",
+        action="append",
+        default=[],
+        metavar="METRIC=VALUE",
+        help="Limit abs(synthetic-real) aggregate crop-stat mean delta. Repeatable.",
     )
     parser.add_argument(
         "--max-abs-class-crop-delta",
@@ -80,7 +106,7 @@ def parse_class_names(values: list[str]) -> list[str]:
     class_names: list[str] = []
     seen: set[str] = set()
     for value in values:
-        for raw_class in value.split(","):
+        for raw_class in value.replace(",", " ").split():
             class_name = raw_class.strip()
             if class_name and class_name not in seen:
                 class_names.append(class_name)
@@ -134,13 +160,21 @@ def crop_box(row: dict[str, Any], image_size: tuple[int, int], pad_frac: float) 
 def crop_stats(crop: Image.Image) -> dict[str, Any]:
     rgb = crop.convert("RGB")
     array = np.asarray(rgb, dtype=np.float32) / 255.0
+    sharpness_rgb = rgb.resize(CROP_SHARPNESS_SIZE, Image.Resampling.BILINEAR)
+    sharpness_array = np.asarray(sharpness_rgb, dtype=np.float32) / 255.0
     height, width = array.shape[:2]
     luma = 0.2126 * array[..., 0] + 0.7152 * array[..., 1] + 0.0722 * array[..., 2]
+    sharpness_luma = (
+        0.2126 * sharpness_array[..., 0]
+        + 0.7152 * sharpness_array[..., 1]
+        + 0.0722 * sharpness_array[..., 2]
+    )
     max_rgb = array.max(axis=2)
     min_rgb = array.min(axis=2)
     saturation = np.divide(max_rgb - min_rgb, np.maximum(max_rgb, 1e-6))
-    dx = np.diff(luma, axis=1) if width > 1 else np.asarray([0.0], dtype=np.float32)
-    dy = np.diff(luma, axis=0) if height > 1 else np.asarray([0.0], dtype=np.float32)
+    sharp_h, sharp_w = sharpness_luma.shape[:2]
+    dx = np.diff(sharpness_luma, axis=1) if sharp_w > 1 else np.asarray([0.0], dtype=np.float32)
+    dy = np.diff(sharpness_luma, axis=0) if sharp_h > 1 else np.asarray([0.0], dtype=np.float32)
     return {
         "crop_width_px": int(width),
         "crop_height_px": int(height),
@@ -231,9 +265,17 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     by_family = {family: group_summary("source_family", family) for family in families}
     deltas: dict[str, Any] = {}
     if "real" in by_family and "synthetic" in by_family:
+        deltas["synthetic_minus_real"] = {"crop_stats": {}, "class_crop_stats": {}}
+        real_crop_stats = by_family["real"].get("crop_stats", {})
+        synthetic_crop_stats = by_family["synthetic"].get("crop_stats", {})
+        for metric, real_metric_stats in real_crop_stats.items():
+            synth_mean = synthetic_crop_stats.get(metric, {}).get("mean")
+            real_mean = real_metric_stats.get("mean")
+            deltas["synthetic_minus_real"]["crop_stats"][metric] = (
+                None if real_mean is None or synth_mean is None else synth_mean - real_mean
+            )
         real_stats = by_family["real"].get("class_crop_stats", {})
         synthetic_stats = by_family["synthetic"].get("class_crop_stats", {})
-        deltas["synthetic_minus_real"] = {"class_crop_stats": {}}
         for class_name in sorted(set(real_stats) | set(synthetic_stats)):
             deltas["synthetic_minus_real"]["class_crop_stats"][class_name] = {}
             for metric, real_metric_stats in real_stats.get(class_name, {}).items():
@@ -245,8 +287,14 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {"by_family": by_family, "by_group": by_group, "deltas": deltas}
 
 
-def gate(payload: dict[str, Any], limits: dict[str, float], classes: list[str], args: argparse.Namespace) -> dict[str, Any]:
-    requested = bool(args.fail_on_gap or limits)
+def gate(
+    payload: dict[str, Any],
+    crop_limits: dict[str, float],
+    class_limits: dict[str, float],
+    classes: list[str],
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    requested = bool(args.fail_on_gap or crop_limits or class_limits)
     failures: list[str] = []
     by_family = payload.get("by_family", {})
     real = by_family.get("real")
@@ -257,7 +305,12 @@ def gate(payload: dict[str, Any], limits: dict[str, float], classes: list[str], 
         if not isinstance(synthetic, dict):
             failures.append("missing synthetic crop family")
     if not isinstance(real, dict) or not isinstance(synthetic, dict):
-        return {"requested": requested, "passed": not failures, "failures": failures, "limits": limits}
+        return {
+            "requested": requested,
+            "passed": not failures,
+            "failures": failures,
+            "limits": {"crop": crop_limits, "class_crop": class_limits},
+        }
 
     real_crops = int(real.get("crops", 0) or 0)
     synthetic_crops = int(synthetic.get("crops", 0) or 0)
@@ -266,15 +319,30 @@ def gate(payload: dict[str, Any], limits: dict[str, float], classes: list[str], 
     if requested and synthetic_crops < args.min_synthetic_crops:
         failures.append(f"synthetic crop count {synthetic_crops} below minimum {args.min_synthetic_crops}")
 
-    deltas = payload.get("deltas", {}).get("synthetic_minus_real", {}).get("class_crop_stats", {})
-    target_classes = classes or sorted(deltas)
+    deltas = payload.get("deltas", {}).get("synthetic_minus_real", {})
+    crop_deltas = deltas.get("crop_stats", {})
+    if not isinstance(crop_deltas, dict):
+        crop_deltas = {}
+    for metric, limit in crop_limits.items():
+        delta = crop_deltas.get(metric)
+        if delta is None:
+            if requested:
+                failures.append(f"crop_stats.{metric} is unavailable")
+            continue
+        if abs(float(delta)) > limit:
+            failures.append(f"crop_stats.{metric} delta {float(delta):.6f} exceeds abs limit {limit:.6f}")
+
+    class_deltas_by_name = deltas.get("class_crop_stats", {})
+    if not isinstance(class_deltas_by_name, dict):
+        class_deltas_by_name = {}
+    target_classes = classes or sorted(class_deltas_by_name)
     for class_name in target_classes:
-        class_deltas = deltas.get(class_name)
+        class_deltas = class_deltas_by_name.get(class_name)
         if not isinstance(class_deltas, dict):
             if requested:
                 failures.append(f"missing crop deltas for class {class_name}")
             continue
-        for metric, limit in limits.items():
+        for metric, limit in class_limits.items():
             delta = class_deltas.get(metric)
             if delta is None:
                 if requested:
@@ -284,7 +352,12 @@ def gate(payload: dict[str, Any], limits: dict[str, float], classes: list[str], 
                 failures.append(
                     f"class_crop_stats.{class_name}.{metric} delta {float(delta):.6f} exceeds abs limit {limit:.6f}"
                 )
-    return {"requested": requested, "passed": not failures, "failures": failures, "limits": limits}
+    return {
+        "requested": requested,
+        "passed": not failures,
+        "failures": failures,
+        "limits": {"crop": crop_limits, "class_crop": class_limits},
+    }
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -330,8 +403,13 @@ def main() -> int:
     class_names = parse_class_names(args.class_name)
     rows = crop_rows(data_path, args.split, set(class_names), args.pad_frac, args.min_crop_pixels)
     payload = summarize(rows)
-    limits = parse_metric_limits(args.max_abs_class_crop_delta)
-    payload["crop_visual_gap_gate"] = gate(payload, limits, class_names, args)
+    preset = CROP_VISUAL_GAP_PRESETS.get(args.gate_preset, {})
+    crop_limits = dict(preset.get("crop", {})) if isinstance(preset.get("crop", {}), dict) else {}
+    class_limits = dict(preset.get("class_crop", {})) if isinstance(preset.get("class_crop", {}), dict) else {}
+    crop_limits.update(parse_metric_limits(args.max_abs_crop_delta))
+    class_limits.update(parse_metric_limits(args.max_abs_class_crop_delta))
+    payload["crop_visual_gap_gate"] = gate(payload, crop_limits, class_limits, class_names, args)
+    payload["crop_visual_gap_gate"]["preset"] = args.gate_preset
     payload["data"] = repo_rel(data_path)
     payload["split"] = args.split
     payload["classes"] = class_names
@@ -350,7 +428,23 @@ def main() -> int:
         by_family.get("synthetic", {}).get("crops", 0) if isinstance(by_family.get("synthetic"), dict) else 0
     )
     print(f"crops=real:{real_crops} synthetic:{synthetic_crops}")
-    metrics = list(limits) if limits else ["luma_mean", "saturation_mean", "sharpness_grad_var", "red_mean"]
+    crop_deltas = payload.get("deltas", {}).get("synthetic_minus_real", {}).get("crop_stats", {})
+    if isinstance(crop_deltas, dict) and crop_deltas:
+        aggregate_metrics = list(crop_limits) if crop_limits else [
+            "luma_mean",
+            "luma_std",
+            "luma_p05",
+            "luma_p95",
+            "saturation_std",
+            "sharpness_grad_var",
+        ]
+        metric_text = " ".join(
+            f"{metric} {float(crop_deltas[metric]):+.3f}"
+            for metric in aggregate_metrics
+            if crop_deltas.get(metric) is not None
+        )
+        print(f"aggregate_crop_deltas: {metric_text}")
+    metrics = list(class_limits) if class_limits else ["luma_mean", "saturation_mean", "sharpness_grad_var", "red_mean"]
     print("top_class_crop_deltas:")
     print_top_class_deltas(payload, args.top_class_deltas, metrics)
     gate_result = payload["crop_visual_gap_gate"]

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "name": "cashsnap_external_negative_banks_v1",
+  "description": "Review registry for external label-empty negative images, including stock/public images of foreign or unknown currency, coins, cash-table clutter, and plain non-note scenes. These images may be useful background/negative data, but trainable use requires local files, source/license metadata, review evidence, and target USD/KHR absence review.",
+  "min_trainable_images": 24,
+  "accepted_trainable_licenses": ["CC0", "CC0-1.0", "Public Domain"],
+  "valid_categories": [
+    "foreign_banknote",
+    "unknown_banknote",
+    "coin_cluster",
+    "cash_table_clutter",
+    "receipt_or_card",
+    "plain_background",
+    "retail_scene",
+    "other_negative"
+  ],
+  "banks": [
+    {
+      "id": "curated_unknown_currency_external_v1",
+      "path": "data/external_negatives/curated_unknown_currency_external_v1",
+      "review_status": "planned",
+      "allowed_artifact_statuses": [],
+      "intended_categories": ["foreign_banknote", "unknown_banknote", "coin_cluster", "cash_table_clutter"],
+      "assets": [],
+      "source_policy": "Prefer CC0/Public Domain sources with stable source_url and license_url. Do not use untracked random stock images in trainable-candidate configs; every accepted image must be local, metadata-backed, visually reviewed, and verified absent of target USD/KHR notes.",
+      "blocker": "No curated external images have been downloaded, licensed, reviewed, or checked against target-currency leakage yet."
+    }
+  ]
+}

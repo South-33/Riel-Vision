@@ -1,0 +1,31 @@
+path: ../..
+train: data/synthetic/cashsnap_webgl_camera_isp_context_billae_train260_v1/images/train
+val: data/cashsnap_v1/images/val
+test: data/cashsnap_v1/images/test
+names:
+  0: USD_1
+  1: USD_5
+  2: USD_10
+  3: USD_20
+  4: USD_50
+  5: USD_100
+  6: KHR_500
+  7: KHR_1000
+  8: KHR_2000
+  9: KHR_5000
+  10: KHR_10000
+  11: KHR_20000
+  12: KHR_50000
+cashsnap_sources:
+  synthetic_train:
+    - data/synthetic/cashsnap_webgl_camera_isp_context_billae_train260_v1
+  real_val: data/cashsnap_v1/images/val
+  real_test: data/cashsnap_v1/images/test
+  geometry_gap: runs/cashsnap/domain_gap_camera_isp_context_billae_train260_v1_geometry.json
+  image_separator: runs/cashsnap/domain_separator_camera_isp_context_billae_train260_v1.json
+  crop_visual_gap: runs/cashsnap/crop_visual_gap_camera_isp_context_billae_train260_v1.json
+cashsnap_policy:
+  intended_use: bounded pure-synth TSTR probe for context plus bill-targeted auto-exposure ISP
+  phase: clean single-note transfer probe before overlap/fan/hand curricula
+  promotion_rule: reject unless it improves real transfer enough to justify the remaining full-image and USD_5 geometry gaps
+  known_limit: 13-class operational subset, intentionally not full 21-class USD/KHR scope

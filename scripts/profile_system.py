@@ -11,6 +11,15 @@ from pathlib import Path
 
 import psutil
 
+from hardware_profile import (
+    headroom_defaults,
+    recommended_device,
+    recommended_train_batch,
+    recommended_val_batch,
+    recommended_workers,
+    webgl_defaults,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -87,6 +96,7 @@ def profile() -> dict[str, object]:
     ram = psutil.virtual_memory()
     machine = windows_machine()
     cpu_name = windows_cpu_name() or platform.processor()
+    gpu = gpu_profile()
     return {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "platform": platform.platform(),
@@ -103,13 +113,34 @@ def profile() -> dict[str, object]:
             "available_gb": round(ram.available / (1024**3), 2),
             "used_percent": ram.percent,
         },
-        "gpu": gpu_profile(),
+        "gpu": gpu,
         "headroom_policy": {
-            "preferred_max_percent": 90,
-            "hard_max_percent": 95,
-            "resume_percent": 82,
-            "training_default_workers": 0,
+            **headroom_defaults(),
         },
+        "recommended_defaults": {
+            "device": recommended_device("auto"),
+            "train_416": {
+                "batch": recommended_train_batch(416),
+                "workers": recommended_workers("train"),
+            },
+            "train_640": {
+                "batch": recommended_train_batch(640),
+                "workers": recommended_workers("train"),
+            },
+            "val_416": {
+                "batch": recommended_val_batch(416),
+                "workers": recommended_workers("val"),
+            },
+            "webgl": webgl_defaults(),
+            "browser_smoke": {
+                "jobs": recommended_workers("browser"),
+            },
+        },
+        "current_bottleneck_read": (
+            "WebGL throughput is now browser/CPU orchestration plus PNG/validation rather than shader capacity; "
+            "YOLO train/eval should use CUDA device 0 with profile-selected batch/workers; "
+            "browser deploy probes remain ONNX Runtime Web/WASM constrained."
+        ),
     }
 
 

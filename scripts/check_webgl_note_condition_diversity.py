@@ -9,10 +9,12 @@ from collections import Counter
 from pathlib import Path
 from typing import Iterable
 
+from webgl_constants import WEBGL_NOTE_CONDITION_POLICIES
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CONDITION_FIELDS = ("dirtiness", "crinkle", "wetness", "edgeWear")
-CLEAN_SCENE_MODES = {"clean", "clean_single"}
+CLEAN_SCENE_MODES = {"clean", "clean_single", "clean_context", "texture_qa"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -27,7 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-dirty-notes", type=int, default=None)
     parser.add_argument("--min-pristine-notes", type=int, default=None)
     parser.add_argument("--min-wet-notes", type=int, default=None)
-    parser.add_argument("--expected-policy", choices=["mixed", "pristine_only", "heavy_wear", "wet_stress"], default="")
+    parser.add_argument("--expected-policy", choices=sorted(WEBGL_NOTE_CONDITION_POLICIES), default="")
     return parser.parse_args()
 
 
@@ -147,13 +149,37 @@ def main() -> int:
         "edge_wear_range": numeric_range(values["edgeWear"]),
     }
 
-    if policy == "pristine_only":
+    if policy == "scan_fidelity":
+        default_min_profiles = 1
+        default_min_dirtiness_range = 0.0
+        default_min_crinkle_range = 0.0
+        default_min_wetness_range = 0.0
+        default_min_dirty_notes = 0
+        default_min_pristine_notes = 0
+        default_min_wet_notes = 0
+    elif policy == "pristine_only":
         default_min_profiles = 1
         default_min_dirtiness_range = 0.0
         default_min_crinkle_range = 0.0
         default_min_wetness_range = 0.0
         default_min_dirty_notes = 0
         default_min_pristine_notes = total_notes
+        default_min_wet_notes = 0
+    elif policy == "handled_clean":
+        default_min_profiles = min(3, auto_unique_threshold(total_notes))
+        default_min_dirtiness_range = auto_range_threshold(total_notes, 0.18, 0.38)
+        default_min_crinkle_range = auto_range_threshold(total_notes, 0.16, 0.34)
+        default_min_wetness_range = 0.0
+        default_min_dirty_notes = max(1, int(total_notes * 0.12)) if total_notes >= 8 else 0
+        default_min_pristine_notes = 0
+        default_min_wet_notes = 0
+    elif policy == "handled_3d":
+        default_min_profiles = min(2, auto_unique_threshold(total_notes))
+        default_min_dirtiness_range = auto_range_threshold(total_notes, 0.10, 0.24)
+        default_min_crinkle_range = auto_range_threshold(total_notes, 0.16, 0.34)
+        default_min_wetness_range = 0.0
+        default_min_dirty_notes = 0
+        default_min_pristine_notes = 0
         default_min_wet_notes = 0
     elif policy == "heavy_wear":
         default_min_profiles = 1

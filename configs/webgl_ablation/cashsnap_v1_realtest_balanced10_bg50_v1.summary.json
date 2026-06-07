@@ -1,0 +1,28 @@
+{
+  "backgrounds": 50,
+  "created_utc": "2026-06-07T13:37:42.440920+00:00",
+  "list": "configs/generated_lists/webgl_ablation/cashsnap_v1_realtest_balanced10_bg50_v1_test.txt",
+  "per_class": 10,
+  "schema": "cashsnap_yolo_balanced_eval_subset_v1",
+  "seed": 17,
+  "selected_backgrounds": 50,
+  "selected_class_images": {
+    "KHR_1000": 10,
+    "KHR_10000": 10,
+    "KHR_2000": 10,
+    "KHR_20000": 10,
+    "KHR_500": 10,
+    "KHR_5000": 10,
+    "KHR_50000": 10,
+    "USD_1": 10,
+    "USD_10": 10,
+    "USD_100": 10,
+    "USD_20": 10,
+    "USD_5": 10,
+    "USD_50": 10
+  },
+  "selected_images": 179,
+  "source_data": "data/cashsnap_v1/data.yaml",
+  "source_split": "test",
+  "target_split": "test"
+}

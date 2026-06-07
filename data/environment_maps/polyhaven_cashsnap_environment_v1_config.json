@@ -1,0 +1,302 @@
+{
+  "schema_version": 1,
+  "name": "polyhaven_cashsnap_environment_v1_config",
+  "description": "Standalone Poly Haven environment-map bank config for WebGL lighting/reflection smokes and review.",
+  "min_trainable_images": 8,
+  "banks": [
+    {
+      "id": "polyhaven_cashsnap_environment_v1",
+      "path": "data/environment_maps/polyhaven_cashsnap_environment_v1",
+      "review_status": "proof_only",
+      "allowed_artifact_statuses": [
+        "smoke",
+        "diagnostic"
+      ],
+      "assets": [
+        {
+          "file": "phone_shop_1k.hdr",
+          "asset_id": "phone_shop",
+          "name": "Phone Shop",
+          "source_url": "https://polyhaven.com/a/phone_shop",
+          "download_url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/phone_shop_1k.hdr",
+          "license": "CC0",
+          "license_url": "https://polyhaven.com/license",
+          "credit": "Poly Haven; authors: Philip Modin",
+          "authors": {
+            "Philip Modin": "All"
+          },
+          "md5": "d51639e99ad3f54c4b740d6022252da3",
+          "size_bytes": 1686918,
+          "resolution": "1k",
+          "format": "hdr",
+          "categories": [
+            "indoor",
+            "urban",
+            "medium contrast",
+            "artificial light"
+          ],
+          "tags": [
+            "lamp",
+            "shop",
+            "store",
+            "display",
+            "counter"
+          ]
+        },
+        {
+          "file": "comfy_cafe_1k.hdr",
+          "asset_id": "comfy_cafe",
+          "name": "Comfy Caf\u00e9",
+          "source_url": "https://polyhaven.com/a/comfy_cafe",
+          "download_url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/comfy_cafe_1k.hdr",
+          "license": "CC0",
+          "license_url": "https://polyhaven.com/license",
+          "credit": "Poly Haven; authors: Sergej Majboroda",
+          "authors": {
+            "Sergej Majboroda": "All"
+          },
+          "md5": "70131a0f4ad26e1b298995792294dabf",
+          "size_bytes": 1609391,
+          "resolution": "1k",
+          "format": "hdr",
+          "categories": [
+            "indoor",
+            "urban",
+            "low contrast",
+            "artificial light"
+          ],
+          "tags": [
+            "shop",
+            "coffee",
+            "cafe",
+            "couch",
+            "table",
+            "store",
+            "backplates"
+          ]
+        },
+        {
+          "file": "leadenhall_market_1k.hdr",
+          "asset_id": "leadenhall_market",
+          "name": "Leadenhall Market",
+          "source_url": "https://polyhaven.com/a/leadenhall_market",
+          "download_url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/leadenhall_market_1k.hdr",
+          "license": "CC0",
+          "license_url": "https://polyhaven.com/license",
+          "credit": "Poly Haven; authors: Andreas Mischok",
+          "authors": {
+            "Andreas Mischok": "All"
+          },
+          "md5": "347112e6925f2a607e9dc6e611b0a1c6",
+          "size_bytes": 1781823,
+          "resolution": "1k",
+          "format": "hdr",
+          "categories": [
+            "indoor",
+            "urban",
+            "morning-afternoon",
+            "medium contrast",
+            "natural light",
+            "artificial light"
+          ],
+          "tags": [
+            "hall",
+            "mall",
+            "europe",
+            "architecture",
+            "london",
+            "cobblestone",
+            "street",
+            "road"
+          ]
+        },
+        {
+          "file": "poly_haven_studio_1k.hdr",
+          "asset_id": "poly_haven_studio",
+          "name": "Poly Haven Studio",
+          "source_url": "https://polyhaven.com/a/poly_haven_studio",
+          "download_url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/poly_haven_studio_1k.hdr",
+          "license": "CC0",
+          "license_url": "https://polyhaven.com/license",
+          "credit": "Poly Haven; authors: Greg Zaal",
+          "authors": {
+            "Greg Zaal": "All"
+          },
+          "md5": "a1065f613cb6e0388d82a99dcee23d3b",
+          "size_bytes": 1682195,
+          "resolution": "1k",
+          "format": "hdr",
+          "categories": [
+            "low contrast",
+            "indoor",
+            "urban",
+            "artificial light",
+            "natural light",
+            "midday"
+          ],
+          "tags": [
+            "chair",
+            "office",
+            "table",
+            "heater",
+            "cat",
+            "wooden ceiling",
+            "computer",
+            "window",
+            "lamp",
+            "curtain",
+            "tiles",
+            "desk",
+            "room",
+            "bright"
+          ]
+        },
+        {
+          "file": "small_empty_room_2_1k.hdr",
+          "asset_id": "small_empty_room_2",
+          "name": "Small Empty Room 2",
+          "source_url": "https://polyhaven.com/a/small_empty_room_2",
+          "download_url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/small_empty_room_2_1k.hdr",
+          "license": "CC0",
+          "license_url": "https://polyhaven.com/license",
+          "credit": "Poly Haven; authors: Sergej Majboroda",
+          "authors": {
+            "Sergej Majboroda": "All"
+          },
+          "md5": "6ef5a8c89ec36091cbc1547e5e5c96b7",
+          "size_bytes": 1477109,
+          "resolution": "1k",
+          "format": "hdr",
+          "categories": [
+            "indoor",
+            "urban",
+            "artificial light",
+            "medium contrast",
+            "night"
+          ],
+          "tags": [
+            "room",
+            "empty",
+            "office",
+            "door",
+            "curtain",
+            "wooden floor",
+            "led panel",
+            "wallpaper"
+          ]
+        },
+        {
+          "file": "small_workshop_1k.hdr",
+          "asset_id": "small_workshop",
+          "name": "Small Workshop",
+          "source_url": "https://polyhaven.com/a/small_workshop",
+          "download_url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/small_workshop_1k.hdr",
+          "license": "CC0",
+          "license_url": "https://polyhaven.com/license",
+          "credit": "Poly Haven; authors: Dimitrios Savva, Jarod Guest",
+          "authors": {
+            "Dimitrios Savva": "Photography",
+            "Jarod Guest": "Processing"
+          },
+          "md5": "c61cc25804e783673486214af7455b4a",
+          "size_bytes": 1728826,
+          "resolution": "1k",
+          "format": "hdr",
+          "categories": [
+            "artificial light",
+            "natural light",
+            "indoor",
+            "urban",
+            "low contrast",
+            "medium contrast",
+            "morning-afternoon"
+          ],
+          "tags": [
+            "workshop",
+            "machine",
+            "fluorescent",
+            "lamp",
+            "table",
+            "tablesaw",
+            "concrete",
+            "tools",
+            "mess"
+          ]
+        },
+        {
+          "file": "urban_street_03_1k.hdr",
+          "asset_id": "urban_street_03",
+          "name": "Urban Street 03",
+          "source_url": "https://polyhaven.com/a/urban_street_03",
+          "download_url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/urban_street_03_1k.hdr",
+          "license": "CC0",
+          "license_url": "https://polyhaven.com/license",
+          "credit": "Poly Haven; authors: Andreas Mischok",
+          "authors": {
+            "Andreas Mischok": "All"
+          },
+          "md5": "dd4e2fd0f98a6c7e9ff4cbd903e38829",
+          "size_bytes": 1633950,
+          "resolution": "1k",
+          "format": "hdr",
+          "categories": [
+            "outdoor",
+            "urban",
+            "morning-afternoon",
+            "overcast",
+            "low contrast",
+            "natural light"
+          ],
+          "tags": [
+            "road",
+            "london",
+            "europe",
+            "street",
+            "apartment",
+            "asphalt"
+          ]
+        },
+        {
+          "file": "modern_evening_street_1k.hdr",
+          "asset_id": "modern_evening_street",
+          "name": "Modern Evening Street",
+          "source_url": "https://polyhaven.com/a/modern_evening_street",
+          "download_url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/modern_evening_street_1k.hdr",
+          "license": "CC0",
+          "license_url": "https://polyhaven.com/license",
+          "credit": "Poly Haven; authors: Grzegorz Wronkowski",
+          "authors": {
+            "Grzegorz Wronkowski": "All"
+          },
+          "md5": "89a5d4dae860c97e465ca8582ed73737",
+          "size_bytes": 1651202,
+          "resolution": "1k",
+          "format": "hdr",
+          "categories": [
+            "outdoor",
+            "urban",
+            "natural light",
+            "low contrast",
+            "partly cloudy",
+            "morning-afternoon"
+          ],
+          "tags": [
+            "building",
+            "city",
+            "street",
+            "street light",
+            "europe",
+            "architecture",
+            "facade",
+            "evening",
+            "dusk",
+            "sidewalk",
+            "office"
+          ]
+        }
+      ],
+      "source_policy": "Downloaded from Poly Haven via its public API; assets are CC0 equirectangular HDRIs with md5/size verification.",
+      "blocker": "Downloaded metadata is present, but this bank still needs visual/lighting review before trainable use."
+    }
+  ]
+}

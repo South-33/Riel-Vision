@@ -26,6 +26,17 @@ def parse_args() -> argparse.Namespace:
         help="Download only a matching project_id or output_name. Repeat for multiple datasets.",
     )
     parser.add_argument("--list", action="store_true", help="List configured datasets and exit without an API key.")
+    parser.add_argument(
+        "--version",
+        type=int,
+        default=None,
+        help="Override the Roboflow version for a single selected dataset.",
+    )
+    parser.add_argument(
+        "--output-name",
+        default=None,
+        help="Override the output directory name for a single selected dataset.",
+    )
     return parser.parse_args()
 
 
@@ -44,7 +55,8 @@ def load_env() -> None:
 
 # Dataset definitions: (workspace_id, project_id, version, output_name, export_format)
 # Versions verified via API - use clean/raw versions, not heavily pre-augmented ones.
-# Khmer-US-currency v3 = 1,782 raw images (best base; v5+ add augmentation we don't want pre-baked)
+# Khmer-US-currency v3 = 1,782 raw images (known clean base). Newer exports
+# can be pulled with --version/--output-name for intake audits before promotion.
 # Cambodia Currency Project v2 = only available version (~552-615 images, 7 KHR classes)
 # KHMER SCAN v1 = 145 images with train/val/test splits
 DATASETS = [
@@ -143,6 +155,20 @@ def main() -> None:
     if not datasets:
         print(f"ERROR: no configured dataset matched: {', '.join(args.dataset)}", file=sys.stderr)
         sys.exit(1)
+    if (args.version is not None or args.output_name) and len(datasets) != 1:
+        print("ERROR: --version/--output-name require exactly one selected dataset.", file=sys.stderr)
+        sys.exit(1)
+    if args.version is not None or args.output_name:
+        workspace, project_id, version, output_name, export_format = datasets[0]
+        datasets = [
+            (
+                workspace,
+                project_id,
+                args.version if args.version is not None else version,
+                args.output_name or output_name,
+                export_format,
+            )
+        ]
 
     failed: list[str] = []
     for workspace, project_id, version, output_name, export_format in datasets:

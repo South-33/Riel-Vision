@@ -5,14 +5,19 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import contextlib
 import hashlib
 import itertools
 import json
 import math
 import re
 import shutil
+import socket
 import subprocess
 import sys
+import tempfile
+import time
+import urllib.request
 from collections import Counter
 from pathlib import Path
 
@@ -20,16 +25,35 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from check_webgl_smoke_output import SmokeOutputError, validate_smoke_output
+from hardware_profile import (
+    HEADROOM_MAX_GPU_MEM_PERCENT,
+    HEADROOM_MAX_PERCENT,
+    HEADROOM_MAX_RAM_PERCENT,
+    HEADROOM_MIN_FREE_RAM_GB,
+    HEADROOM_RESUME_PERCENT,
+    WEBGL_CHECK_JOBS,
+    WEBGL_RENDERER_BATCH_SIZE,
+    WEBGL_RENDER_JOBS,
+)
 from webgl_constants import (
+    WEBGL_ASSET_QUALITY_POLICIES,
     WEBGL_ASSET_SIDE_POLICIES,
+    WEBGL_CAMERA_ISP_POLICIES,
     WEBGL_CAMERA_PROFILES,
+    WEBGL_CLEAN_ORIENTATION_POLICIES,
+    WEBGL_NEGATIVE_PROP_POLICIES,
+    WEBGL_NOTE_CONDITION_POLICIES,
     WEBGL_NOTE_PRINT_TONE_POLICIES,
     WEBGL_OCCLUDER_POLICIES,
+    WEBGL_SCENE_MODES,
     WEBGL_STACK_POSE_POLICIES,
+    WEBGL_TEXTURE_QA_EFFECTS,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_EDGE = Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
 CLASS_NAMES = [
     "USD_1",
     "USD_5",
@@ -64,13 +88,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--count", type=int, default=4)
     parser.add_argument(
         "--scene-mode",
-        choices=["auto", "clean", "clean_single", "negative", "stack", "fan", "thin_edge", "hand_occlusion", "qa3"],
+        choices=sorted(WEBGL_SCENE_MODES),
         default="auto",
     )
     parser.add_argument("--width", type=int, default=1440)
     parser.add_argument("--height", type=int, default=1080)
     parser.add_argument("--visual-scale", default="2", help="Visual WebGL supersampling scale passed to render-smoke.mjs.")
     parser.add_argument("--browser-executable", type=Path, default=None, help="Optional Chromium/Edge executable override for render-smoke.mjs.")
+    parser.add_argument(
+        "--shared-browser",
+        action="store_true",
+        help="Launch one headless browser for this batch and let per-variant renderers connect to it.",
+    )
+    parser.add_argument("--browser-start-timeout", type=float, default=45.0, help="Seconds to wait for a shared browser DevTools endpoint.")
     parser.add_argument("--background-dir", type=Path, help="Optional reviewed-clean background image directory.")
     parser.add_argument("--environment-dir", type=Path, help="Optional equirectangular environment map directory for visual lighting/reflections.")
     parser.add_argument(
@@ -92,10 +122,22 @@ def parse_args() -> argparse.Namespace:
         help="Constrain banknote scan side sampling for front/back confusion recipes.",
     )
     parser.add_argument(
+        "--asset-quality-policy",
+        choices=sorted(WEBGL_ASSET_QUALITY_POLICIES),
+        default="latest_design",
+        help="Constrain banknote scan sampling to current/latest reviewed designs by default.",
+    )
+    parser.add_argument(
         "--camera-profile",
         choices=sorted(WEBGL_CAMERA_PROFILES),
         default="generic_phone_jitter",
         help="Select WebGL camera/FOV/framing profile.",
+    )
+    parser.add_argument(
+        "--camera-isp-policy",
+        choices=sorted(WEBGL_CAMERA_ISP_POLICIES),
+        default="default",
+        help="Select RGB camera/ISP-style postprocess policy.",
     )
     parser.add_argument(
         "--stack-pose-policy",
@@ -104,13 +146,19 @@ def parse_args() -> argparse.Namespace:
         help="Optional class-conditioned pose policy for generic stack scenes.",
     )
     parser.add_argument(
+        "--clean-orientation-policy",
+        choices=sorted(WEBGL_CLEAN_ORIENTATION_POLICIES),
+        default="default",
+        help="Optional class-conditioned in-plane orientation policy for clean scenes.",
+    )
+    parser.add_argument(
         "--class-sequence",
         default="",
         help="Optional comma/space-separated class sequence for generic clean/stack/fan sampling.",
     )
     parser.add_argument(
         "--note-condition-policy",
-        choices=["mixed", "pristine_only", "heavy_wear", "wet_stress"],
+        choices=sorted(WEBGL_NOTE_CONDITION_POLICIES),
         default="mixed",
         help="Per-note condition distribution for dirt/crinkle/wetness rendering.",
     )
@@ -127,10 +175,22 @@ def parse_args() -> argparse.Namespace:
         help="Optional per-note print dynamic-range treatment before WebGL material rendering.",
     )
     parser.add_argument(
+        "--texture-qa-effects",
+        choices=sorted(WEBGL_TEXTURE_QA_EFFECTS),
+        default="flat",
+        help="Effect ladder for texture_qa renders: flat, lit material, backing, postprocess, or condition.",
+    )
+    parser.add_argument(
         "--occluder-policy",
         choices=sorted(WEBGL_OCCLUDER_POLICIES),
         default="scene_default",
         help="Control primitive occluders independently from scene geometry.",
+    )
+    parser.add_argument(
+        "--negative-prop-policy",
+        choices=sorted(WEBGL_NEGATIVE_PROP_POLICIES),
+        default="classic",
+        help="Select prop texture/style mix for zero-label negative scenes.",
     )
     parser.add_argument("--recipe-name", default="", help="Human-readable recipe name to write into recipe.json.")
     parser.add_argument(
@@ -147,17 +207,35 @@ def parse_args() -> argparse.Namespace:
         default="diagnostic",
         help="diagnostic keeps review-required fragment labels; ignore moves them to ignored metadata for trainable fragment views.",
     )
-    parser.add_argument("--headroom-max-percent", default="90", help="CPU/GPU percent cap passed to run_with_headroom.py.")
-    parser.add_argument("--headroom-resume-percent", default="82", help="Resume threshold passed to run_with_headroom.py.")
-    parser.add_argument("--headroom-max-ram-percent", default="90", help="RAM percent cap passed to run_with_headroom.py.")
-    parser.add_argument("--headroom-max-gpu-mem-percent", default="90", help="GPU memory percent cap passed to run_with_headroom.py.")
-    parser.add_argument("--min-free-ram-gb", default="3", help="Free-RAM preflight floor passed to run_with_headroom.py.")
+    parser.add_argument("--headroom-max-percent", default=str(int(HEADROOM_MAX_PERCENT)), help="CPU/GPU percent cap passed to run_with_headroom.py.")
+    parser.add_argument("--headroom-resume-percent", default=str(int(HEADROOM_RESUME_PERCENT)), help="Resume threshold passed to run_with_headroom.py.")
+    parser.add_argument("--headroom-max-ram-percent", default=str(int(HEADROOM_MAX_RAM_PERCENT)), help="RAM percent cap passed to run_with_headroom.py.")
+    parser.add_argument("--headroom-max-gpu-mem-percent", default=str(int(HEADROOM_MAX_GPU_MEM_PERCENT)), help="GPU memory percent cap passed to run_with_headroom.py.")
+    parser.add_argument("--min-free-ram-gb", default=str(int(HEADROOM_MIN_FREE_RAM_GB)), help="Free-RAM preflight floor passed to run_with_headroom.py.")
     parser.add_argument("--preflight-timeout", default="120", help="Initial headroom wait timeout in seconds.")
     parser.add_argument(
         "--render-jobs",
         type=int,
-        default=1,
+        default=WEBGL_RENDER_JOBS,
         help="Number of WebGL render subprocesses to run concurrently. Validation and packaging remain sequential.",
+    )
+    parser.add_argument(
+        "--renderer-batch-size",
+        type=int,
+        default=WEBGL_RENDERER_BATCH_SIZE,
+        help="Number of variants each Node/WebGL renderer process should render before exiting.",
+    )
+    parser.add_argument(
+        "--check-jobs",
+        type=int,
+        default=WEBGL_CHECK_JOBS,
+        help="Number of rendered variant smoke-output checks to run concurrently.",
+    )
+    parser.add_argument(
+        "--check-mode",
+        choices=["in-process", "subprocess"],
+        default="subprocess",
+        help="Run smoke-output checks in this Python process, or via the legacy subprocess path.",
     )
     parser.add_argument("--skip-render", action="store_true", help="Only recheck/contact-sheet existing outputs.")
     parser.add_argument("--skip-yolo-check", action="store_true", help="Do not run check_yolo_dataset.py on the packaged dataset.")
@@ -205,10 +283,14 @@ def run(cmd: list[str]) -> None:
     subprocess.run(cmd, cwd=ROOT, check=True)
 
 
-def require_positive_render_jobs(value: int) -> int:
+def require_positive_int(value: int, name: str) -> int:
     if value < 1:
-        raise SystemExit("--render-jobs must be >= 1")
+        raise SystemExit(f"--{name} must be >= 1")
     return value
+
+
+def chunk_rows(rows: list[tuple[int, Path]], size: int) -> list[list[tuple[int, Path]]]:
+    return [rows[index:index + size] for index in range(0, len(rows), size)]
 
 
 def check_background_bank(background_dir: Path | None, artifact_status: str, config: Path) -> None:
@@ -249,8 +331,69 @@ def check_environment_bank(environment_dir: Path | None, artifact_status: str, c
         raise SystemExit(result.returncode)
 
 
-def render_variant(variant: int, out_dir: Path, scene_mode: str, background_dir: Path | None, args: argparse.Namespace) -> None:
-    cmd = [
+def free_tcp_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def wait_for_browser_ws_endpoint(port: int, timeout: float) -> str:
+    url = f"http://127.0.0.1:{port}/json/version"
+    deadline = time.monotonic() + timeout
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=1.0) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            endpoint = str(payload.get("webSocketDebuggerUrl", "")).strip()
+            if endpoint:
+                return endpoint
+        except Exception as exc:  # Browser startup races are expected here.
+            last_error = exc
+            time.sleep(0.20)
+    detail = f": {last_error}" if last_error else ""
+    raise RuntimeError(f"shared browser did not expose DevTools on port {port} within {timeout:.1f}s{detail}")
+
+
+@contextlib.contextmanager
+def shared_browser_endpoint(args: argparse.Namespace, out_root: Path):
+    browser_executable = args.browser_executable or DEFAULT_EDGE
+    if not browser_executable.exists():
+        raise FileNotFoundError(f"browser executable not found at {browser_executable}")
+    port = free_tcp_port()
+    with tempfile.TemporaryDirectory(prefix="_shared_browser_", dir=out_root) as profile_dir:
+        cmd = [
+            str(browser_executable),
+            "--headless=new",
+            f"--remote-debugging-port={port}",
+            f"--user-data-dir={profile_dir}",
+            "--allow-file-access-from-files",
+            "--disable-background-timer-throttling",
+            "--disable-renderer-backgrounding",
+            "--enable-gpu-rasterization",
+            "--ignore-gpu-blocklist",
+            "--no-first-run",
+            "--disable-default-apps",
+            "--disable-extensions",
+            "--disable-component-update",
+            "--disable-features=Translate,MediaRouter",
+            "--use-angle=d3d11",
+        ]
+        print(f"shared_browser_port={port}", flush=True)
+        proc = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            yield wait_for_browser_ws_endpoint(port, args.browser_start_timeout)
+        finally:
+            proc.terminate()
+            try:
+                proc.wait(timeout=8)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=8)
+
+
+def render_headroom_prefix(args: argparse.Namespace) -> list[str]:
+    return [
         sys.executable,
         "scripts/run_with_headroom.py",
         "--max-percent",
@@ -268,8 +411,17 @@ def render_variant(variant: int, out_dir: Path, scene_mode: str, background_dir:
         "--",
         "node",
         "renderers/webgl/src/render-smoke.mjs",
-        "--variant",
-        str(variant),
+    ]
+
+
+def append_common_render_args(
+    cmd: list[str],
+    scene_mode: str,
+    background_dir: Path | None,
+    args: argparse.Namespace,
+    browser_ws_endpoint: str = "",
+) -> None:
+    cmd.extend([
         "--scene-mode",
         scene_mode,
         "--width",
@@ -280,15 +432,23 @@ def render_variant(variant: int, out_dir: Path, scene_mode: str, background_dir:
         str(args.visual_scale),
         "--asset-side-policy",
         args.asset_side_policy,
+        "--asset-quality-policy",
+        args.asset_quality_policy,
         "--camera-profile",
         args.camera_profile,
+        "--camera-isp-policy",
+        args.camera_isp_policy,
         "--stack-pose-policy",
         args.stack_pose_policy,
+        "--clean-orientation-policy",
+        args.clean_orientation_policy,
         "--occluder-policy",
         args.occluder_policy,
-        "--out-dir",
-        str(out_dir),
-    ]
+        "--negative-prop-policy",
+        args.negative_prop_policy,
+        "--texture-qa-effects",
+        args.texture_qa_effects,
+    ])
     if args.class_sequence.strip():
         cmd.extend(["--class-sequence", args.class_sequence])
     if args.note_condition_policy != "mixed":
@@ -303,6 +463,50 @@ def render_variant(variant: int, out_dir: Path, scene_mode: str, background_dir:
         cmd.extend(["--environment-dir", str(args.environment_dir)])
     if args.browser_executable is not None:
         cmd.extend(["--browser-executable", str(args.browser_executable)])
+    if browser_ws_endpoint:
+        cmd.extend(["--browser-ws-endpoint", browser_ws_endpoint])
+
+
+def render_variant(
+    variant: int,
+    out_dir: Path,
+    scene_mode: str,
+    background_dir: Path | None,
+    args: argparse.Namespace,
+    browser_ws_endpoint: str = "",
+) -> None:
+    cmd = render_headroom_prefix(args)
+    cmd.extend(["--variant", str(variant), "--out-dir", str(out_dir)])
+    append_common_render_args(cmd, scene_mode, background_dir, args, browser_ws_endpoint)
+    run(cmd)
+
+
+def render_variant_batch(
+    batch_index: int,
+    variant_rows: list[tuple[int, Path]],
+    out_root: Path,
+    scene_mode: str,
+    background_dir: Path | None,
+    args: argparse.Namespace,
+    browser_ws_endpoint: str = "",
+) -> None:
+    manifest_dir = out_root / "qa" / "render_manifests"
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    start_variant = variant_rows[0][0]
+    end_variant = variant_rows[-1][0]
+    manifest_path = manifest_dir / f"batch_{batch_index:04d}_{start_variant:04d}_{end_variant:04d}.json"
+    write_json(
+        manifest_path,
+        {
+            "variants": [
+                {"variant": variant, "outDir": str(out_dir)}
+                for variant, out_dir in variant_rows
+            ]
+        },
+    )
+    cmd = render_headroom_prefix(args)
+    cmd.extend(["--batch-manifest", str(manifest_path)])
+    append_common_render_args(cmd, scene_mode, background_dir, args, browser_ws_endpoint)
     run(cmd)
 
 
@@ -311,7 +515,23 @@ def check_variant(
     allow_no_occluder: bool = False,
     allow_no_overlap: bool = False,
     allow_no_boxes: bool = False,
+    check_mode: str = "in-process",
 ) -> None:
+    if check_mode == "in-process":
+        try:
+            print(
+                validate_smoke_output(
+                    out_dir,
+                    allow_no_occluder=allow_no_occluder,
+                    allow_no_overlap=allow_no_overlap,
+                    allow_no_boxes=allow_no_boxes,
+                ),
+                flush=True,
+            )
+        except SmokeOutputError as exc:
+            raise RuntimeError(f"{out_dir}: {exc}") from exc
+        return
+
     cmd = [sys.executable, "scripts/check_webgl_smoke_output.py", "--out-dir", str(out_dir)]
     if allow_no_occluder:
         cmd.append("--allow-no-occluder")
@@ -1084,6 +1304,7 @@ def write_yolo_dataset(
     front_back_mix_counts: Counter[str] = Counter()
     note_print_tone_policy_counts: Counter[str] = Counter()
     note_print_tone_contrasts: list[float] = []
+    camera_isp_policy_counts: Counter[str] = Counter()
     camera_profile_request_counts: Counter[str] = Counter()
     camera_profile_counts: Counter[str] = Counter()
     visible_pixels_per_instance: list[float] = []
@@ -1165,6 +1386,7 @@ def write_yolo_dataset(
             if isinstance(camera, dict):
                 camera_profile_request_counts[str(camera.get("profileRequested", "unknown"))] += 1
                 camera_profile_counts[str(camera.get("profile", "unknown"))] += 1
+            camera_isp_policy_counts[str(scene_config.get("cameraIspPolicy", "default"))] += 1
         asset_selection = source_metadata.get("assetSelection", {})
         if isinstance(asset_selection, dict):
             side_policy = str(asset_selection.get("sidePolicy", "unknown"))
@@ -1463,6 +1685,7 @@ def write_yolo_dataset(
                 "requested_counts": dict(sorted(camera_profile_request_counts.items())),
                 "selected_counts": dict(sorted(camera_profile_counts.items())),
             },
+            "camera_isp_policies": dict(sorted(camera_isp_policy_counts.items())),
             "class_counts": dict(sorted(class_counts.items())),
             "visible_instances": {
                 "total": int(sum(visible_instances_per_image)),
@@ -1601,14 +1824,23 @@ def write_recipe_metadata(
             "height": args.height,
             "visual_scale": args.visual_scale,
             "browser_executable": rel(args.browser_executable) if args.browser_executable else "",
+            "shared_browser": args.shared_browser,
+            "browser_start_timeout": args.browser_start_timeout,
+            "renderer_batch_size": args.renderer_batch_size,
             "note_condition_policy": args.note_condition_policy,
             "lens_distortion_policy": args.lens_distortion_policy,
             "note_print_tone_policy": args.note_print_tone_policy,
+            "camera_isp_policy": args.camera_isp_policy,
+            "texture_qa_effects": args.texture_qa_effects,
             "stack_pose_policy": args.stack_pose_policy,
+            "clean_orientation_policy": args.clean_orientation_policy,
             "occluder_policy": args.occluder_policy,
+            "negative_prop_policy": args.negative_prop_policy,
         },
         "asset_side_policy": args.asset_side_policy,
+        "asset_quality_policy": args.asset_quality_policy,
         "camera_profile": args.camera_profile,
+        "camera_isp_policy": args.camera_isp_policy,
         "class_sequence": args.class_sequence,
         "balanced_subset": {
             "enabled": args.balanced_subset_count > 0,
@@ -1678,7 +1910,9 @@ def main() -> int:
     args = parse_args()
     if args.count < 1:
         raise SystemExit("--count must be positive")
-    render_jobs = require_positive_render_jobs(args.render_jobs)
+    render_jobs = require_positive_int(args.render_jobs, "render-jobs")
+    renderer_batch_size = require_positive_int(args.renderer_batch_size, "renderer-batch-size")
+    check_jobs = require_positive_int(args.check_jobs, "check-jobs")
 
     out_root = args.out_root if args.out_root.is_absolute() else ROOT / args.out_root
     out_root.mkdir(parents=True, exist_ok=True)
@@ -1689,35 +1923,100 @@ def main() -> int:
         for variant in range(args.start_variant, args.start_variant + args.count)
     ]
     if not args.skip_render:
-        if render_jobs == 1:
-            for variant, out_dir in variant_rows:
-                render_variant(variant, out_dir, args.scene_mode, args.background_dir, args)
-        else:
-            print(f"parallel_render_jobs={render_jobs}", flush=True)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=render_jobs) as executor:
-                futures = {
-                    executor.submit(render_variant, variant, out_dir, args.scene_mode, args.background_dir, args): variant
-                    for variant, out_dir in variant_rows
-                }
-                for future in concurrent.futures.as_completed(futures):
-                    variant = futures[future]
-                    try:
-                        future.result()
-                    except subprocess.CalledProcessError as exc:
-                        raise SystemExit(f"variant {variant:04d} render failed with exit code {exc.returncode}") from exc
+        browser_context = shared_browser_endpoint(args, out_root) if args.shared_browser else contextlib.nullcontext("")
+        render_batches = chunk_rows(variant_rows, renderer_batch_size)
+        with browser_context as browser_ws_endpoint:
+            if render_jobs == 1 or len(render_batches) == 1:
+                for batch_index, batch_rows in enumerate(render_batches):
+                    if renderer_batch_size == 1:
+                        variant, out_dir = batch_rows[0]
+                        render_variant(variant, out_dir, args.scene_mode, args.background_dir, args, browser_ws_endpoint)
+                    else:
+                        render_variant_batch(
+                            batch_index,
+                            batch_rows,
+                            out_root,
+                            args.scene_mode,
+                            args.background_dir,
+                            args,
+                            browser_ws_endpoint,
+                        )
+            else:
+                print(f"parallel_render_jobs={render_jobs}", flush=True)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=render_jobs) as executor:
+                    futures = {}
+                    for batch_index, batch_rows in enumerate(render_batches):
+                        if renderer_batch_size == 1:
+                            variant, out_dir = batch_rows[0]
+                            future = executor.submit(
+                                render_variant,
+                                variant,
+                                out_dir,
+                                args.scene_mode,
+                                args.background_dir,
+                                args,
+                                browser_ws_endpoint,
+                            )
+                            label = f"variant {variant:04d}"
+                        else:
+                            start_variant = batch_rows[0][0]
+                            end_variant = batch_rows[-1][0]
+                            future = executor.submit(
+                                render_variant_batch,
+                                batch_index,
+                                batch_rows,
+                                out_root,
+                                args.scene_mode,
+                                args.background_dir,
+                                args,
+                                browser_ws_endpoint,
+                            )
+                            label = f"batch {batch_index:04d} variants {start_variant:04d}-{end_variant:04d}"
+                        futures[future] = label
+                    for future in concurrent.futures.as_completed(futures):
+                        label = futures[future]
+                        try:
+                            future.result()
+                        except subprocess.CalledProcessError as exc:
+                            raise SystemExit(f"{label} render failed with exit code {exc.returncode}") from exc
 
-    variant_dirs: list[tuple[int, Path]] = []
-    for variant, out_dir in variant_rows:
-        check_variant(
-            out_dir,
-            allow_no_occluder=(
-                args.scene_mode in {"clean", "clean_single", "negative", "qa3"}
-                or args.occluder_policy in {"no_hand", "none"}
-            ),
-            allow_no_overlap=args.scene_mode in {"clean", "clean_single", "negative"},
-            allow_no_boxes=args.scene_mode == "negative",
-        )
-        variant_dirs.append((variant, out_dir))
+    allow_no_occluder = (
+        args.scene_mode in {"clean", "clean_single", "clean_context", "texture_qa", "negative", "qa3"}
+        or args.occluder_policy in {"no_hand", "none"}
+    )
+    allow_no_overlap = args.scene_mode in {"clean", "clean_single", "clean_context", "texture_qa", "negative"}
+    allow_no_boxes = args.scene_mode == "negative"
+    if check_jobs == 1 or len(variant_rows) == 1:
+        for _variant, out_dir in variant_rows:
+            check_variant(
+                out_dir,
+                allow_no_occluder=allow_no_occluder,
+                allow_no_overlap=allow_no_overlap,
+                allow_no_boxes=allow_no_boxes,
+                check_mode=args.check_mode,
+            )
+    else:
+        print(f"parallel_check_jobs={check_jobs}", flush=True)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=check_jobs) as executor:
+            futures = {
+                executor.submit(
+                    check_variant,
+                    out_dir,
+                    allow_no_occluder,
+                    allow_no_overlap,
+                    allow_no_boxes,
+                    args.check_mode,
+                ): f"variant {variant:04d}"
+                for variant, out_dir in variant_rows
+            }
+            for future in concurrent.futures.as_completed(futures):
+                label = futures[future]
+                try:
+                    future.result()
+                except subprocess.CalledProcessError as exc:
+                    raise SystemExit(f"{label} check failed with exit code {exc.returncode}") from exc
+
+    variant_dirs: list[tuple[int, Path]] = list(variant_rows)
 
     contact_sheet = out_root / "contact_sheet.png"
     variant_dirs, balanced_subset_report = select_balanced_subset(variant_dirs, args)

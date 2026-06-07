@@ -1,0 +1,253 @@
+{
+  "schema_version": 1,
+  "name": "cashsnap_data_lifecycle_registry_v1",
+  "purpose": "Single source of truth for which local data roots are working, diagnostic, intake, archive, or rejected so training and rendering do not accidentally use stale or wrong assets.",
+  "policy": {
+    "working_requires_review": true,
+    "trainable_texture_source": "configs/synthetic_recipes/cashsnap_webgl_approved_texture_bank_v1.json",
+    "do_not_train_directly_from_states": ["archive", "rejected", "intake", "container", "planned"],
+    "note": "Generated/large data roots are ignored by git; this registry is the tracked lifecycle map. Physical moves can happen after references are cleaned."
+  },
+  "entries": [
+    {
+      "id": "cashsnap_v1_real_yolo",
+      "path": "data/cashsnap_v1",
+      "state": "working",
+      "kind": "real_yolo_dataset",
+      "purpose": "Current real transfer judge; includes labeled positives and empty-label hard negatives.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "roboflow_khmer_us_currency_v3_raw",
+      "path": "data/raw_datasets/roboflow_khmer_us_currency",
+      "state": "intake",
+      "kind": "real_yolo_dataset",
+      "purpose": "Raw Roboflow Khmer-US-currency v3 export; known clean 1782-image source, not direct training/eval until converted through a schema-aware bridge.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "roboflow_khmer_us_currency_v10_raw",
+      "path": "data/raw_datasets/roboflow_khmer_us_currency_v10",
+      "state": "intake",
+      "kind": "real_yolo_dataset",
+      "purpose": "Raw Roboflow Khmer-US-currency v10 export from the Universe dataset/10 page; 2539 images, CC BY 4.0, no augmentation, not direct training/eval until converted through a schema-aware bridge.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "roboflow_khmer_us_currency_core13_bridge_v1",
+      "path": "data/processed/roboflow_khmer_us_currency_core13_bridge_v1",
+      "state": "diagnostic",
+      "kind": "real_positive_yolo_bridge",
+      "purpose": "Deduped v10+v3 Roboflow positive bridge converted to the current 13-class operational schema; cleaner KHR/USD-positive evaluator, not full official-taxonomy proof.",
+      "checks": ["exists", "yolo_dataset"]
+    },
+    {
+      "id": "roboflow_khmer_us_currency_official21_partial_bridge_v1",
+      "path": "data/processed/roboflow_khmer_us_currency_official21_partial_bridge_v1",
+      "state": "diagnostic",
+      "kind": "real_positive_yolo_bridge",
+      "purpose": "Deduped v10+v3 Roboflow positive bridge converted to the official 21-class schema; partial source preserving KHR_100 and exposing missing official denominations.",
+      "checks": ["exists", "yolo_dataset"]
+    },
+    {
+      "id": "numista_current_cutout_bank_v1",
+      "path": "data/asset_candidates/numista_current_cutout_bank_v1",
+      "state": "working",
+      "kind": "target_banknote_cutouts",
+      "purpose": "Active in-circulation USD/KHR cutout source for WebGL target-note renders.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "numista_current_fullscope_cutout_bank_probe_v1",
+      "path": "data/asset_candidates/numista_current_fullscope_cutout_bank_probe_v1",
+      "state": "diagnostic",
+      "kind": "target_banknote_cutouts",
+      "purpose": "Official-scope current-status cutout candidate bank; covers 20/21 official classes and needs review before any promotion.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "numista_official_fullscope_any_status_cutout_bank_probe_v1",
+      "path": "data/asset_candidates/numista_official_fullscope_any_status_cutout_bank_probe_v1",
+      "state": "diagnostic",
+      "kind": "target_banknote_cutouts",
+      "purpose": "Official-scope any-status cutout candidate bank; covers all 21 official classes but KHR_50 is out-of-circulation and not trainable without status resolution.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "webgl_approved_texture_bank_v1",
+      "path": "configs/synthetic_recipes/cashsnap_webgl_approved_texture_bank_v1.json",
+      "state": "working",
+      "kind": "texture_bank_registry",
+      "purpose": "Reviewed latest-design texture allowlist; prevents old/out-of-circulation or unreviewed note scans from entering trainable renders.",
+      "checks": ["exists", "json", "approved_texture_bank_v1"]
+    },
+    {
+      "id": "webgl_texture_bank_official21_current_partial_candidate_v1",
+      "path": "configs/synthetic_recipes/cashsnap_webgl_texture_bank_official21_current_partial_candidate_v1.json",
+      "state": "diagnostic",
+      "kind": "texture_bank_registry",
+      "purpose": "Official 21-class current-status texture candidate bank; 40 rows, missing KHR_50 front/back, pending review and not an active trainable allowlist.",
+      "checks": ["exists", "json"]
+    },
+    {
+      "id": "webgl_texture_bank_official21_any_status_candidate_v1",
+      "path": "configs/synthetic_recipes/cashsnap_webgl_texture_bank_official21_any_status_candidate_v1.json",
+      "state": "diagnostic",
+      "kind": "texture_bank_registry",
+      "purpose": "Official 21-class any-status texture candidate bank; 42 rows with KHR_50 out-of-circulation, review/status diagnostic only.",
+      "checks": ["exists", "json"]
+    },
+    {
+      "id": "webgl_recipe_catalog_v1",
+      "path": "configs/synthetic_recipes/cashsnap_webgl_recipe_catalog_v1.json",
+      "state": "working",
+      "kind": "synthetic_recipe_catalog",
+      "purpose": "Active WebGL recipe catalog.",
+      "checks": ["exists", "json"]
+    },
+    {
+      "id": "synthetic_governance_v1",
+      "path": "configs/synthetic_recipes/cashsnap_synthetic_governance_v1.json",
+      "state": "working",
+      "kind": "governance",
+      "purpose": "Active synthetic data governance rules.",
+      "checks": ["exists", "json"]
+    },
+    {
+      "id": "external_negative_banks_v1",
+      "path": "configs/synthetic_recipes/cashsnap_external_negative_banks_v1.json",
+      "state": "planned",
+      "kind": "negative_registry",
+      "purpose": "Planned external non-target currency/clutter negative bank; not trainable until local files, source/license metadata, and review pass.",
+      "checks": ["exists", "json"]
+    },
+    {
+      "id": "official_source_gap_registry_v1",
+      "path": "configs/synthetic_recipes/cashsnap_official_source_gap_registry_v1.json",
+      "state": "diagnostic",
+      "kind": "source_gap_registry",
+      "purpose": "Official-denomination source gaps blocking full-taxonomy synthetic rendering; currently records KHR_50 rights/status blocker and rejected watermarked/out-of-circulation candidates.",
+      "checks": ["exists", "json"]
+    },
+    {
+      "id": "real_geometry_stress_slices_v1",
+      "path": "runs/cashsnap/real_geometry_stress_slices_v1",
+      "state": "diagnostic",
+      "kind": "real_slice_outputs",
+      "purpose": "Current provisional real positive/stress/protected validation slices.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "background_fp_review_filtered185_vs_billae_train260_conf005",
+      "path": "runs/cashsnap/background_fp_review_filtered185_vs_camera_isp_context_billae_train260_conf005",
+      "state": "diagnostic",
+      "kind": "real_empty_label_fp_review",
+      "purpose": "Overlay/crop review pack proving top empty-label false positives are realistic non-target banknotes, not blank backgrounds.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "camera_isp_context_billae_train260_v1",
+      "path": "data/synthetic/cashsnap_webgl_camera_isp_context_billae_train260_v1",
+      "state": "diagnostic",
+      "kind": "synthetic_probe_root",
+      "purpose": "Bill-targeted auto-exposure/context transfer probe; useful clue but not promoted.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "unknown_currency_negative_smoke_v1",
+      "path": "data/synthetic/cashsnap_webgl_unknown_currency_negative_smoke_v1",
+      "state": "diagnostic",
+      "kind": "synthetic_hard_negative_root",
+      "purpose": "Zero-label unknown-currency diagnostic root.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "unknown_currency_soft_negative_smoke_v1",
+      "path": "data/synthetic/cashsnap_webgl_unknown_currency_soft_negative_smoke_v1",
+      "state": "diagnostic",
+      "kind": "synthetic_hard_negative_root",
+      "purpose": "Zero-label soft unknown-currency diagnostic root.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "numista_raw_source",
+      "path": "data/numista_raw",
+      "state": "intake",
+      "kind": "raw_source_bank",
+      "purpose": "Raw downloaded/source scans; do not train or render directly except through reviewed current cutout and texture registries.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "asset_candidates_container",
+      "path": "data/asset_candidates",
+      "state": "container",
+      "kind": "mixed_asset_workspace",
+      "purpose": "Mixed candidate/review/archive workspace; only explicitly working subroots are trainable.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "synthetic_container",
+      "path": "data/synthetic",
+      "state": "container",
+      "kind": "generated_synthetic_workspace",
+      "purpose": "Mixed generated roots; train only from registered configs/recipes with gates.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "backgrounds_container",
+      "path": "data/backgrounds",
+      "state": "container",
+      "kind": "mixed_background_workspace",
+      "purpose": "Mixed background/patch workspace; use only through reviewed background-bank policy.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "raw_datasets_intake",
+      "path": "data/raw_datasets",
+      "state": "intake",
+      "kind": "raw_dataset_intake",
+      "purpose": "Raw dataset intake; not a direct training source.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "processed_intake",
+      "path": "data/processed",
+      "state": "intake",
+      "kind": "processed_dataset_intake",
+      "purpose": "Intermediate processed data; not a direct training source unless promoted to working registry.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "inbox_intake",
+      "path": "data/inbox",
+      "state": "intake",
+      "kind": "manual_drop_intake",
+      "purpose": "Manual capture/drop inbox; must be reviewed before promotion.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "config_archive",
+      "path": "configs/archive",
+      "state": "archive",
+      "kind": "config_archive",
+      "purpose": "Historical configs kept for reference; not active planning.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "script_archive",
+      "path": "scripts/archive",
+      "state": "archive",
+      "kind": "script_archive",
+      "purpose": "Historical scripts kept for reference; do not use in active pipeline without re-review.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "docs_archive",
+      "path": "docs/archive",
+      "state": "archive",
+      "kind": "docs_archive",
+      "purpose": "Historical notes and old model-brain content.",
+      "checks": ["exists"]
+    }
+  ]
+}

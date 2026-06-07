@@ -2,6 +2,8 @@
 
 CashSnap is an AI-assisted computer vision application designed to help retail vendors and cashiers count mixed US Dollars (USD) and Khmer Riel (KHR) from a single casual photo. The app is designed for retail counter layouts, handling fanning, overlapping bills, hand occlusions, and circulating wear (folded, crinkled, or dirty banknotes).
 
+This folder is a demo/submission app snapshot. For current model status, synthetic-data direction, and experiment results, use the repository root `README.md` and `model.md`.
+
 ## Project Overview
 
 In everyday retail contexts, banknotes are rarely isolated. They overlap and form fans. If a standard object detector is used, one bill is often split visually into multiple fragments, leading to double-counting. 
@@ -63,5 +65,5 @@ If you don't have API keys or a trained model deployed on Hugging Face yet:
 ## Limitations & Project Disclaimer
 
 - **Counterfeit Detection**: CashSnap is for cash counting assistance only. Counterfeit detection is outside the project scope.
-- **Visual Validation Gaps**: Clean, isolated-note detection is highly mature. However, dense overlap and fanned notes remain a complex research challenge.
-- **Visual Pipeline Proof**: The WebGL synthetic renderer and label pipelines are strong, but real-world fan/overlap/hand stress validation is still the next major proof step to achieve production-grade counting.
+- **Visual Validation Gaps**: Clean visible-note transfer is still being improved, and dense overlap, fanned notes, hand occlusions, and partial-note counting remain research challenges.
+- **Visual Pipeline Proof**: The WebGL synthetic renderer and label pipelines are strong enough for bounded probes, but production-grade counting still needs real transfer guardrails and promoted real fan/overlap/hand stress labels.

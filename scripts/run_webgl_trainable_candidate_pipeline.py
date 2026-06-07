@@ -8,6 +8,17 @@ import subprocess
 import sys
 from pathlib import Path
 
+from hardware_profile import (
+    HEADROOM_MAX_GPU_MEM_PERCENT,
+    HEADROOM_MAX_PERCENT,
+    HEADROOM_MAX_RAM_PERCENT,
+    HEADROOM_MIN_FREE_RAM_GB,
+    HEADROOM_RESUME_PERCENT,
+    WEBGL_CHECK_JOBS,
+    WEBGL_RENDERER_BATCH_SIZE,
+    WEBGL_RENDER_JOBS,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SUITE = ROOT / "configs" / "synthetic_recipes" / "cashsnap_webgl_trainable_candidates_v1.json"
@@ -42,12 +53,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--height", type=int, default=1080)
     parser.add_argument("--visual-scale", default=None, help="Override every suite recipe visual_scale. Defaults to each suite row.")
     parser.add_argument("--browser-executable", type=Path, default=None, help="Optional Chromium/Edge executable override.")
-    parser.add_argument("--headroom-max-percent", default="90")
-    parser.add_argument("--headroom-resume-percent", default="82")
-    parser.add_argument("--headroom-max-ram-percent", default="90")
-    parser.add_argument("--headroom-max-gpu-mem-percent", default="90")
-    parser.add_argument("--min-free-ram-gb", default="3")
+    parser.add_argument("--headroom-max-percent", default=str(int(HEADROOM_MAX_PERCENT)))
+    parser.add_argument("--headroom-resume-percent", default=str(int(HEADROOM_RESUME_PERCENT)))
+    parser.add_argument("--headroom-max-ram-percent", default=str(int(HEADROOM_MAX_RAM_PERCENT)))
+    parser.add_argument("--headroom-max-gpu-mem-percent", default=str(int(HEADROOM_MAX_GPU_MEM_PERCENT)))
+    parser.add_argument("--min-free-ram-gb", default=str(int(HEADROOM_MIN_FREE_RAM_GB)))
     parser.add_argument("--preflight-timeout", default="120")
+    parser.add_argument("--render-jobs", type=int, default=WEBGL_RENDER_JOBS)
+    parser.add_argument("--renderer-batch-size", type=int, default=WEBGL_RENDERER_BATCH_SIZE)
+    parser.add_argument("--check-jobs", type=int, default=WEBGL_CHECK_JOBS)
+    parser.add_argument("--check-mode", choices=["in-process", "subprocess"], default="subprocess")
+    parser.add_argument("--shared-browser", action="store_true", help="Reuse one headless browser per recipe render batch.")
     return parser.parse_args()
 
 
@@ -91,6 +107,14 @@ def main() -> int:
         args.min_free_ram_gb,
         "--preflight-timeout",
         args.preflight_timeout,
+        "--render-jobs",
+        str(args.render_jobs),
+        "--renderer-batch-size",
+        str(args.renderer_batch_size),
+        "--check-jobs",
+        str(args.check_jobs),
+        "--check-mode",
+        args.check_mode,
     ]
     if args.visual_scale is not None:
         suite_cmd.extend(["--visual-scale", str(args.visual_scale)])
@@ -98,6 +122,8 @@ def main() -> int:
         suite_cmd.append("--skip-render")
     if args.browser_executable:
         suite_cmd.extend(["--browser-executable", str(args.browser_executable)])
+    if args.shared_browser:
+        suite_cmd.append("--shared-browser")
     if args.dry_run:
         suite_cmd.append("--dry-run")
     run(suite_cmd, args.dry_run)
@@ -173,6 +199,7 @@ def main() -> int:
                 "--workers",
                 "0",
                 "--quiet",
+                "--no-val",
                 "--exist-ok",
             ],
             args.dry_run,

@@ -35,7 +35,17 @@ CLASS_NAMES = [
     "KHR_20000",
     "KHR_50000",
 ]
+IMAGE_METRICS = [
+    "luma_mean",
+    "luma_std",
+    "luma_p05",
+    "luma_p95",
+    "saturation_mean",
+    "saturation_std",
+    "sharpness_grad_var",
+]
 BOX_METRICS = ["box_area", "box_width", "box_height", "box_aspect"]
+POSTPROCESS_METRICS = ("contrast", "saturation", "brightness", "focusBlurPx", "grainStrength", "grainAlpha", "vignette")
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,6 +58,31 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-per-class", type=int, default=1)
     parser.add_argument("--max-class-ratio", type=float, default=0.0)
     parser.add_argument("--max-class-spread", type=int, default=-1)
+    parser.add_argument("--min-camera-profiles", type=int, default=0)
+    parser.add_argument("--min-condition-profiles", type=int, default=0)
+    parser.add_argument("--min-class-camera-profiles", type=int, default=0)
+    parser.add_argument("--min-class-condition-profiles", type=int, default=0)
+    parser.add_argument(
+        "--min-postprocess-range",
+        action="append",
+        default=[],
+        metavar="FIELD=RANGE",
+        help="Require a selected metadata postprocess numeric range. Repeatable.",
+    )
+    parser.add_argument(
+        "--root-min",
+        action="append",
+        default=[],
+        metavar="ROOT=COUNT",
+        help="Require at least COUNT selected images from a specific root. Repeatable.",
+    )
+    parser.add_argument(
+        "--root-max",
+        action="append",
+        default=[],
+        metavar="ROOT=COUNT",
+        help="Cap selected images from a specific root. Repeatable.",
+    )
     parser.add_argument("--seed", type=int, default=2606)
     parser.add_argument("--restarts", type=int, default=160)
     parser.add_argument("--iterations", type=int, default=1200)
@@ -68,6 +103,61 @@ def repo_rel(path: Path) -> str:
 
 def slug(value: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_]+", "_", value).strip("_").lower()
+
+
+def parse_root_max(values: list[str]) -> dict[str, int]:
+    caps: dict[str, int] = {}
+    for value in values:
+        if "=" not in value:
+            raise SystemExit(f"--root-max must be ROOT=COUNT, got {value!r}")
+        raw_root, raw_count = value.rsplit("=", 1)
+        root = repo_rel(resolve(Path(raw_root.strip())))
+        try:
+            count = int(raw_count)
+        except ValueError as exc:
+            raise SystemExit(f"--root-max count must be an integer, got {raw_count!r}") from exc
+        if count < 0:
+            raise SystemExit("--root-max count must be >= 0")
+        caps[root] = count
+    return caps
+
+
+def parse_root_min(values: list[str]) -> dict[str, int]:
+    floors: dict[str, int] = {}
+    for value in values:
+        if "=" not in value:
+            raise SystemExit(f"--root-min must be ROOT=COUNT, got {value!r}")
+        raw_root, raw_count = value.rsplit("=", 1)
+        root = repo_rel(resolve(Path(raw_root.strip())))
+        try:
+            count = int(raw_count)
+        except ValueError as exc:
+            raise SystemExit(f"--root-min count must be an integer, got {raw_count!r}") from exc
+        if count < 0:
+            raise SystemExit("--root-min count must be >= 0")
+        floors[root] = count
+    return floors
+
+
+def parse_min_postprocess_ranges(values: list[str]) -> dict[str, float]:
+    ranges: dict[str, float] = {}
+    allowed = set(POSTPROCESS_METRICS)
+    for value in values:
+        if "=" not in value:
+            raise SystemExit(f"--min-postprocess-range must be FIELD=RANGE, got {value!r}")
+        field, raw_range = value.rsplit("=", 1)
+        field = field.strip()
+        if field not in allowed:
+            allowed_text = ", ".join(sorted(allowed))
+            raise SystemExit(f"unknown postprocess field {field!r}; expected one of: {allowed_text}")
+        try:
+            min_range = float(raw_range)
+        except ValueError as exc:
+            raise SystemExit(f"--min-postprocess-range value must be numeric, got {raw_range!r}") from exc
+        if min_range < 0:
+            raise SystemExit("--min-postprocess-range value must be >= 0")
+        ranges[field] = min_range
+    return ranges
 
 
 def class_name_for_id(class_id: int) -> str:
@@ -122,6 +212,50 @@ def read_box_rows(label: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def candidate_metadata(root: Path, variant: str) -> dict[str, Any]:
+    path = root / variant / "metadata.json"
+    if not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return payload if isinstance(payload, dict) else {}
+
+
+def camera_profile_from_metadata(metadata: dict[str, Any]) -> str:
+    scene_config = metadata.get("sceneConfig", {})
+    camera = scene_config.get("camera", {}) if isinstance(scene_config, dict) else {}
+    return str(camera.get("profile", "")).strip() if isinstance(camera, dict) else ""
+
+
+def condition_profiles_from_metadata(metadata: dict[str, Any]) -> list[str]:
+    assets = metadata.get("assets", [])
+    if not isinstance(assets, list):
+        return []
+    profiles: list[str] = []
+    for asset in assets:
+        if not isinstance(asset, dict):
+            continue
+        condition = asset.get("condition", {})
+        if not isinstance(condition, dict):
+            continue
+        profile = str(condition.get("profile", "")).strip()
+        if profile:
+            profiles.append(profile)
+    return profiles
+
+
+def postprocess_from_metadata(metadata: dict[str, Any]) -> dict[str, float]:
+    scene_config = metadata.get("sceneConfig", {})
+    postprocess = scene_config.get("postprocess", {}) if isinstance(scene_config, dict) else {}
+    if not isinstance(postprocess, dict):
+        return {}
+    values: dict[str, float] = {}
+    for field in POSTPROCESS_METRICS:
+        value = postprocess.get(field)
+        if isinstance(value, (int, float)):
+            values[field] = float(value)
+    return values
+
+
 def real_box_rows(real_rows: list[str]) -> list[dict[str, Any]]:
     names = {index: class_name for index, class_name in enumerate(CLASS_NAMES)}
     rows: list[dict[str, Any]] = []
@@ -130,6 +264,15 @@ def real_box_rows(real_rows: list[str]) -> list[dict[str, Any]]:
         rows.extend(domain_gap.label_rows(image, names))
     if not rows:
         raise SystemExit("real train list has no boxes")
+    return rows
+
+
+def image_stat_rows(image_rows: list[str]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for row in image_rows:
+        rows.append(domain_gap.image_stats(resolve_image_row(row)))
+    if not rows:
+        raise SystemExit("image list has no rows")
     return rows
 
 
@@ -148,6 +291,7 @@ def candidate_rows(roots: list[Path]) -> list[dict[str, Any]]:
             boxes = read_box_rows(label)
             if not boxes:
                 continue
+            metadata = candidate_metadata(root, label.stem)
             seen_images.add(image_rel)
             candidates.append(
                 {
@@ -156,6 +300,11 @@ def candidate_rows(roots: list[Path]) -> list[dict[str, Any]]:
                     "root": repo_rel(root),
                     "variant": label.stem,
                     "boxes": boxes,
+                    "classes": sorted({str(row["class_name"]) for row in boxes}),
+                    "image_stats": domain_gap.image_stats(image),
+                    "camera_profile": camera_profile_from_metadata(metadata),
+                    "condition_profiles": condition_profiles_from_metadata(metadata),
+                    "postprocess": postprocess_from_metadata(metadata),
                 }
             )
     if not candidates:
@@ -165,6 +314,16 @@ def candidate_rows(roots: list[Path]) -> list[dict[str, Any]]:
 
 def mean(values: list[float]) -> float | None:
     return sum(values) / len(values) if values else None
+
+
+def summarize_image_stats(rows: list[dict[str, Any]]) -> dict[str, float]:
+    stats = {
+        metric: mean([float(row[metric]) for row in rows if row.get(metric) is not None])
+        for metric in IMAGE_METRICS
+    }
+    if any(value is None for value in stats.values()):
+        raise SystemExit("cannot summarize image stats")
+    return {metric: float(value) for metric, value in stats.items()}
 
 
 def summarize_boxes(rows: list[dict[str, Any]]) -> tuple[dict[str, float], dict[str, dict[str, float]], dict[str, int]]:
@@ -202,18 +361,38 @@ def score_selection(
     *,
     candidates: list[dict[str, Any]],
     selected: set[int],
+    real_image_stats: dict[str, float],
     real_aggregate: dict[str, float],
     real_class_stats: dict[str, dict[str, float]],
+    image_limits: dict[str, float],
     aggregate_limits: dict[str, float],
     class_limits: dict[str, float],
     min_per_class: int,
     max_class_ratio: float,
     max_class_spread: int,
+    root_min_counts: dict[str, int],
+    root_max_counts: dict[str, int],
+    min_camera_profiles: int,
+    min_condition_profiles: int,
+    min_class_camera_profiles: int,
+    min_class_condition_profiles: int,
+    min_postprocess_ranges: dict[str, float],
 ) -> dict[str, Any]:
     synthetic_rows = selected_box_rows(candidates, selected)
+    selected_candidates = [candidates[index] for index in selected]
+    synthetic_image_stats = summarize_image_stats([candidate["image_stats"] for candidate in selected_candidates])
     aggregate, class_stats, class_counts = summarize_boxes(synthetic_rows)
     failures: list[str] = []
     score = 0.0
+
+    image_deltas: dict[str, float] = {}
+    for metric, limit in image_limits.items():
+        delta = float(synthetic_image_stats[metric]) - float(real_image_stats[metric])
+        image_deltas[metric] = delta
+        score += 2.0 * (abs(delta) / max(limit, 1e-9)) ** 2
+        if abs(delta) > limit:
+            failures.append(f"image_stats.{metric} delta {delta:.6f} exceeds abs limit {limit:.6f}")
+            score += 80.0
 
     for metric, limit in aggregate_limits.items():
         delta = float(aggregate[metric]) - float(real_aggregate[metric])
@@ -235,6 +414,84 @@ def score_selection(
     if max_class_ratio > 0 and class_ratio > max_class_ratio:
         failures.append(f"class count ratio {class_ratio:.6f} exceeds {max_class_ratio:.6f}")
         score += 500.0 * (class_ratio - max_class_ratio)
+
+    root_counts = defaultdict(int)
+    for candidate in selected_candidates:
+        root_counts[str(candidate.get("root", ""))] += 1
+    for root, min_count in root_min_counts.items():
+        count = int(root_counts.get(root, 0))
+        if count < min_count:
+            failures.append(f"root {root} selected count {count} below {min_count}")
+            score += 600.0 * (min_count - count)
+    for root, max_count in root_max_counts.items():
+        count = int(root_counts.get(root, 0))
+        if count > max_count:
+            failures.append(f"root {root} selected count {count} exceeds {max_count}")
+            score += 600.0 * (count - max_count)
+
+    camera_profiles = {
+        str(candidate.get("camera_profile", "")).strip()
+        for candidate in selected_candidates
+        if str(candidate.get("camera_profile", "")).strip()
+    }
+    condition_profiles = {
+        str(profile).strip()
+        for candidate in selected_candidates
+        for profile in candidate.get("condition_profiles", [])
+        if str(profile).strip()
+    }
+    if min_camera_profiles > 0 and len(camera_profiles) < min_camera_profiles:
+        failures.append(f"camera profile count {len(camera_profiles)} below {min_camera_profiles}")
+        score += 750.0 * (min_camera_profiles - len(camera_profiles))
+    if min_condition_profiles > 0 and len(condition_profiles) < min_condition_profiles:
+        failures.append(f"condition profile count {len(condition_profiles)} below {min_condition_profiles}")
+        score += 750.0 * (min_condition_profiles - len(condition_profiles))
+
+    class_camera_profiles: dict[str, set[str]] = {class_name: set() for class_name in CLASS_NAMES}
+    class_condition_profiles: dict[str, set[str]] = {class_name: set() for class_name in CLASS_NAMES}
+    for candidate in selected_candidates:
+        camera_profile = str(candidate.get("camera_profile", "")).strip()
+        condition_profile_values = {
+            str(profile).strip()
+            for profile in candidate.get("condition_profiles", [])
+            if str(profile).strip()
+        }
+        for class_name in candidate.get("classes", []):
+            if class_name not in class_camera_profiles:
+                continue
+            if camera_profile:
+                class_camera_profiles[class_name].add(camera_profile)
+            class_condition_profiles[class_name].update(condition_profile_values)
+
+    if min_class_camera_profiles > 0:
+        for class_name, profiles in class_camera_profiles.items():
+            if len(profiles) < min_class_camera_profiles:
+                failures.append(
+                    f"class camera profile count {class_name} {len(profiles)} below {min_class_camera_profiles}"
+                )
+                score += 250.0 * (min_class_camera_profiles - len(profiles))
+    if min_class_condition_profiles > 0:
+        for class_name, profiles in class_condition_profiles.items():
+            if len(profiles) < min_class_condition_profiles:
+                failures.append(
+                    f"class condition profile count {class_name} {len(profiles)} below {min_class_condition_profiles}"
+                )
+                score += 250.0 * (min_class_condition_profiles - len(profiles))
+
+    postprocess_ranges: dict[str, float] = {}
+    for field, min_range in min_postprocess_ranges.items():
+        values = [
+            float(candidate["postprocess"][field])
+            for candidate in selected_candidates
+            if field in candidate.get("postprocess", {})
+        ]
+        value_range = max(values) - min(values) if values else 0.0
+        postprocess_ranges[field] = value_range
+        deficit = min_range - value_range
+        if deficit > 0:
+            failures.append(f"postprocess.{field} range {value_range:.6f} below {min_range:.6f}")
+            score += 300.0 * deficit
+            score += 20.0 * (deficit / max(min_range, 1e-9)) ** 2
 
     class_deltas: dict[str, dict[str, float | None]] = {}
     for class_name in CLASS_NAMES:
@@ -262,6 +519,17 @@ def score_selection(
         "class_counts": class_counts,
         "class_count_spread": spread,
         "class_count_ratio": class_ratio,
+        "root_counts": dict(sorted(root_counts.items())),
+        "camera_profiles": sorted(camera_profiles),
+        "condition_profiles": sorted(condition_profiles),
+        "class_camera_profiles": {
+            class_name: sorted(profiles) for class_name, profiles in sorted(class_camera_profiles.items())
+        },
+        "class_condition_profiles": {
+            class_name: sorted(profiles) for class_name, profiles in sorted(class_condition_profiles.items())
+        },
+        "postprocess_ranges": postprocess_ranges,
+        "image_deltas": image_deltas,
         "aggregate_deltas": {
             metric: float(aggregate[metric]) - float(real_aggregate[metric])
             for metric in aggregate_limits
@@ -270,31 +538,49 @@ def score_selection(
     }
 
 
-def search(candidates: list[dict[str, Any]], args: argparse.Namespace, real_stats: tuple[dict[str, float], dict[str, dict[str, float]], dict[str, int]]) -> tuple[set[int], dict[str, Any]]:
+def search(
+    candidates: list[dict[str, Any]],
+    args: argparse.Namespace,
+    real_image_stats: dict[str, float],
+    real_stats: tuple[dict[str, float], dict[str, dict[str, float]], dict[str, int]],
+) -> tuple[set[int], dict[str, Any]]:
     if args.count < 1:
         raise SystemExit("--count must be positive")
     if args.count > len(candidates):
         raise SystemExit(f"--count {args.count} exceeds candidate count {len(candidates)}")
 
     preset = domain_gap.DOMAIN_GAP_PRESETS[args.gate_preset]
+    image_limits = dict(preset.get("image", {}))
     aggregate_limits = dict(preset.get("box", {}))
     class_limits = dict(preset.get("class_box", {}))
     if not class_limits:
         class_limits = dict(aggregate_limits)
     real_aggregate, real_class_stats, _real_class_counts = real_stats
+    root_min_counts = parse_root_min(args.root_min)
+    root_max_counts = parse_root_max(args.root_max)
+    min_postprocess_ranges = parse_min_postprocess_ranges(args.min_postprocess_range)
     rng = random.Random(args.seed)
 
     def evaluate(selected: set[int]) -> dict[str, Any]:
         return score_selection(
             candidates=candidates,
             selected=selected,
+            real_image_stats=real_image_stats,
             real_aggregate=real_aggregate,
             real_class_stats=real_class_stats,
+            image_limits=image_limits,
             aggregate_limits=aggregate_limits,
             class_limits=class_limits,
             min_per_class=args.min_per_class,
             max_class_ratio=args.max_class_ratio,
             max_class_spread=args.max_class_spread,
+            root_min_counts=root_min_counts,
+            root_max_counts=root_max_counts,
+            min_camera_profiles=args.min_camera_profiles,
+            min_condition_profiles=args.min_condition_profiles,
+            min_class_camera_profiles=args.min_class_camera_profiles,
+            min_class_condition_profiles=args.min_class_condition_profiles,
+            min_postprocess_ranges=min_postprocess_ranges,
         )
 
     initial = set(rng.sample(range(len(candidates)), args.count))
@@ -378,6 +664,8 @@ def write_selected_outputs(
                 "restarts": args.restarts,
                 "iterations": args.iterations,
                 "roots": [repo_rel(resolve(root)) for root in args.root],
+                "root_min": parse_root_min(args.root_min),
+                "root_max": parse_root_max(args.root_max),
                 "metrics": metrics,
                 "selected_images": [str(row["image_rel"]) for row in selected_candidates],
                 "selected_variants": [
@@ -422,9 +710,10 @@ def main() -> int:
     roots = [resolve(root) for root in args.root]
     real_train_list = resolve(args.real_train_list)
     real_rows = read_image_list(real_train_list)
+    real_image_stats = summarize_image_stats(image_stat_rows(real_rows))
     real_stats = summarize_boxes(real_box_rows(real_rows))
     candidates = candidate_rows(roots)
-    selected, metrics = search(candidates, args, real_stats)
+    selected, metrics = search(candidates, args, real_image_stats, real_stats)
     train_list, data_yaml, selection_json, audit_json = write_selected_outputs(
         args=args,
         candidates=candidates,

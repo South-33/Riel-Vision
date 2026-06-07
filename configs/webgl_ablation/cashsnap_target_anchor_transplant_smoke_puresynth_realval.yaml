@@ -1,0 +1,83 @@
+path: ../..
+train: data/synthetic/cashsnap_target_anchor_transplant_smoke/images/train
+val: data/cashsnap_v1/images/val
+test: data/cashsnap_v1/images/test
+names:
+  0: USD_1
+  1: USD_5
+  2: USD_10
+  3: USD_20
+  4: USD_50
+  5: USD_100
+  6: KHR_500
+  7: KHR_1000
+  8: KHR_2000
+  9: KHR_5000
+  10: KHR_10000
+  11: KHR_20000
+  12: KHR_50000
+cashsnap_policy:
+  intended_use: pure-synth target-anchored transplant TSTR probe using train-only
+    CashSnap no-note background patches and synthetic cutout-bank note labels
+  phase: target-domain anchor regime-change MVP
+  source_dataset: data/synthetic/cashsnap_target_anchor_transplant_smoke
+  promotion_rule: reject unless fixed-step full real transfer jumps materially over
+    filtered185/repair baselines without worse empty-frame behavior
+  schema: cashsnap_target_anchor_transplant_summary_v1
+  seed: 8
+  per_class: 1
+  images: 13
+  class_counts:
+    KHR_1000: 1
+    KHR_10000: 1
+    KHR_2000: 1
+    KHR_20000: 1
+    KHR_500: 1
+    KHR_5000: 1
+    KHR_50000: 1
+    USD_1: 1
+    USD_10: 1
+    USD_100: 1
+    USD_20: 1
+    USD_5: 1
+    USD_50: 1
+  background_source_images: 25
+  background_root: data/backgrounds/cashsnap_v1_no_note_patches_strict_v1
+  background_split: train
+  canvas_size:
+  - 640
+  - 640
+  unique_backgrounds_used: 9
+  real_geometry_samples_by_class:
+    USD_1: 627
+    USD_5: 753
+    USD_10: 1009
+    USD_20: 894
+    USD_50: 911
+    USD_100: 976
+    KHR_500: 284
+    KHR_1000: 635
+    KHR_2000: 153
+    KHR_5000: 614
+    KHR_10000: 349
+    KHR_20000: 17
+    KHR_50000: 18
+  unique_geometry_sources_used: 13
+  assets_by_class:
+    USD_1: 2
+    USD_5: 8
+    USD_10: 8
+    USD_20: 8
+    USD_50: 8
+    USD_100: 8
+    KHR_500: 4
+    KHR_1000: 6
+    KHR_2000: 8
+    KHR_5000: 4
+    KHR_10000: 4
+    KHR_20000: 4
+    KHR_50000: 4
+  unique_assets_used: 13
+  cashsnap_root: data/cashsnap_v1
+  asset_manifest: data/asset_candidates/numista_current_cutout_bank_v1/manifest.csv
+  metadata: data/synthetic/cashsnap_target_anchor_transplant_smoke/metadata/train.jsonl

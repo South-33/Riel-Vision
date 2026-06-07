@@ -1,0 +1,8 @@
+data/synthetic/cashsnap_webgl_hard_negative_candidate_v1/images/train/variant_1500.png
+data/synthetic/cashsnap_webgl_hard_negative_candidate_v1/images/train/variant_1504.png
+data/synthetic/cashsnap_webgl_hard_negative_candidate_v1/images/train/variant_1508.png
+data/synthetic/cashsnap_webgl_hard_negative_candidate_v1/images/train/variant_1512.png
+data/synthetic/cashsnap_webgl_hard_negative_candidate_v1/images/train/variant_1516.png
+data/synthetic/cashsnap_webgl_hard_negative_candidate_v1/images/train/variant_1520.png
+data/synthetic/cashsnap_webgl_hard_negative_candidate_v1/images/train/variant_1524.png
+data/synthetic/cashsnap_webgl_hard_negative_candidate_v1/images/train/variant_1528.png

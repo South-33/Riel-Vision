@@ -1,0 +1,28 @@
+path: ../..
+train:
+  - data/synthetic/cashsnap_webgl_clean_base_topdown_768x640_handled_probe_v2/images/train
+  - data/synthetic/cashsnap_webgl_clean_base_square_classdiverse_postproc_geometry_selected96_v2/images/train
+val:
+  - data/synthetic/cashsnap_webgl_clean_base_topdown_768x640_handled_probe_v2/images/train
+  - data/synthetic/cashsnap_webgl_clean_base_square_classdiverse_postproc_geometry_selected96_v2/images/train
+names:
+  0: USD_1
+  1: USD_5
+  2: USD_10
+  3: USD_20
+  4: USD_50
+  5: USD_100
+  6: KHR_500
+  7: KHR_1000
+  8: KHR_2000
+  9: KHR_5000
+  10: KHR_10000
+  11: KHR_20000
+  12: KHR_50000
+cashsnap_sources:
+  synthetic_self_eval:
+    - data/synthetic/cashsnap_webgl_clean_base_topdown_768x640_handled_probe_v2
+    - data/synthetic/cashsnap_webgl_clean_base_square_classdiverse_postproc_geometry_selected96_v2
+cashsnap_policy:
+  intended_use: synthetic self-eval for the 768x640 topdown plus square class-diverse blend
+  known_limit: self-eval helper only; real transfer uses cashsnap_webgl_clean_768topdown_squareclassdiverse_blend_puresynth_realval_v1.yaml

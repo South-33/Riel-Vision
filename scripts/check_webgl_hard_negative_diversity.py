@@ -19,6 +19,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-total-props", type=int, default=1)
     parser.add_argument("--min-prop-kinds", type=int, default=1)
     parser.add_argument("--min-textured-props", type=int, default=0)
+    parser.add_argument(
+        "--require-prop-kind",
+        action="append",
+        default=[],
+        help="Required propKind value. Repeatable; comma-separated values are also accepted.",
+    )
+    parser.add_argument(
+        "--require-confusion-hardness",
+        action="append",
+        default=[],
+        help="Required negativeConfusionHardness value. Repeatable; comma-separated values are also accepted.",
+    )
     parser.add_argument("--require-zero-assets", action="store_true", help="Require no banknote assets in every image.")
     return parser.parse_args()
 
@@ -38,6 +50,20 @@ def require(condition: bool, message: str) -> None:
         raise SystemExit(message)
 
 
+def parse_required_prop_kinds(values: list[str]) -> list[str]:
+    rows: list[str] = []
+    for value in values:
+        rows.extend(item.strip() for item in value.split(",") if item.strip())
+    return rows
+
+
+def parse_required_confusion_hardness(values: list[str]) -> list[str]:
+    rows: list[str] = []
+    for value in values:
+        rows.extend(item.strip() for item in value.split(",") if item.strip())
+    return rows
+
+
 def source_metadata_path(dataset_root: Path, row: dict) -> Path:
     raw = str(row.get("source_metadata", "")).strip()
     require(bool(raw), f"manifest row for variant {row.get('variant', '<unknown>')} is missing source_metadata")
@@ -52,6 +78,7 @@ def main() -> int:
     require(len(manifest) >= args.min_images, f"expected at least {args.min_images} images, got {len(manifest)}")
 
     prop_kinds: Counter[str] = Counter()
+    confusion_hardness: Counter[str] = Counter()
     scene_modes: Counter[str] = Counter()
     total_props = 0
     textured_props = 0
@@ -78,11 +105,20 @@ def main() -> int:
             prop_kind = str(occluder.get("propKind", occluder.get("kind", ""))).strip()
             require(prop_kind, f"{row.get('source_metadata')}: occluder is missing kind/propKind")
             prop_kinds[prop_kind] += 1
+            hardness = str(occluder.get("negativeConfusionHardness", "")).strip()
+            if hardness:
+                confusion_hardness[hardness] += 1
             if str(occluder.get("textureStyle", "")).strip():
                 textured_props += 1
 
     if args.require_zero_assets:
         require(asset_count == 0, f"expected zero banknote assets, got {asset_count}")
+    required_prop_kinds = parse_required_prop_kinds(args.require_prop_kind)
+    missing_prop_kinds = [prop_kind for prop_kind in required_prop_kinds if prop_kinds[prop_kind] <= 0]
+    require(not missing_prop_kinds, f"missing required prop kinds {missing_prop_kinds}; got {dict(prop_kinds)}")
+    required_confusion_hardness = parse_required_confusion_hardness(args.require_confusion_hardness)
+    missing_hardness = [hardness for hardness in required_confusion_hardness if confusion_hardness[hardness] <= 0]
+    require(not missing_hardness, f"missing required confusion hardness {missing_hardness}; got {dict(confusion_hardness)}")
     require(images_with_props >= args.min_images, f"expected props in at least {args.min_images} images, got {images_with_props}")
     require(total_props >= args.min_total_props, f"expected at least {args.min_total_props} total props, got {total_props}")
     require(len(prop_kinds) >= args.min_prop_kinds, f"expected at least {args.min_prop_kinds} prop kinds, got {dict(prop_kinds)}")
@@ -91,7 +127,8 @@ def main() -> int:
     print(
         "ok: WebGL hard-negative diversity passed "
         f"({len(manifest)} images, total_props={total_props}, textured_props={textured_props}, "
-        f"prop_kinds={dict(sorted(prop_kinds.items()))})"
+        f"prop_kinds={dict(sorted(prop_kinds.items()))}, "
+        f"confusion_hardness={dict(sorted(confusion_hardness.items()))})"
     )
     return 0
 

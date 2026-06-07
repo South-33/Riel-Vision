@@ -43,6 +43,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--doses", default="1,2,4,8,16", help="Comma/space-separated dose image counts.")
     parser.add_argument("--dose-classes", default=DEFAULT_CLASSES)
+    parser.add_argument(
+        "--dose-selection",
+        choices=("exact", "spread"),
+        default="exact",
+        help=(
+            "Select dose rows by exact class-balance search, or evenly spread rows "
+            "across the sorted dose pool for large single-class pools."
+        ),
+    )
     parser.add_argument("--max-combinations", type=int, default=500_000)
     parser.add_argument("--domain-gap-preset", default="accepted_blend_v1")
     parser.add_argument("--skip-domain-gap-gate", action="store_true")
@@ -214,10 +223,44 @@ def selected_dose_rows(
     row_counts: list[Counter[str]],
     dose: int,
     classes: list[str],
+    selection: str,
     max_combinations: int,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if dose > len(rows):
         raise SystemExit(f"dose {dose} exceeds dose pool size {len(rows)}")
+    if selection == "spread":
+        ordered_indexes = sorted(
+            range(len(rows)),
+            key=lambda index: (
+                int(rows[index].get("variant", index)),
+                str(rows[index].get("image", "")),
+            ),
+        )
+        if dose == 1:
+            best_indexes = (ordered_indexes[len(ordered_indexes) // 2],)
+        else:
+            best_indexes = tuple(
+                ordered_indexes[round(position * (len(ordered_indexes) - 1) / (dose - 1))]
+                for position in range(dose)
+            )
+        counts: Counter[str] = Counter()
+        for index in best_indexes:
+            counts.update(row_counts[index])
+        metrics = balance_metrics(counts, classes)
+        return [rows[index] for index in best_indexes], {
+            "source": "visible_boxes.physical_visible_instances",
+            "classes": classes,
+            "dose_images": int(dose),
+            "search": {
+                "method": "spread",
+                "pool_size": int(len(rows)),
+                "max_combinations": int(max_combinations),
+            },
+            "selected_variants": [int(rows[index].get("variant")) for index in best_indexes],
+            "selected_counts": metrics,
+        }
+    if selection != "exact":
+        raise SystemExit(f"unsupported dose selection mode: {selection}")
     combination_count = math.comb(len(rows), dose)
     if combination_count > max_combinations:
         raise SystemExit(
@@ -564,6 +607,7 @@ def main() -> int:
             row_counts,
             dose,
             dose_classes,
+            args.dose_selection,
             args.max_combinations,
         )
         dose_image_rows = [

@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
+import sys
 from pathlib import Path
 
-from webgl_constants import WEBGL_ASSET_SIDE_POLICIES, WEBGL_CAMERA_PROFILES
+from webgl_constants import WEBGL_ASSET_QUALITY_POLICIES, WEBGL_ASSET_SIDE_POLICIES, WEBGL_CAMERA_PROFILES
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +22,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-recipe", default="")
     parser.add_argument("--require-scene-mode", default="")
     parser.add_argument("--require-asset-side-policy", default="")
+    parser.add_argument("--require-asset-quality-policy", default="")
+    parser.add_argument("--require-reviewed-textures", action="store_true")
     parser.add_argument("--require-camera-profile", default="")
     return parser.parse_args()
 
@@ -100,6 +104,27 @@ def main() -> int:
             require(isinstance(side_counts, dict), "asset_selection.side_counts must be an object")
             require(int(side_counts.get("front", 0)) > 0, "front_back_mix rendered no fronts")
             require(int(side_counts.get("back", 0)) > 0, "front_back_mix rendered no backs")
+    if args.require_asset_quality_policy:
+        require(
+            args.require_asset_quality_policy in WEBGL_ASSET_QUALITY_POLICIES,
+            f"--require-asset-quality-policy must be one of {sorted(WEBGL_ASSET_QUALITY_POLICIES)}",
+        )
+    if args.require_asset_quality_policy or args.require_reviewed_textures:
+        texture_cmd = [
+            sys.executable,
+            "scripts/check_webgl_texture_asset_policy.py",
+            "--root",
+            str(dataset_root),
+            "--min-images",
+            str(args.min_images),
+        ]
+        if args.require_asset_quality_policy:
+            texture_cmd.extend(["--require-asset-quality-policy", args.require_asset_quality_policy])
+        else:
+            texture_cmd.extend(["--require-asset-quality-policy", ""])
+        if not args.require_reviewed_textures:
+            texture_cmd.extend(["--require-reviewed-status", ""])
+        subprocess.run(texture_cmd, cwd=ROOT, check=True)
     if args.require_camera_profile:
         require(
             args.require_camera_profile in WEBGL_CAMERA_PROFILES,
@@ -147,7 +172,7 @@ def main() -> int:
         require(fragments == 0, "negative smoke must have zero fragments")
         require(ignored == 0, "negative smoke must have zero ignored fragments")
         require(rejected_obb == 0, "negative smoke should not quarantine OBB images")
-    elif scene_mode in {"clean", "clean_single"}:
+    elif scene_mode in {"clean", "clean_single", "clean_context", "texture_qa"}:
         require(visible > 0, "clean smoke must expose banknotes")
         require(fragments == visible, "clean smoke should have one fragment per visible instance")
         require(split_parents == 0, "clean smoke should not split parents")

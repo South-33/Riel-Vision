@@ -10,18 +10,35 @@ import subprocess
 import sys
 from pathlib import Path
 
+from hardware_profile import (
+    HEADROOM_MAX_GPU_MEM_PERCENT,
+    HEADROOM_MAX_PERCENT,
+    HEADROOM_MAX_RAM_PERCENT,
+    HEADROOM_MIN_FREE_RAM_GB,
+    HEADROOM_RESUME_PERCENT,
+    WEBGL_CHECK_JOBS,
+    WEBGL_RENDERER_BATCH_SIZE,
+    WEBGL_RENDER_JOBS,
+)
 from webgl_constants import (
+    WEBGL_ASSET_QUALITY_POLICIES,
     WEBGL_ASSET_SIDE_POLICIES,
+    WEBGL_CAMERA_ISP_POLICIES,
     WEBGL_CAMERA_PROFILES,
+    WEBGL_CLEAN_ORIENTATION_POLICIES,
+    WEBGL_NOTE_CONDITION_POLICIES,
     WEBGL_NOTE_PRINT_TONE_POLICIES,
+    WEBGL_NEGATIVE_PROP_POLICIES,
     WEBGL_OCCLUDER_POLICIES,
+    WEBGL_SCENE_MODES,
     WEBGL_STACK_POSE_POLICIES,
+    WEBGL_TEXTURE_QA_EFFECTS,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CATALOG = ROOT / "configs" / "synthetic_recipes" / "cashsnap_webgl_recipe_catalog_v1.json"
-RUNNABLE_SCENE_MODES = {"auto", "clean", "clean_single", "negative", "stack", "fan", "thin_edge", "hand_occlusion", "qa3"}
+RUNNABLE_SCENE_MODES = WEBGL_SCENE_MODES
 STATUS_TO_BATCH_STATUS = {
     "planned": "diagnostic",
     "smoke_ready": "smoke",
@@ -45,13 +62,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--visual-scale", default="2", help="Visual WebGL supersampling scale.")
     parser.add_argument("--browser-executable", type=Path, default=None, help="Optional Chromium/Edge executable override.")
     parser.add_argument("--asset-side-policy", default="", help="Override catalog asset-side sampling policy.")
+    parser.add_argument("--asset-quality-policy", default="", help="Override catalog asset quality/current-design sampling policy.")
     parser.add_argument("--camera-profile", default="", help="Override catalog WebGL camera/FOV/framing profile.")
+    parser.add_argument("--camera-isp-policy", default="", help="Override catalog camera/ISP-style RGB postprocess policy.")
     parser.add_argument("--stack-pose-policy", default="", help="Override catalog class-conditioned stack pose policy.")
+    parser.add_argument("--clean-orientation-policy", default="", help="Override catalog class-conditioned clean-scene orientation policy.")
     parser.add_argument("--class-sequence", default="", help="Override catalog class sequence for supported scene modes.")
     parser.add_argument("--note-condition-policy", default="", help="Override catalog per-note dirt/crinkle/wetness policy.")
     parser.add_argument("--lens-distortion-policy", default="", help="Override catalog shared radial lens-warp policy.")
     parser.add_argument("--note-print-tone-policy", default="", help="Override catalog per-note print dynamic-range policy.")
+    parser.add_argument("--texture-qa-effects", default="", help="Override texture_qa effect-ladder stage.")
     parser.add_argument("--occluder-policy", default="", help="Override catalog primitive occluder policy.")
+    parser.add_argument("--negative-prop-policy", default="", help="Override catalog zero-label negative prop policy.")
     parser.add_argument("--artifact-status", choices=["smoke", "diagnostic", "trainable-candidate"], default="")
     parser.add_argument("--background-dir", type=Path, default=None)
     parser.add_argument("--environment-dir", type=Path, default=None, help="Optional equirectangular environment map directory for visual lighting/reflections.")
@@ -61,13 +83,17 @@ def parse_args() -> argparse.Namespace:
         default=Path("configs/synthetic_recipes/cashsnap_webgl_environment_banks_v1.json"),
         help="Review registry forwarded when --environment-dir is used.",
     )
-    parser.add_argument("--headroom-max-percent", default="90")
-    parser.add_argument("--headroom-resume-percent", default="82")
-    parser.add_argument("--headroom-max-ram-percent", default="90")
-    parser.add_argument("--headroom-max-gpu-mem-percent", default="90")
-    parser.add_argument("--min-free-ram-gb", default="3")
+    parser.add_argument("--headroom-max-percent", default=str(int(HEADROOM_MAX_PERCENT)))
+    parser.add_argument("--headroom-resume-percent", default=str(int(HEADROOM_RESUME_PERCENT)))
+    parser.add_argument("--headroom-max-ram-percent", default=str(int(HEADROOM_MAX_RAM_PERCENT)))
+    parser.add_argument("--headroom-max-gpu-mem-percent", default=str(int(HEADROOM_MAX_GPU_MEM_PERCENT)))
+    parser.add_argument("--min-free-ram-gb", default=str(int(HEADROOM_MIN_FREE_RAM_GB)))
     parser.add_argument("--preflight-timeout", default="120")
-    parser.add_argument("--render-jobs", type=int, default=1, help="Forwarded WebGL render subprocess concurrency.")
+    parser.add_argument("--render-jobs", type=int, default=WEBGL_RENDER_JOBS, help="Forwarded WebGL render subprocess concurrency.")
+    parser.add_argument("--renderer-batch-size", type=int, default=WEBGL_RENDERER_BATCH_SIZE, help="Forwarded variants per Node/WebGL renderer process.")
+    parser.add_argument("--check-jobs", type=int, default=WEBGL_CHECK_JOBS, help="Forwarded rendered variant smoke-check concurrency.")
+    parser.add_argument("--check-mode", choices=["in-process", "subprocess"], default="subprocess", help="Forwarded rendered variant smoke-check execution mode.")
+    parser.add_argument("--shared-browser", action="store_true", help="Forwarded: reuse one headless browser across renderer subprocesses.")
     parser.add_argument("--skip-render", action="store_true")
     parser.add_argument("--skip-yolo-check", action="store_true")
     parser.add_argument("--skip-label-view-check", action="store_true")
@@ -81,6 +107,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-smoke-gate", action="store_true")
     parser.add_argument("--skip-trainable-gate", action="store_true")
     parser.add_argument("--train-views", default="detect", help="Comma-separated train views for trainable-candidate gates.")
+    parser.add_argument("--require-visual-note-quality", action="store_true", help="Forward readable-note pixel/softness QA to the trainable gate.")
     parser.add_argument(
         "--fragment-review-policy",
         choices=["auto", "diagnostic", "ignore"],
@@ -148,6 +175,13 @@ def choose_stack_pose_policy(recipe: dict, override: str) -> str:
     return policy
 
 
+def choose_clean_orientation_policy(recipe: dict, override: str) -> str:
+    policy = override or str(recipe.get("clean_orientation_policy", "default"))
+    if policy not in WEBGL_CLEAN_ORIENTATION_POLICIES:
+        raise SystemExit(f"--clean-orientation-policy must be one of {sorted(WEBGL_CLEAN_ORIENTATION_POLICIES)}")
+    return policy
+
+
 def normalize_class_sequence(value: object) -> str:
     if isinstance(value, list):
         return ",".join(str(item).strip() for item in value if str(item).strip())
@@ -172,11 +206,18 @@ def main() -> int:
     recipe = find_recipe(catalog, args.recipe_id)
     scene_mode = choose_scene_mode(recipe, args.scene_mode)
     asset_side_policy = choose_asset_side_policy(recipe, args.asset_side_policy)
+    asset_quality_policy = args.asset_quality_policy.strip() or str(recipe.get("asset_quality_policy", "latest_design")).strip() or "latest_design"
+    if asset_quality_policy not in WEBGL_ASSET_QUALITY_POLICIES:
+        raise SystemExit(f"--asset-quality-policy must be one of {sorted(WEBGL_ASSET_QUALITY_POLICIES)}")
     camera_profile = choose_camera_profile(recipe, args.camera_profile)
+    camera_isp_policy = args.camera_isp_policy.strip() or str(recipe.get("camera_isp_policy", "default")).strip() or "default"
+    if camera_isp_policy not in WEBGL_CAMERA_ISP_POLICIES:
+        raise SystemExit(f"unsupported camera_isp_policy: {camera_isp_policy}")
     stack_pose_policy = choose_stack_pose_policy(recipe, args.stack_pose_policy)
+    clean_orientation_policy = choose_clean_orientation_policy(recipe, args.clean_orientation_policy)
     class_sequence = args.class_sequence.strip() or normalize_class_sequence(recipe.get("class_sequence", ""))
     note_condition_policy = args.note_condition_policy.strip() or str(recipe.get("note_condition_policy", "mixed")).strip() or "mixed"
-    if note_condition_policy not in {"mixed", "pristine_only", "heavy_wear", "wet_stress"}:
+    if note_condition_policy not in WEBGL_NOTE_CONDITION_POLICIES:
         raise SystemExit(f"unsupported note_condition_policy: {note_condition_policy}")
     lens_distortion_policy = args.lens_distortion_policy.strip() or str(recipe.get("lens_distortion_policy", "off")).strip() or "off"
     if lens_distortion_policy not in {"off", "phone_mild"}:
@@ -184,9 +225,15 @@ def main() -> int:
     note_print_tone_policy = args.note_print_tone_policy.strip() or str(recipe.get("note_print_tone_policy", "off")).strip() or "off"
     if note_print_tone_policy not in WEBGL_NOTE_PRINT_TONE_POLICIES:
         raise SystemExit(f"unsupported note_print_tone_policy: {note_print_tone_policy}")
+    texture_qa_effects = args.texture_qa_effects.strip() or str(recipe.get("texture_qa_effects", "flat")).strip() or "flat"
+    if texture_qa_effects not in WEBGL_TEXTURE_QA_EFFECTS:
+        raise SystemExit(f"unsupported texture_qa_effects: {texture_qa_effects}")
     occluder_policy = args.occluder_policy.strip() or str(recipe.get("occluder_policy", "scene_default")).strip() or "scene_default"
     if occluder_policy not in WEBGL_OCCLUDER_POLICIES:
         raise SystemExit(f"unsupported occluder_policy: {occluder_policy}")
+    negative_prop_policy = args.negative_prop_policy.strip() or str(recipe.get("negative_prop_policy", "classic")).strip() or "classic"
+    if negative_prop_policy not in WEBGL_NEGATIVE_PROP_POLICIES:
+        raise SystemExit(f"unsupported negative_prop_policy: {negative_prop_policy}")
     count = int(args.count if args.count is not None else recipe.get("render_pool_count", 4))
     if count < 1:
         raise SystemExit("--count must be positive")
@@ -255,12 +302,22 @@ def main() -> int:
         str(args.visual_scale),
         "--asset-side-policy",
         asset_side_policy,
+        "--asset-quality-policy",
+        asset_quality_policy,
         "--camera-profile",
         camera_profile,
+        "--camera-isp-policy",
+        camera_isp_policy,
         "--stack-pose-policy",
         stack_pose_policy,
+        "--clean-orientation-policy",
+        clean_orientation_policy,
         "--occluder-policy",
         occluder_policy,
+        "--negative-prop-policy",
+        negative_prop_policy,
+        "--texture-qa-effects",
+        texture_qa_effects,
         "--recipe-name",
         args.recipe_id,
         "--artifact-status",
@@ -285,6 +342,12 @@ def main() -> int:
         args.preflight_timeout,
         "--render-jobs",
         str(args.render_jobs),
+        "--renderer-batch-size",
+        str(args.renderer_batch_size),
+        "--check-jobs",
+        str(args.check_jobs),
+        "--check-mode",
+        args.check_mode,
     ]
     if class_sequence:
         cmd.extend(["--class-sequence", class_sequence])
@@ -313,6 +376,8 @@ def main() -> int:
         cmd.extend(["--environment-bank-config", str(args.environment_bank_config)])
     if args.browser_executable:
         cmd.extend(["--browser-executable", str(args.browser_executable)])
+    if args.shared_browser:
+        cmd.append("--shared-browser")
     if args.skip_render:
         cmd.append("--skip-render")
     if args.skip_yolo_check:
@@ -367,6 +432,8 @@ def main() -> int:
         gate_cmd.extend(["--require-camera-profile", camera_profile])
         if args.allow_zero_visible_trainable:
             gate_cmd.append("--allow-zero-visible")
+        if args.require_visual_note_quality:
+            gate_cmd.append("--require-visual-note-quality")
         print(" ".join(gate_cmd), flush=True)
         subprocess.run(gate_cmd, cwd=ROOT, check=True)
     return 0

@@ -9,8 +9,21 @@ from pathlib import Path
 
 import psutil
 
+from local_runtime import configure_project_cache
+from hardware_profile import (
+    HEADROOM_MAX_GPU_MEM_PERCENT,
+    HEADROOM_MAX_PERCENT,
+    HEADROOM_MAX_RAM_PERCENT,
+    HEADROOM_MIN_FREE_RAM_GB,
+    HEADROOM_RESUME_PERCENT,
+    recommended_device,
+    recommended_train_batch,
+    recommended_workers,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
+configure_project_cache()
 
 
 @dataclass(frozen=True)
@@ -41,7 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--project", default=str(ROOT / "runs" / "cashsnap"))
     parser.add_argument("--batch", default="auto", help="Integer batch size or 'auto'.")
     parser.add_argument("--workers", default="auto", help="Integer worker count or 'auto'.")
-    parser.add_argument("--device", default=None)
+    parser.add_argument("--device", default="auto")
     parser.add_argument("--optimizer", default=None)
     parser.add_argument("--lr0", type=float, default=None)
     parser.add_argument("--lrf", type=float, default=None)
@@ -50,9 +63,34 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-momentum", type=float, default=None)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--fraction", type=float, default=None)
+    parser.add_argument(
+        "--cache",
+        default=None,
+        choices=["false", "ram", "disk", "true"],
+        help="Pass Ultralytics --cache mode to train_yolo.py.",
+    )
+    parser.add_argument(
+        "--compile",
+        nargs="?",
+        const="default",
+        default=None,
+        help="Pass optional torch.compile mode to train_yolo.py.",
+    )
     parser.add_argument("--max-train-batches", type=int, default=None)
+    parser.add_argument("--mosaic", type=float, default=None)
+    parser.add_argument("--erasing", type=float, default=None)
+    parser.add_argument("--hsv-h", type=float, default=None)
+    parser.add_argument("--hsv-s", type=float, default=None)
+    parser.add_argument("--hsv-v", type=float, default=None)
+    parser.add_argument("--translate", type=float, default=None)
+    parser.add_argument("--scale", type=float, default=None)
+    parser.add_argument("--fliplr", type=float, default=None)
+    parser.add_argument("--degrees", type=float, default=None)
+    parser.add_argument("--shear", type=float, default=None)
+    parser.add_argument("--perspective", type=float, default=None)
+    parser.add_argument("--close-mosaic", type=int, default=None)
     parser.add_argument("--no-amp", action="store_true", help="Pass --no-amp to train_yolo.py.")
-    parser.add_argument("--no-val", action="store_true", help="Pass --no-val to train_yolo.py.")
+    parser.add_argument("--no-val", action="store_true", help="Pass train_yolo.py --no-val to skip epoch/final validation.")
     parser.add_argument("--quiet", action="store_true", help="Pass --quiet to train_yolo.py.")
     parser.add_argument("--plots", action="store_true", help="Allow Ultralytics plot generation.")
     parser.add_argument("--exist-ok", action="store_true", help="Allow reusing an existing run directory.")
@@ -73,14 +111,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--dry-run", action="store_true", help="Print the planned command and exit.")
     parser.add_argument("--probe-seconds", type=float, default=4.0)
-    parser.add_argument("--max-percent", type=float, default=90.0)
-    parser.add_argument("--resume-percent", type=float, default=82.0)
-    parser.add_argument("--max-ram-percent", type=float, default=90.0)
-    parser.add_argument("--max-gpu-mem-percent", type=float, default=90.0)
+    parser.add_argument("--max-percent", type=float, default=HEADROOM_MAX_PERCENT)
+    parser.add_argument("--resume-percent", type=float, default=HEADROOM_RESUME_PERCENT)
+    parser.add_argument("--max-ram-percent", type=float, default=HEADROOM_MAX_RAM_PERCENT)
+    parser.add_argument("--max-gpu-mem-percent", type=float, default=HEADROOM_MAX_GPU_MEM_PERCENT)
     parser.add_argument(
         "--min-free-ram-gb",
         type=float,
-        default=4.0,
+        default=HEADROOM_MIN_FREE_RAM_GB,
         help="Refuse to launch training below this available system RAM floor. Use 0 to disable.",
     )
     parser.add_argument("--interval", type=float, default=2.0)
@@ -136,27 +174,17 @@ def parse_auto_int(value: str, chosen: int, name: str) -> int:
 
 
 def choose_batch(gpu: GpuInfo | None, ram: psutil._common.svmem, image_size: int) -> int:
-    if ram.percent > 65 or ram.available < 6 * 1024**3:
+    if ram.percent > 85 or ram.available < 2 * 1024**3:
         return 2
     if gpu is None:
         return 2
-    free = gpu.mem_free_mb
-    if image_size >= 960:
-        return 2
-    if image_size >= 640:
-        return 2 if free < 5000 else 4
-    if free < 3500:
-        return 2
-    if free < 7000:
-        return 4
-    return 6 if ram.percent > 75 else 8
+    return recommended_train_batch(image_size, ram_gb=ram.available / (1024**3))
 
 
 def choose_workers(cpu_percent: float, ram: psutil._common.svmem) -> int:
-    cores = psutil.cpu_count(logical=True) or 1
-    if cpu_percent > 50 or ram.percent > 65 or ram.available < 6 * 1024**3 or cores <= 8:
+    if cpu_percent > 75 or ram.percent > 85 or ram.available < 2 * 1024**3:
         return 0
-    return 1
+    return recommended_workers("train", ram.available / (1024**3))
 
 
 def append_optional(command: list[str], flag: str, value) -> None:
@@ -200,7 +228,21 @@ def build_command(
     append_optional(train_command, "--warmup-momentum", args.warmup_momentum)
     append_optional(train_command, "--seed", args.seed)
     append_optional(train_command, "--fraction", args.fraction)
+    append_optional(train_command, "--cache", args.cache)
+    append_optional(train_command, "--compile", args.compile)
     append_optional(train_command, "--max-train-batches", args.max_train_batches)
+    append_optional(train_command, "--mosaic", args.mosaic)
+    append_optional(train_command, "--erasing", args.erasing)
+    append_optional(train_command, "--hsv-h", args.hsv_h)
+    append_optional(train_command, "--hsv-s", args.hsv_s)
+    append_optional(train_command, "--hsv-v", args.hsv_v)
+    append_optional(train_command, "--translate", args.translate)
+    append_optional(train_command, "--scale", args.scale)
+    append_optional(train_command, "--fliplr", args.fliplr)
+    append_optional(train_command, "--degrees", args.degrees)
+    append_optional(train_command, "--shear", args.shear)
+    append_optional(train_command, "--perspective", args.perspective)
+    append_optional(train_command, "--close-mosaic", args.close_mosaic)
     if args.no_amp:
         train_command.append("--no-amp")
     if args.no_val:
@@ -251,8 +293,7 @@ def main() -> int:
             raise SystemExit(f"--{name.replace('_', '-')} must stay <= 95 so the PC remains usable.")
 
     cpu, ram, gpu = probe(args.probe_seconds)
-    if args.device is None and gpu is not None:
-        args.device = "0"
+    args.device = recommended_device(args.device)
     batch = parse_auto_int(args.batch, choose_batch(gpu, ram, args.imgsz), "batch")
     workers = parse_auto_int(args.workers, choose_workers(cpu, ram), "workers")
 

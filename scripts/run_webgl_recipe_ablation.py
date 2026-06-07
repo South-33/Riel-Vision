@@ -12,8 +12,19 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from local_runtime import configure_project_cache
+from hardware_profile import (
+    HEADROOM_MAX_GPU_MEM_PERCENT,
+    HEADROOM_MAX_PERCENT,
+    HEADROOM_MAX_RAM_PERCENT,
+    HEADROOM_MIN_FREE_RAM_GB,
+    HEADROOM_RESUME_PERCENT,
+    recommended_workers,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
+configure_project_cache()
 DEFAULT_MODEL = ROOT / "runs" / "cashsnap" / "yolo26n_cashsnap_current_thin_legacy_clean_v1_e20_i416_b8" / "weights" / "best.pt"
 DEFAULT_SUITE = ROOT / "configs" / "synthetic_recipes" / "cashsnap_webgl_trainable_candidates_v1.json"
 DEFAULT_CONFIG_DIR = ROOT / "configs" / "webgl_ablation"
@@ -37,7 +48,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--imgsz", type=int, default=416)
     parser.add_argument("--batch", type=int, default=2)
-    parser.add_argument("--workers", type=int, default=0)
+    parser.add_argument("--workers", type=int, default=recommended_workers("train"))
     parser.add_argument("--optimizer", default="AdamW")
     parser.add_argument("--lr0", type=float, default=0.00005)
     parser.add_argument("--lrf", type=float, default=0.2)
@@ -47,11 +58,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--amp", action="store_true", help="Enable AMP. Default keeps AMP disabled.")
     parser.add_argument("--device", default="0")
-    parser.add_argument("--min-free-ram-gb", type=float, default=1.2)
-    parser.add_argument("--max-ram-percent", type=float, default=94.0)
-    parser.add_argument("--max-cpu-percent", type=float, default=90.0)
-    parser.add_argument("--resume-cpu-percent", type=float, default=82.0)
-    parser.add_argument("--max-gpu-mem-percent", type=float, default=90.0)
+    parser.add_argument("--min-free-ram-gb", type=float, default=HEADROOM_MIN_FREE_RAM_GB)
+    parser.add_argument("--max-ram-percent", type=float, default=HEADROOM_MAX_RAM_PERCENT)
+    parser.add_argument("--max-cpu-percent", type=float, default=HEADROOM_MAX_PERCENT)
+    parser.add_argument("--resume-cpu-percent", type=float, default=HEADROOM_RESUME_PERCENT)
+    parser.add_argument("--max-gpu-mem-percent", type=float, default=HEADROOM_MAX_GPU_MEM_PERCENT)
     parser.add_argument(
         "--max-per-class-drop",
         type=float,
@@ -189,6 +200,7 @@ def train_if_needed(kind: str, data_yaml: Path, args: argparse.Namespace) -> Pat
         "--warmup-momentum",
         str(args.warmup_momentum),
         "--quiet",
+        "--no-val",
         "--exist-ok",
         "--min-free-ram-gb",
         str(args.min_free_ram_gb),

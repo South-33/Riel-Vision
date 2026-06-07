@@ -33,6 +33,7 @@ DEFAULT_QUALITY = ROOT / "manifests" / "real_fan_benchmark_label_quality.csv"
 DEFAULT_CAPTURE_INVENTORY = ROOT / "manifests" / "real_partial_capture_inventory.csv"
 DEFAULT_CAPTURE_REQUIREMENTS = ROOT / "manifests" / "real_partial_capture_requirements.csv"
 DEFAULT_REAL_DATASET_CANDIDATES = ROOT / "runs" / "cashsnap" / "real_dataset_stress_candidates_latest.json"
+DEFAULT_GOVERNANCE = ROOT / "configs" / "synthetic_recipes" / "cashsnap_synthetic_governance_v1.json"
 
 RECIPE_STATUS_RANK = {
     "rejected_probe": -1,
@@ -107,6 +108,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--quality", type=Path, default=DEFAULT_QUALITY)
     parser.add_argument("--capture-inventory", type=Path, default=DEFAULT_CAPTURE_INVENTORY)
     parser.add_argument("--capture-requirements", type=Path, default=DEFAULT_CAPTURE_REQUIREMENTS)
+    parser.add_argument("--governance", type=Path, default=DEFAULT_GOVERNANCE)
     parser.add_argument(
         "--real-dataset-candidates",
         type=Path,
@@ -169,6 +171,71 @@ def file_fingerprint(path: Path) -> dict[str, Any]:
         row["sha256"] = file_sha256(resolved)
         row["size_bytes"] = resolved.stat().st_size
     return row
+
+
+def source_artifact_report(governance_path: Path) -> dict[str, Any]:
+    governance = read_json(governance_path)
+    required_ids = {
+        str(item).strip()
+        for item in governance.get("required_source_artifact_ids", [])
+        if str(item).strip()
+    }
+    rows = governance.get("source_artifacts", [])
+    if not isinstance(rows, list):
+        raise SystemExit("governance source_artifacts must be a list")
+
+    seen_ids: set[str] = set()
+    duplicate_ids: set[str] = set()
+    artifacts: list[dict[str, Any]] = []
+    blockers: list[str] = []
+
+    for row in rows:
+        if not isinstance(row, dict):
+            blockers.append("source_artifacts contains a non-object row")
+            continue
+        artifact_id = str(row.get("id", "")).strip()
+        if not artifact_id:
+            blockers.append("source_artifacts contains a row with missing id")
+            continue
+        if artifact_id in seen_ids:
+            duplicate_ids.add(artifact_id)
+        seen_ids.add(artifact_id)
+
+        path_text = str(row.get("path", "")).strip()
+        fingerprint = file_fingerprint(Path(path_text)) if path_text else {"path": "", "exists": False}
+        if artifact_id in required_ids and not fingerprint.get("exists"):
+            blockers.append(f"required source artifact missing: {artifact_id} ({path_text})")
+        artifacts.append(
+            {
+                "id": artifact_id,
+                "kind": row.get("kind", ""),
+                "path": path_text,
+                "required": artifact_id in required_ids,
+                "exists": bool(fingerprint.get("exists")),
+                "fingerprint": fingerprint,
+                "rights_status": row.get("rights_status", ""),
+                "release_policy": row.get("release_policy", ""),
+            }
+        )
+
+    missing_required_ids = sorted(required_ids - seen_ids)
+    duplicate_ids = sorted(duplicate_ids)
+    for artifact_id in missing_required_ids:
+        blockers.append(f"required source artifact id not declared: {artifact_id}")
+    for artifact_id in duplicate_ids:
+        blockers.append(f"duplicate source artifact id: {artifact_id}")
+
+    return {
+        "governance_path": repo_path(governance_path),
+        "governance_fingerprint": file_fingerprint(governance_path),
+        "required_ids": sorted(required_ids),
+        "missing_required_ids": missing_required_ids,
+        "duplicate_ids": duplicate_ids,
+        "artifact_count": len(artifacts),
+        "required_artifact_count": sum(1 for row in artifacts if row["required"]),
+        "blockers": blockers,
+        "artifacts": artifacts,
+    }
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
@@ -514,6 +581,8 @@ def main() -> int:
     capture_inventory = read_csv(args.capture_inventory)
     capture_requirements = read_csv(args.capture_requirements)
     real_dataset_candidates = read_optional_json(args.real_dataset_candidates)
+    source_artifacts = source_artifact_report(args.governance)
+    source_artifact_blockers = list(source_artifacts["blockers"])
 
     target_rows = targets.get("conditions", [])
     catalog_rows = catalog.get("recipes", [])
@@ -623,6 +692,7 @@ def main() -> int:
             "capture_inventory": file_fingerprint(args.capture_inventory),
             "capture_requirements": file_fingerprint(args.capture_requirements),
             "real_dataset_candidates": file_fingerprint(args.real_dataset_candidates),
+            "governance": file_fingerprint(args.governance),
         },
         "check_existing": args.check_existing,
         "required_conditions": len(required_reports),
@@ -651,8 +721,10 @@ def main() -> int:
             "scene_candidate_counts": real_dataset_candidates.get("scene_candidate_counts", {}),
             "scene_unique_origin_counts": real_dataset_candidates.get("scene_unique_origin_counts", {}),
         },
+        "source_artifacts": source_artifacts,
         "suite_package_reports": package_reports,
-        "ready_for_synthetic_scale": not blocked_required,
+        "ready_for_synthetic_scale": not blocked_required and not source_artifact_blockers,
+        "source_artifact_blockers": source_artifact_blockers,
         "blocked_required_conditions": [row["condition_id"] for row in blocked_required],
         "conditions": condition_reports,
     }
@@ -669,8 +741,13 @@ def main() -> int:
         f"trainable={len(trainable_required)} "
         f"real_role_ready={len(real_role_ready)}/{len(real_role_required)} "
         f"candidate_hints={len(candidate_hint_ready)}/{len(candidate_mapped_required)} "
-        f"usable_captures={len(usable_captures)}"
+        f"usable_captures={len(usable_captures)} "
+        f"source_artifact_blockers={len(source_artifact_blockers)}"
     )
+    for blocker in source_artifact_blockers[:4]:
+        print(f"source_artifact_blocker: {blocker}")
+    if len(source_artifact_blockers) > 4:
+        print(f"source_artifact_blocker: ... {len(source_artifact_blockers) - 4} more")
     for row in required_reports:
         blocker_suffix = f" blockers={len(row['blockers'])}" if row["blockers"] else ""
         print(
@@ -689,7 +766,7 @@ def main() -> int:
 
     if args.json_out is not None:
         print(f"wrote_json={repo_path(args.json_out)}")
-    if args.strict and blocked_required:
+    if args.strict and (blocked_required or source_artifact_blockers):
         raise SystemExit(1)
     return 0
 

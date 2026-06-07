@@ -10,12 +10,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from webgl_constants import WEBGL_NOTE_PRINT_TONE_POLICIES, WEBGL_OCCLUDER_POLICIES
+from webgl_constants import WEBGL_NOTE_CONDITION_POLICIES, WEBGL_NOTE_PRINT_TONE_POLICIES, WEBGL_OCCLUDER_POLICIES
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CATALOG = ROOT / "configs" / "synthetic_recipes" / "cashsnap_webgl_recipe_catalog_v1.json"
-NOTE_CONDITION_POLICIES = {"mixed", "pristine_only", "heavy_wear", "wet_stress"}
+NOTE_CONDITION_POLICIES = WEBGL_NOTE_CONDITION_POLICIES
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 CLASS_NAMES = [
     "USD_1",
@@ -204,6 +204,10 @@ def run_hard_negative_diversity_gate(root: Path, gate: dict[str, Any]) -> None:
     add_int_option(cmd, gate, "min_total_props", "--min-total-props")
     add_int_option(cmd, gate, "min_prop_kinds", "--min-prop-kinds")
     add_int_option(cmd, gate, "min_textured_props", "--min-textured-props")
+    for prop_kind in gate.get("require_prop_kinds", []):
+        cmd.extend(["--require-prop-kind", str(prop_kind)])
+    for hardness in gate.get("require_confusion_hardness", []):
+        cmd.extend(["--require-confusion-hardness", str(hardness)])
     if gate.get("require_zero_assets"):
         cmd.append("--require-zero-assets")
     run(cmd)
