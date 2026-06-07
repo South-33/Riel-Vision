@@ -431,8 +431,11 @@ Targeted branch status:
   train-only YAML self-eval, not real transfer: candidate synthetic self
   mAP50-95 `0.005647` vs baseline `0.005095` (`+0.000552`). Real CashSnap test
   validation of those weights was attempted and blocked immediately by RAM
-  (`~97%`, `~0.5GB` free). Do not cite the `320/b1` self-eval as transfer
-  proof; rerun real-test eval when memory headroom is available.
+  (`~97%`, `~0.5GB` free). A later retry after RAM recovered to `83.4%` still
+  tripped the guard when the `1,562` image test cache/eval loaded, even at
+  batch `1`. Do not cite the `320/b1` self-eval as transfer proof; rerun
+  real-test eval when memory headroom is available or add a bounded real-test
+  subset evaluator.
 - Fixed-step model A/B is not completed. b64/b32/b16/b8 attempts hit the 95%
   RAM guard while RunLong/Codex were resident. Also, one failed b64 attempt
   reused the old leader run name with the wrapper's real-clean default before
