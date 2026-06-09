@@ -595,6 +595,11 @@ row, with sheet `focus_review_packet_v1_sheet.jpg`. The script adds
 rows receive explicit accepted review decisions. Use this as the next review
 entrypoint before any overlap dose, and do not let flat front/back catalog pairs
 stand in for real overlap/fan anchors.
+`scripts/build_real_overlap_review_html.py` writes the local reviewer
+`runs/cashsnap/real_overlap_focus_review_packet_v1/focus_review_packet_v1_review.html`;
+open it in a browser, choose per-row routes, download
+`focus_review_packet_v1_reviewed.csv`, and pass that file to
+`scripts/materialize_real_overlap_review.py`.
 
 The same builder writes diagnostic route views, still not accepted materialized
 data: `suggested_eval_view_v1_data.yaml` (`11` held-out candidates),
