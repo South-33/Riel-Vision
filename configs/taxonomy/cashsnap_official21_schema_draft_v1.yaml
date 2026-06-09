@@ -1,0 +1,87 @@
+# Non-active draft schema for official/current USD + Khmer riel coverage.
+# Do not point training at this until labels, cutouts, and eval slices are migrated.
+schema: cashsnap_official21_schema_draft_v1
+status: draft_non_active
+class_scope: official_current_usd_khr
+source_artifacts:
+  taxonomy_gap_plan: runs/cashsnap/real_data_label_audit_v1/current_schema_unknown_khr100_eval_v1/currency_taxonomy_gap_plan_official_v1.json
+  candidate_cutout_audit: runs/cashsnap/real_data_label_audit_v1/current_schema_unknown_khr100_eval_v1/schema_expansion_candidate_cutout_audit_v1.json
+  current_schema_unknown_khr100_scorecard: runs/cashsnap/real_data_label_audit_v1/current_schema_unknown_khr100_eval_v1/light_scorecard_current_schema_unknown_khr100_v1.json
+nc: 21
+names:
+  0: USD_1
+  1: USD_2
+  2: USD_5
+  3: USD_10
+  4: USD_20
+  5: USD_50
+  6: USD_100
+  7: KHR_50
+  8: KHR_100
+  9: KHR_200
+  10: KHR_500
+  11: KHR_1000
+  12: KHR_2000
+  13: KHR_5000
+  14: KHR_10000
+  15: KHR_15000
+  16: KHR_20000
+  17: KHR_30000
+  18: KHR_50000
+  19: KHR_100000
+  20: KHR_200000
+current_core13_compat:
+  old_schema: data/cashsnap_v1/data.yaml
+  old_to_official21:
+    0: 0   # USD_1
+    1: 2   # USD_5
+    2: 3   # USD_10
+    3: 4   # USD_20
+    4: 5   # USD_50
+    5: 6   # USD_100
+    6: 10  # KHR_500
+    7: 11  # KHR_1000
+    8: 12  # KHR_2000
+    9: 13  # KHR_5000
+    10: 14 # KHR_10000
+    11: 16 # KHR_20000
+    12: 18 # KHR_50000
+  official21_to_old:
+    0: 0
+    2: 1
+    3: 2
+    4: 3
+    5: 4
+    6: 5
+    10: 6
+    11: 7
+    12: 8
+    13: 9
+    14: 10
+    16: 11
+    18: 12
+missing_from_current_core13:
+  - USD_2
+  - KHR_50
+  - KHR_100
+  - KHR_200
+  - KHR_15000
+  - KHR_30000
+  - KHR_100000
+  - KHR_200000
+candidate_cutout_status:
+  current_fullscope_candidate_ready:
+    - USD_2
+    - KHR_100
+    - KHR_200
+    - KHR_15000
+    - KHR_30000
+    - KHR_100000
+    - KHR_200000
+  needs_current_raw_or_status_review:
+    - KHR_50
+training_preconditions:
+  - Promote or explicitly approve candidate cutouts with rights/status review.
+  - Migrate labels through current_core13_compat instead of reusing old class ids.
+  - Build eval slices for missing official classes before comparing to 13-class AP.
+  - Decide whether current 13-class unknown rows become labeled classes or remain out-of-scope.

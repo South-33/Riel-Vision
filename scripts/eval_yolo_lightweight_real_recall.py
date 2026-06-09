@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -47,9 +47,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="0")
     parser.add_argument("--conf", type=float, default=0.05)
     parser.add_argument("--iou", type=float, default=0.50)
+    parser.add_argument(
+        "--nms-iou",
+        type=float,
+        default=None,
+        help="Optional YOLO prediction NMS IoU. Matching still uses --iou.",
+    )
     parser.add_argument("--max-images", type=int, default=0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--json-out", required=True, type=Path)
+    parser.add_argument(
+        "--ignore-pred-class",
+        action="append",
+        default=[],
+        help="Prediction class id or name to drop before matching. Repeat or comma-separate for product-filtered views.",
+    )
+    parser.add_argument(
+        "--class-min-conf",
+        action="append",
+        default=[],
+        help="Class-specific prediction confidence floor, e.g. KHR_50000=0.30. Repeat or comma-separate.",
+    )
     return parser.parse_args()
 
 
@@ -58,6 +76,44 @@ def load_config(path: Path) -> dict[str, Any]:
     if not isinstance(config, dict):
         raise SystemExit(f"YOLO data YAML must be a mapping: {repo_rel(path)}")
     return config
+
+
+def ignored_prediction_class_ids(raw_values: list[str], names: dict[int, str]) -> set[int]:
+    ignored: set[int] = set()
+    name_to_id = {name: class_id for class_id, name in names.items()}
+    for raw_value in raw_values:
+        for token in raw_value.replace(",", " ").split():
+            if token in name_to_id:
+                ignored.add(name_to_id[token])
+                continue
+            try:
+                ignored.add(int(token))
+            except ValueError as exc:
+                raise SystemExit(f"unknown --ignore-pred-class value: {token}") from exc
+    return ignored
+
+
+def class_min_conf_by_id(raw_values: list[str], names: dict[int, str]) -> dict[int, float]:
+    thresholds: dict[int, float] = {}
+    name_to_id = {name: class_id for class_id, name in names.items()}
+    for raw_value in raw_values:
+        for token in raw_value.replace(",", " ").split():
+            if "=" not in token:
+                raise SystemExit(f"--class-min-conf must look like CLASS=THRESHOLD, got {token!r}")
+            raw_class, raw_threshold = token.split("=", 1)
+            if raw_class in name_to_id:
+                class_id = name_to_id[raw_class]
+            else:
+                try:
+                    class_id = int(raw_class)
+                except ValueError as exc:
+                    raise SystemExit(f"unknown --class-min-conf class: {raw_class}") from exc
+            try:
+                threshold = float(raw_threshold)
+            except ValueError as exc:
+                raise SystemExit(f"invalid --class-min-conf threshold for {raw_class}: {raw_threshold}") from exc
+            thresholds[class_id] = threshold
+    return thresholds
 
 
 def data_root(config_path: Path, config: dict[str, Any]) -> Path:
@@ -239,6 +295,8 @@ def main() -> None:
     data_path = resolve(args.data)
     config = load_config(data_path)
     names = {int(key): str(value) for key, value in (config.get("names") or {}).items()}
+    ignored_pred_class_ids = ignored_prediction_class_ids(args.ignore_pred_class, names)
+    class_conf_thresholds = class_min_conf_by_id(args.class_min_conf, names)
     images = split_images(data_path, config, args.split)
     if args.max_images > 0:
         rng = random.Random(args.seed)
@@ -255,9 +313,23 @@ def main() -> None:
     background_images_with_fp = 0
     images_with_fp = 0
     total_predictions = 0
+    raw_total_predictions = 0
+    ignored_predictions = 0
+    ignored_predictions_by_class: Counter[int] = Counter()
+    ignored_predictions_by_source: Counter[str] = Counter()
+    ignored_background_predictions_by_source: Counter[str] = Counter()
+    ignored_predictions_by_source_class: dict[str, Counter[int]] = defaultdict(Counter)
+    thresholded_predictions = 0
+    thresholded_predictions_by_class: Counter[int] = Counter()
+    thresholded_predictions_by_source: Counter[str] = Counter()
+    thresholded_background_predictions_by_source: Counter[str] = Counter()
+    thresholded_predictions_by_source_class: dict[str, Counter[int]] = defaultdict(Counter)
     examples_with_fp: list[dict[str, Any]] = []
     examples_with_fn: list[dict[str, Any]] = []
     examples_with_large_fp: list[dict[str, Any]] = []
+    fp_examples_by_class: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    fn_examples_by_class: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    large_fp_examples_by_class: dict[int, list[dict[str, Any]]] = defaultdict(list)
     prediction_area_stats: dict[str, float | int] = {
         "count": 0,
         "sum": 0.0,
@@ -266,6 +338,13 @@ def main() -> None:
         "full_ge_90pct": 0,
     }
     fp_area_stats: dict[str, float | int] = {
+        "count": 0,
+        "sum": 0.0,
+        "max": 0.0,
+        "large_ge_50pct": 0,
+        "full_ge_90pct": 0,
+    }
+    ignored_prediction_area_stats: dict[str, float | int] = {
         "count": 0,
         "sum": 0.0,
         "max": 0.0,
@@ -286,6 +365,7 @@ def main() -> None:
             source=[str(path) for path in batch],
             imgsz=args.imgsz,
             conf=args.conf,
+            iou=args.nms_iou if args.nms_iou is not None else 0.7,
             batch=len(batch),
             device=args.device,
             verbose=False,
@@ -310,12 +390,31 @@ def main() -> None:
                 cls = result.boxes.cls.cpu().numpy()
                 conf = result.boxes.conf.cpu().numpy()
                 for box, class_id, score in zip(xyxy, cls, conf):
+                    raw_total_predictions += 1
+                    class_id = int(class_id)
                     xyxy_box = [float(value) for value in box.tolist()]
                     area_ratio = box_area_ratio(xyxy_box, image_size)
+                    if class_id in ignored_pred_class_ids:
+                        ignored_predictions += 1
+                        ignored_predictions_by_class[class_id] += 1
+                        ignored_predictions_by_source[source_group] += 1
+                        ignored_predictions_by_source_class[source_group][class_id] += 1
+                        if not labels:
+                            ignored_background_predictions_by_source[source_group] += 1
+                        update_area_stats(ignored_prediction_area_stats, area_ratio)
+                        continue
+                    if class_id in class_conf_thresholds and float(score) < class_conf_thresholds[class_id]:
+                        thresholded_predictions += 1
+                        thresholded_predictions_by_class[class_id] += 1
+                        thresholded_predictions_by_source[source_group] += 1
+                        thresholded_predictions_by_source_class[source_group][class_id] += 1
+                        if not labels:
+                            thresholded_background_predictions_by_source[source_group] += 1
+                        continue
                     update_area_stats(prediction_area_stats, area_ratio)
                     predictions.append(
                         {
-                            "class_id": int(class_id),
+                            "class_id": class_id,
                             "confidence": float(score),
                             "xyxy": xyxy_box,
                             "area_ratio": area_ratio,
@@ -324,11 +423,30 @@ def main() -> None:
             total_predictions += len(predictions)
             tp, fn, false_predictions = match_predictions(labels, predictions, args.iou)
             for prediction in false_predictions:
-                fp_by_class[int(prediction["class_id"])] += 1
+                fp_class_id = int(prediction["class_id"])
+                fp_by_class[fp_class_id] += 1
                 source_fp[source_group] += 1
                 update_area_stats(fp_area_stats, float(prediction.get("area_ratio", 0.0)))
+                if len(fp_examples_by_class[fp_class_id]) < 12:
+                    fp_examples_by_class[fp_class_id].append(
+                        {
+                            "image": repo_rel(image_path),
+                            "source_group": source_group,
+                            "labels": labels,
+                            "false_predictions": [prediction],
+                        }
+                    )
                 if float(prediction.get("area_ratio", 0.0)) >= 0.50 and len(examples_with_large_fp) < 30:
                     examples_with_large_fp.append(
+                        {
+                            "image": repo_rel(image_path),
+                            "source_group": source_group,
+                            "labels": labels,
+                            "false_prediction": prediction,
+                        }
+                    )
+                if float(prediction.get("area_ratio", 0.0)) >= 0.50 and len(large_fp_examples_by_class[fp_class_id]) < 12:
+                    large_fp_examples_by_class[fp_class_id].append(
                         {
                             "image": repo_rel(image_path),
                             "source_group": source_group,
@@ -391,6 +509,24 @@ def main() -> None:
                         "predictions": predictions[:5],
                     }
                 )
+            if fn:
+                missed_labels = [
+                    label
+                    for index, label in enumerate(labels)
+                    if index not in matched_label_indices
+                ]
+                for label in missed_labels:
+                    fn_class_id = int(label["class_id"])
+                    if len(fn_examples_by_class[fn_class_id]) >= 12:
+                        continue
+                    fn_examples_by_class[fn_class_id].append(
+                        {
+                            "image": repo_rel(image_path),
+                            "source_group": source_group,
+                            "missed_labels": [label],
+                            "predictions": predictions[:5],
+                        }
+                    )
 
     per_class = {}
     for class_id in sorted(set(gt_by_class) | set(tp_by_class) | set(fp_by_class) | set(fn_by_class)):
@@ -437,10 +573,43 @@ def main() -> None:
         "imgsz": args.imgsz,
         "conf": args.conf,
         "iou": args.iou,
+        "nms_iou": args.nms_iou if args.nms_iou is not None else 0.7,
+        "ignored_pred_class_ids": sorted(ignored_pred_class_ids),
+        "ignored_pred_class_names": [names.get(class_id, str(class_id)) for class_id in sorted(ignored_pred_class_ids)],
+        "class_min_conf": {
+            names.get(class_id, str(class_id)): threshold for class_id, threshold in sorted(class_conf_thresholds.items())
+        },
         "images": len(images),
         "background_images": background_images,
         "background_images_with_fp": background_images_with_fp,
         "images_with_fp": images_with_fp,
+        "raw_total_predictions": raw_total_predictions,
+        "ignored_predictions": ignored_predictions,
+        "ignored_predictions_by_class": {
+            names.get(class_id, str(class_id)): count for class_id, count in sorted(ignored_predictions_by_class.items())
+        },
+        "ignored_predictions_by_source": dict(sorted(ignored_predictions_by_source.items())),
+        "ignored_background_predictions_by_source": dict(sorted(ignored_background_predictions_by_source.items())),
+        "ignored_predictions_by_source_class": {
+            source_group: {
+                names.get(class_id, str(class_id)): count
+                for class_id, count in sorted(class_counts.items())
+            }
+            for source_group, class_counts in sorted(ignored_predictions_by_source_class.items())
+        },
+        "thresholded_predictions": thresholded_predictions,
+        "thresholded_predictions_by_class": {
+            names.get(class_id, str(class_id)): count for class_id, count in sorted(thresholded_predictions_by_class.items())
+        },
+        "thresholded_predictions_by_source": dict(sorted(thresholded_predictions_by_source.items())),
+        "thresholded_background_predictions_by_source": dict(sorted(thresholded_background_predictions_by_source.items())),
+        "thresholded_predictions_by_source_class": {
+            source_group: {
+                names.get(class_id, str(class_id)): count
+                for class_id, count in sorted(class_counts.items())
+            }
+            for source_group, class_counts in sorted(thresholded_predictions_by_source_class.items())
+        },
         "total_predictions": total_predictions,
         "gt": int(total_gt),
         "tp": int(total_tp),
@@ -451,10 +620,20 @@ def main() -> None:
         "per_class": per_class,
         "per_source": per_source,
         "prediction_area_stats": finalize_area_stats(prediction_area_stats),
+        "ignored_prediction_area_stats": finalize_area_stats(ignored_prediction_area_stats),
         "fp_area_stats": finalize_area_stats(fp_area_stats),
         "fp_examples": examples_with_fp,
         "fn_examples": examples_with_fn,
         "large_fp_examples": examples_with_large_fp,
+        "fp_examples_by_class": {
+            names.get(class_id, str(class_id)): rows for class_id, rows in sorted(fp_examples_by_class.items())
+        },
+        "fn_examples_by_class": {
+            names.get(class_id, str(class_id)): rows for class_id, rows in sorted(fn_examples_by_class.items())
+        },
+        "large_fp_examples_by_class": {
+            names.get(class_id, str(class_id)): rows for class_id, rows in sorted(large_fp_examples_by_class.items())
+        },
     }
     out_path = resolve(args.json_out)
     out_path.parent.mkdir(parents=True, exist_ok=True)

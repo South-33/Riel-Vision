@@ -9,7 +9,6 @@ import json
 import math
 import re
 import shutil
-import tempfile
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
@@ -104,6 +103,12 @@ def parse_model(value: str) -> tuple[str, Path]:
 
 def parse_focus_classes(value: str) -> set[str]:
     return {item.strip() for item in re.split(r"[,\s]+", value) if item.strip()}
+
+
+def batched(items: list[Path], size: int):
+    step = max(1, size)
+    for index in range(0, len(items), step):
+        yield items[index : index + step]
 
 
 def read_names(config: dict[str, Any]) -> dict[int, str]:
@@ -423,22 +428,22 @@ def run_model_split(
         "error_types": Counter(),
         "wrong_class_pairs": Counter(),
     }
-    with tempfile.TemporaryDirectory(prefix="cashsnap_positive_error_") as tmp_dir:
-        source_file = Path(tmp_dir) / "images.txt"
-        source_file.write_text("\n".join(path.resolve().as_posix() for path in images) + "\n", encoding="utf-8")
+    for batch in batched(images, args.batch):
         results = model.predict(
-            source=str(source_file),
+            source=[str(path) for path in batch],
             imgsz=args.imgsz,
-            batch=args.batch,
+            batch=len(batch),
             conf=args.conf,
             iou=args.pred_iou,
             max_det=args.max_det,
             device=args.device,
             verbose=False,
             save=False,
-            stream=True,
         )
-        for image_path, result in zip(images, results, strict=True):
+        if len(results) != len(batch):
+            raise RuntimeError(f"model returned {len(results)} results for {len(batch)} input images")
+        for image_path, result in zip(batch, results, strict=True):
+            image_path = image_path.resolve()
             with Image.open(image_path) as image:
                 image_size = image.size
             gt_rows = read_gt_boxes(image_path, dataset_names, image_size)
