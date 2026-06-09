@@ -606,6 +606,17 @@ versus `9/16` TP, `16` FP, so the champion is quieter but loses one TP
 hole survives flat-source removal: `48/60` TP, `39` FP versus `41/60` TP, `29`
 FP, led by `KHR_5000` (`11/12 -> 5/12`). This makes reviewed `KHR_5000`
 overlap/fan anchors the highest-value train-side question.
+
+Real capture bridge status: `scripts/check_capture_requirements.py` currently
+reports `0` inventory rows and writes
+`runs/cashsnap/real_capture_requirements_latest.json` plus
+`runs/cashsnap/real_capture_shot_list_latest.md`. The P1 capture gaps align with
+the model bottleneck: `hand_fan`, `khr_5000_face_number_overlap`,
+`thin_slice_khr_5000`, `mixed_usd_khr_rare_common`, hard `KHR_50000` partials,
+and no-note/non-banknote hard negatives. `scripts/init_capture_inbox.py
+--write-guides` created ignored drop folders under
+`data/inbox/real_partial_photos/`; use those real phone captures, then register
+and review them, before any new overlap/fan training dose.
 Threshold probing on the same packet says this is not fixed by a simple global
 confidence knob: champion `conf=0.05` gives recall/precision `0.7688/0.6245`,
 `0.03` gives `0.8172/0.5547`, `0.02` gives `0.8333/0.4874`, and `0.01` gives
