@@ -502,6 +502,63 @@ training data and not a promotion set. Rows need visual decisions such as
 `exclude_duplicate_or_flat` before they can become an eval bridge or
 half-synthetic anchors.
 
+The first balanced review packet is
+`runs/cashsnap/real_overlap_review_queue_v1/first_review_clusters_balanced_v1.csv`
+with sheet
+`runs/cashsnap/real_overlap_review_queue_v1/first_review_clusters_balanced_v1_sheet.jpg`.
+The queue builder also writes
+`first_review_clusters_balanced_v1_images.txt` and diagnostic
+`first_review_clusters_balanced_v1_data.yaml` so model-error review can run over
+the packet without hand-built configs.
+After review, materialize it through
+`scripts/materialize_real_overlap_review.py`: it ignores blank rows, fails by
+default when nothing reviewed is materialized, and only writes empty dry
+manifests with `--allow-empty`. Default materialization keeps
+`trusted_overlap_eval` representative-only and held out to val/test, while
+`train_anchor_candidate` and `hard_negative_context` expand only train variants.
+Smoke check
+`runs/cashsnap/real_overlap_review_materialized_smoke_v1/summary.json`
+materialized `2` reviewed clusters into `4` images (`3` train anchors and `1`
+held-out eval representative) and wrote diagnostic YOLO views including
+`active_eval_data.yaml` for `eval_yolo_lightweight_real_recall.py --split test`.
+Mock-materializing the unreviewed `val_test_multi_note_smoke` packet through the
+same bridge reproduced the old 5-image recall (`7/11 = 0.6364`) for the current
+p24 synth+real champion, with precision `0.3684` (`12` FP). Against balanced
+real p24 on the same bridge, aggregate recall ties and FP drops by `1`, but the
+scorecard still fails per-class because the single `KHR_1000` GT goes from
+`1/1` to `0/1`; tiny sample, useful warning. This verifies the bridge plumbing,
+not model promotion. Visual error triage is in
+`runs/cashsnap/real_overlap_review_materialized_valtest_mock_v1/positive_error_review_balanced_vs_champion/`;
+use it to inspect KHR partial/fan denomination confusions before designing any
+new overlap dose. `scripts/merge_overlap_review_model_errors.py` can merge those
+error rows back into a review CSV; the mock merge wrote
+`runs/cashsnap/real_overlap_review_queue_v1/first_review_clusters_balanced_v1_model_error_triage_mock.csv`
+with `4/120` rows carrying model-error triage columns.
+Scoring the old WebGL stack/fan cap6 and real-crop fan48 checkpoints through the
+same 5-image mock bridge did not revive them: both tie champion recall at
+`0.6364` but add `+1` FP/prediction and fail the scorecard
+`runs/cashsnap/real_overlap_review_materialized_valtest_mock_v1/scorecard_champion_vs_old_overlap_candidates_valtest_mock.json`.
+Full first-packet diagnostic triage over all 120 images sharpened the current
+bottleneck: balanced-real p24 has `157/186` TP, `288` predictions, `18` missed
+GT, `120` unmatched FP, and `11` wrong-class errors; p24 synth+real has
+`143/186` TP, `229` predictions, `32` missed GT, `75` unmatched FP, and `11`
+wrong-class errors, with weak `KHR_5000` recall (`5/12`). The merged triage CSV
+`runs/cashsnap/real_overlap_review_queue_v1/first_review_clusters_balanced_v1_model_error_triage.csv`
+annotates `79/120` first-packet rows. Read: the champion is quieter but may be
+less recall-safe on review-heavy overlap/partial candidates, so the next dose
+must not optimize only FP reduction.
+Threshold probing on the same packet says this is not fixed by a simple global
+confidence knob: champion `conf=0.05` gives recall/precision `0.7688/0.6245`,
+`0.03` gives `0.8172/0.5547`, `0.02` gives `0.8333/0.4874`, and `0.01` gives
+`0.8763/0.3638`, versus balanced-real p24 at `0.8441/0.5451` for `conf=0.05`.
+Lowering only `KHR_5000` to the `0.01` floor recovers little (`0.7849/0.6160`);
+lowering the weak set (`KHR_1000`, `KHR_5000`, `KHR_10000`, `USD_20`, `USD_5`)
+gets to `0.8333/0.5065` but creates heavy `KHR_1000/KHR_10000` FP pressure.
+Use thresholds as diagnostics/product knobs only; the training/data issue is
+recall-safe overlap/partial evidence without uncontrolled FP expansion.
+Do not train or promote from the queue before review and this strict
+materialization step.
+
 Audit-clean sourcecap48 real p24 proves data trust/source diversity can rival
 the synth+real detector without adding synthetic rows. Config:
 `configs/audit/cashsnap_v1_auditclean_real_p24_bg24_sourcecap48_v1.yaml`, built

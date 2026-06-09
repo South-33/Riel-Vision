@@ -7,6 +7,7 @@ import argparse
 import csv
 import json
 import math
+import os
 import re
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
@@ -39,6 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tight-gap", type=float, default=0.035)
     parser.add_argument("--overlap-small-ratio", type=float, default=0.01)
     parser.add_argument("--top-k", type=int, default=400)
+    parser.add_argument("--first-packet-items", type=int, default=120)
     parser.add_argument("--sheet-items", type=int, default=120)
     parser.add_argument("--thumb-width", type=int, default=240)
     parser.add_argument("--cols", type=int, default=5)
@@ -56,6 +58,10 @@ def repo_rel(path: Path) -> str:
         return resolved.relative_to(ROOT).as_posix()
     except ValueError:
         return resolved.as_posix()
+
+
+def rel_between(from_dir: Path, target: Path) -> str:
+    return os.path.relpath(target.resolve(), from_dir.resolve()).replace("\\", "/")
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -313,6 +319,7 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "canonical_key",
         "variant_count",
         "variant_splits",
+        "packet_bucket",
         "image",
         "boxes",
         "unique_classes",
@@ -342,6 +349,23 @@ def write_list(path: Path, images: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     unique = list(dict.fromkeys(images))
     path.write_text("\n".join(unique) + ("\n" if unique else ""), encoding="utf-8")
+
+
+def write_review_data_yaml(path: Path, image_list: Path, base_config: dict[str, Any]) -> None:
+    payload = {
+        "path": rel_between(path.parent, ROOT),
+        "train": repo_rel(image_list),
+        "val": repo_rel(image_list),
+        "test": repo_rel(image_list),
+        "names": base_config.get("names", {}),
+        "cashsnap_diagnostic": {
+            "purpose": "Diagnostic YOLO view for real overlap review packet model-error triage.",
+            "source_review_packet": repo_rel(image_list),
+            "not_a_promotion_config": True,
+        },
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
 
 
 def build_clusters(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -379,6 +403,69 @@ def build_clusters(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         reverse=True,
     )
     return clusters
+
+
+def tags_for_row(row: dict[str, Any]) -> set[str]:
+    return {tag for tag in str(row.get("tags", "")).split(",") if tag}
+
+
+def select_first_packet(cluster_rows: list[dict[str, Any]], max_items: int) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = []
+    selected_keys: set[str] = set()
+
+    def add_bucket(name: str, cap: int, predicate) -> None:
+        per_source: Counter[str] = Counter()
+        source_cap = max(3, math.ceil(cap / 2))
+        for row in cluster_rows:
+            if len(selected) >= max_items:
+                return
+            if sum(1 for item in selected if item.get("packet_bucket") == name) >= cap:
+                return
+            key = str(row["canonical_key"])
+            source = str(row["source_group"])
+            if key in selected_keys or per_source[source] >= source_cap:
+                continue
+            if not predicate(row, tags_for_row(row)):
+                continue
+            copy = dict(row)
+            copy["packet_bucket"] = name
+            selected.append(copy)
+            selected_keys.add(key)
+            per_source[source] += 1
+
+    add_bucket(
+        "val_test_multi_note_smoke",
+        12,
+        lambda row, tags: row["split"] in {"val", "test"} and "multi_note" in tags,
+    )
+    add_bucket(
+        "protected_riel_overlap",
+        18,
+        lambda row, tags: "protected_riel" in tags and ("multi_note" in tags or "tight_pair" in tags),
+    )
+    add_bucket("bbox_overlap", 20, lambda row, tags: "bbox_overlap" in tags)
+    add_bucket("tight_pair", 20, lambda row, tags: "tight_pair" in tags)
+    add_bucket(
+        "cashcountingxl_usd_context",
+        16,
+        lambda row, tags: row["source_group"] == "cashcountingxl" and ("multi_note" in tags or "partial_edge" in tags),
+    )
+    add_bucket(
+        "khr_real_context",
+        20,
+        lambda row, tags: row["source_group"] in {"khmer", "cambodia_currency_project"} and "multi_note" in tags,
+    )
+    add_bucket(
+        "source_balanced_partial_edge",
+        24,
+        lambda row, tags: "partial_edge" in tags and "multi_note" not in tags,
+    )
+    add_bucket(
+        "remaining_overlap_candidates",
+        max_items,
+        lambda row, tags: bool(tags & {"multi_note", "bbox_overlap", "tight_pair", "protected_riel"}),
+    )
+    return selected[:max_items]
 
 
 def scale_box(label: dict[str, Any], source_size: tuple[int, int], target_size: tuple[int, int]) -> tuple[int, int, int, int]:
@@ -434,7 +521,7 @@ def draw_sheet(path: Path, rows: list[dict[str, Any]], *, items: int, thumb_widt
             f"{row['split']} {row['source_group']} p={row['priority']}",
             f"boxes={row['boxes']} vars={row.get('variant_count', 1)} gap={row['min_gap']}",
             f"ov={row['max_intersection_small_ratio']} {str(row['canonical_key'])[:28]}",
-            str(row["tags"])[:52],
+            str(row.get("packet_bucket") or row["tags"])[:52],
         ]
         for line_no, text in enumerate(caption):
             draw.text((tile_x + 4, tile_y + thumb_height + 3 + line_no * 17), text, fill=(20, 20, 20), font=font)
@@ -514,6 +601,21 @@ def main() -> int:
         thumb_width=args.thumb_width,
         cols=args.cols,
     )
+    first_packet_rows = select_first_packet(cluster_rows, args.first_packet_items)
+    first_packet_csv_path = out_dir / "first_review_clusters_balanced_v1.csv"
+    write_csv(first_packet_csv_path, first_packet_rows)
+    first_packet_list_path = out_dir / "first_review_clusters_balanced_v1_images.txt"
+    write_list(first_packet_list_path, [str(row["image"]) for row in first_packet_rows])
+    first_packet_data_yaml_path = out_dir / "first_review_clusters_balanced_v1_data.yaml"
+    write_review_data_yaml(first_packet_data_yaml_path, first_packet_list_path, config)
+    first_packet_sheet_path = out_dir / "first_review_clusters_balanced_v1_sheet.jpg"
+    draw_sheet(
+        first_packet_sheet_path,
+        first_packet_rows,
+        items=min(args.sheet_items, args.first_packet_items),
+        thumb_width=args.thumb_width,
+        cols=args.cols,
+    )
 
     list_paths: dict[str, str] = {}
     for tag in sorted(tag_counts):
@@ -531,12 +633,18 @@ def main() -> int:
         "review_queue_sheet": repo_rel(sheet_path),
         "review_clusters_csv": repo_rel(cluster_csv_path),
         "review_clusters_sheet": repo_rel(cluster_sheet_path),
+        "first_review_clusters_csv": repo_rel(first_packet_csv_path),
+        "first_review_clusters_images": repo_rel(first_packet_list_path),
+        "first_review_clusters_data_yaml": repo_rel(first_packet_data_yaml_path),
+        "first_review_clusters_sheet": repo_rel(first_packet_sheet_path),
         "list_paths": list_paths,
         "splits": split_counts,
         "queued_images": len(rows),
         "queued_clusters": len(cluster_rows),
         "review_rows_written": len(review_rows),
         "review_clusters_written": len(review_clusters),
+        "first_review_clusters_written": len(first_packet_rows),
+        "first_review_bucket_counts": dict(Counter(str(row.get("packet_bucket", "")) for row in first_packet_rows).most_common()),
         "tag_counts": dict(tag_counts.most_common()),
         "cluster_tag_counts": dict(
             Counter(
