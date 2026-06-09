@@ -509,7 +509,11 @@ with sheet
 The queue builder also writes
 `first_review_clusters_balanced_v1_images.txt` and diagnostic
 `first_review_clusters_balanced_v1_data.yaml` so model-error review can run over
-the packet without hand-built configs.
+the packet without hand-built configs. `scripts/build_real_overlap_review_diagnostic_views.py`
+then splits an annotated review CSV into representative-only diagnostic YOLO
+views by held-out split and packet bucket; these views are still not promotion
+configs, but they prevent train-row triage from being confused with held-out
+evidence.
 After review, materialize it through
 `scripts/materialize_real_overlap_review.py`: it ignores blank rows, fails by
 default when nothing reviewed is materialized, and only writes empty dry
@@ -538,15 +542,36 @@ Scoring the old WebGL stack/fan cap6 and real-crop fan48 checkpoints through the
 same 5-image mock bridge did not revive them: both tie champion recall at
 `0.6364` but add `+1` FP/prediction and fail the scorecard
 `runs/cashsnap/real_overlap_review_materialized_valtest_mock_v1/scorecard_champion_vs_old_overlap_candidates_valtest_mock.json`.
-Full first-packet diagnostic triage over all 120 images sharpened the current
-bottleneck: balanced-real p24 has `157/186` TP, `288` predictions, `18` missed
-GT, `120` unmatched FP, and `11` wrong-class errors; p24 synth+real has
-`143/186` TP, `229` predictions, `32` missed GT, `75` unmatched FP, and `11`
-wrong-class errors, with weak `KHR_5000` recall (`5/12`). The merged triage CSV
+Full first-packet diagnostic triage over all 120 images remains useful but is
+split-mixed, not a held-out verdict: balanced-real p24 has `157/186` TP, `288`
+predictions, `18` missed GT, `120` unmatched FP, and `11` wrong-class errors;
+p24 synth+real has `143/186` TP, `229` predictions, `32` missed GT, `75`
+unmatched FP, and `11` wrong-class errors, with weak `KHR_5000` recall (`5/12`).
+The merged triage CSV
 `runs/cashsnap/real_overlap_review_queue_v1/first_review_clusters_balanced_v1_model_error_triage.csv`
-annotates `79/120` first-packet rows. Read: the champion is quieter but may be
-less recall-safe on review-heavy overlap/partial candidates, so the next dose
-must not optimize only FP reduction.
+annotates `79/120` first-packet rows.
+
+Diagnostic split views under
+`runs/cashsnap/real_overlap_review_diagnostic_views_v1/` correct the read. On
+held-out representatives (`64` val/test images, `70` boxes), balanced-real and
+p24 synth+real both hit `62/70` TP (`0.8857` recall), while p24 synth+real is
+quieter (`40` FP vs `62`, precision `0.6078` vs `0.5000`). The held-out
+model-error subset also ties recall (`33/41`) with fewer p24 synth+real FPs
+(`40` vs `62`). The scorecard still fails per-class on tiny pockets
+(`KHR_1000`/`USD_5` one-box drops and `KHR_50000` `17/19 -> 16/19` on the
+held-out error subset), so this is not promotion evidence.
+
+The real recall hole is train-only hard geometry that still needs visual
+review/materialization before training: train representatives are `95/116` TP
+for balanced-real versus `81/116` for p24 synth+real; bbox-overlap is `28/37 ->
+24/37`, tight-pair is `36/41 -> 27/41`, and the worst class pockets include
+`KHR_5000` plus USD tight-pair rows such as `USD_20`. Held-out partial-edge and
+remaining-overlap views are recall-safe or better for p24 synth+real; the small
+held-out cashcountingxl USD context remains a recall warning (`5/7 -> 4/7`,
+with fewer FPs). Read: do not train or promote from the unreviewed queue, and do
+not treat the all-120 diagnostic as a held-out failure. The next detector dose
+needs reviewed bbox/tight-pair train anchors and a reviewed USD cash-counting
+eval pocket, while preserving the champion's lower FP behavior.
 Threshold probing on the same packet says this is not fixed by a simple global
 confidence knob: champion `conf=0.05` gives recall/precision `0.7688/0.6245`,
 `0.03` gives `0.8172/0.5547`, `0.02` gives `0.8333/0.4874`, and `0.01` gives
