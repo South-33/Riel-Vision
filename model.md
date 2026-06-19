@@ -730,7 +730,6 @@ Documentation:
 
 Runtime and harness:
 - Work on `master` unless the user asks for a branch.
-- Prefer `rl` command prefixes in RunLong.
 - Use repo-local runtime storage through `scripts/local_runtime.py`.
 - Keep YOLO train/eval caches and generated outputs under repo-local ignored
   paths.
@@ -738,7 +737,7 @@ Runtime and harness:
   Ultralytics/Torch-heavy imports in ML entry points.
 - YOLO promotion posture: train/eval `cache=false`; use `workers=0` for train on
   this laptop unless explicitly running a heavier parity pass.
-- Run long/big training, rendering, and broad eval jobs through the headroom
+- Run big training, rendering, and broad eval jobs through the headroom
   guard (`scripts/run_with_headroom.py`, or `scripts/bench_train_with_headroom.py`
   for YOLO training). Prefer `--memory-clean-preset memreduct`; it triggers the
   installed COM task path `memreductTask=-clean` for
@@ -778,9 +777,9 @@ Runtime and harness:
 Canonical checks:
 
 ```powershell
-rl python scripts\check_currency_taxonomy_coverage.py
-rl python scripts\check_data_lifecycle_registry.py
-rl python scripts\check_synthetic_pipeline_readiness.py --check-existing --json-out runs\cashsnap\synthetic_pipeline_readiness_latest.json
-rl python scripts\check_webgl_trainable_candidate_suite.py --check-existing
-rl python scripts\check_yolo_transfer_guardrails.py --help
+python scripts\check_currency_taxonomy_coverage.py
+python scripts\check_data_lifecycle_registry.py
+python scripts\check_synthetic_pipeline_readiness.py --check-existing --json-out runs\cashsnap\synthetic_pipeline_readiness_latest.json
+python scripts\check_webgl_trainable_candidate_suite.py --check-existing
+python scripts\check_yolo_transfer_guardrails.py --help
 ```
