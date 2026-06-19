@@ -9,6 +9,12 @@ from yolo_data_config import resolve_ultralytics_data_yaml
 
 configure_project_cache()
 
+# Monkey-patch BaseDataset.check_cache_ram to always return True.
+# This forces RAM caching of our pre-resized imgsz=416 images (requiring ~6.5 GB),
+# avoiding the conservative 50% safety margin check that skips caching on this 16 GB laptop.
+from ultralytics.data.base import BaseDataset
+BaseDataset.check_cache_ram = lambda self, safety_margin=0.5: True
+
 from ultralytics import YOLO
 
 
@@ -106,6 +112,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-plots", action="store_true", help="Skip Ultralytics training plots.")
     parser.add_argument("--exist-ok", action="store_true", help="Allow reusing an existing run directory.")
     parser.add_argument("--quiet", action="store_true", help="Reduce Ultralytics training log output.")
+    parser.add_argument("--resume", action="store_true", help="Resume training from last.pt checkpoint in the run directory.")
     return parser.parse_args()
 
 
@@ -158,6 +165,7 @@ def main() -> None:
         "fraction": args.fraction,
         "cache": parse_cache(args.cache),
         "exist_ok": args.exist_ok,
+        "resume": args.resume,
         "verbose": not args.quiet,
     }
     train_args["device"] = args.device
@@ -201,7 +209,7 @@ def main() -> None:
         if value is not None:
             train_args[key] = value
 
-    if args.no_val and args.exist_ok:
+    if args.no_val and args.exist_ok and not args.resume:
         remove_stale_no_val_checkpoints(project_path, args.name)
 
     model = YOLO(resolve_local_model(args.model))

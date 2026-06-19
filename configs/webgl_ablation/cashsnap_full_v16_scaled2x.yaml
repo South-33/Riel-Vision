@@ -1,0 +1,72 @@
+path: ../..
+train: configs/generated_lists/webgl_ablation/cashsnap_full_v16_scaled2x_train.txt
+val: data/cashsnap_v1/images/val
+test: data/cashsnap_v1/images/test
+names:
+  0: USD_1
+  1: USD_5
+  2: USD_10
+  3: USD_20
+  4: USD_50
+  5: USD_100
+  6: KHR_500
+  7: KHR_1000
+  8: KHR_2000
+  9: KHR_5000
+  10: KHR_10000
+  11: KHR_20000
+  12: KHR_50000
+cashsnap_production_pilot:
+  schema: cashsnap_production_pilot_config_v1
+  tag: cashsnap_production_pilot_full_v16_scaled2x_from_base
+  base_reference_config: configs/webgl_ablation/cashsnap_production_pilot_v16_scaled2x.yaml
+  recommended_init_checkpoint: yolo26n.pt
+  component_sources:
+    full_real_images:
+    - configs/generated_lists/cashsnap_v1_full_real_only_seed_train.txt
+    custom_real_crops:
+    - configs/generated_lists/webgl_ablation/cashsnap_production_pilot_v2_hardneg_guard_train.txt
+    strictbest_synth_replay:
+    - data/synthetic/cashsnap_webgl_clean_base_candidate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_overlap_stack_candidate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_fan_fullschema_candidate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_hand_occlusion_candidate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_thin_edge_partial_candidate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_hard_negative_diversity_catalog_gate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_back_side_confusion_candidate_v1_scaled4x/images/train
+  summary:
+    seed: 20260611
+    rows: 15420
+    unique_rows: 14860
+    duplicate_exposures: 560
+    empty_rows: 6950
+    class_counts:
+      USD_1: 1070
+      USD_5: 1036
+      USD_10: 1296
+      USD_20: 1177
+      USD_50: 1195
+      USD_100: 1253
+      KHR_500: 795
+      KHR_1000: 1071
+      KHR_2000: 423
+      KHR_5000: 1127
+      KHR_10000: 758
+      KHR_20000: 609
+      KHR_50000: 310
+    strict_synth_unique: 560
+    strict_synth_repeated_exposures: 1120
+  label_policy:
+  - Train from existing train-split/list-backed rows only; no new data root is introduced.
+  - Human-countable partial positives are allowed; unreviewed corner_*.vis0p5 rows
+    are blocked.
+  - Hard-negative rows must be zero-label train-split rows.
+  - Eval/failure-slice-mined rows are kept out of hard-negative training unless they
+    are train-split analogs.
+cashsnap_policy:
+  intended_use: 'Base training recipe: full 14,036 real + 264 custom real crops +
+    WebGL synthetic candidates at scaled 2x from base yolo26n.pt.'
+  promotion_rule: Compare against the p24 synth+real champion and p24 vis70 clue on
+    full real, strict clean, source-excluded clean, filtered countable partial, source-FP
+    review queue, hard-slice count/value, and per-class guards; kill if gains come
+    from duplicate or wrong-denomination boxes.

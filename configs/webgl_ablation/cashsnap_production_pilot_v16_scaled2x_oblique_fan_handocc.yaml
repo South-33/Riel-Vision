@@ -1,0 +1,31 @@
+path: ../..
+train: configs/generated_lists/webgl_ablation/cashsnap_production_pilot_v16_scaled2x_oblique_fan_handocc_train.txt
+val: data/cashsnap_v1/images/val
+test: data/cashsnap_v1/images/test
+names:
+  0: USD_1
+  1: USD_5
+  2: USD_10
+  3: USD_20
+  4: USD_50
+  5: USD_100
+  6: KHR_500
+  7: KHR_1000
+  8: KHR_2000
+  9: KHR_5000
+  10: KHR_10000
+  11: KHR_20000
+  12: KHR_50000
+cashsnap_production_pilot:
+  schema: cashsnap_production_pilot_config_v1
+  tag: cashsnap_production_pilot_v16_scaled2x_oblique_fan_handocc
+  base_reference_config: configs/webgl_ablation/cashsnap_production_pilot_v16_scaled2x_oblique_fan.yaml
+  recommended_init_checkpoint: runs/cashsnap/cashsnap_v16_oblique_fan_finetune/weights/best.pt
+  component_sources:
+    inherited_oblique_fan_mix:
+    - configs/generated_lists/webgl_ablation/cashsnap_production_pilot_v16_scaled2x_oblique_fan_train.txt
+    hard_oblique_hand_occlusion_training:
+    - data/synthetic/cashsnap_webgl_hard_oblique_hand_occlusion_candidate_v1/images/train
+cashsnap_policy:
+  intended_use: 'Oblique-hand fine-tune: current oblique-fan champion mix plus 256-image hard oblique hand/partial occlusion dose at 2x exposure.'
+  promotion_rule: Hard oblique hand/partial eval improves without regression on hard oblique fan, clean real, source-excluded strict clean, countable partial, count/value, or unknown/empty guardrails.

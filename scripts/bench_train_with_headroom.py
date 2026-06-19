@@ -98,6 +98,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--quiet", action="store_true", help="Pass --quiet to train_yolo.py.")
     parser.add_argument("--plots", action="store_true", help="Allow Ultralytics plot generation.")
     parser.add_argument("--exist-ok", action="store_true", help="Allow reusing an existing run directory.")
+    parser.add_argument("--resume", action="store_true", help="Resume training from last.pt checkpoint in the run directory.")
     parser.add_argument(
         "--adaptive-restarts",
         type=int,
@@ -283,6 +284,8 @@ def build_command(
         train_command.append("--no-plots")
     if exist_ok:
         train_command.append("--exist-ok")
+    if args.resume:
+        train_command.append("--resume")
 
     command = [
         sys.executable,
@@ -320,8 +323,8 @@ def main() -> int:
     if args.resume_percent >= args.max_percent:
         raise SystemExit("--resume-percent must be lower than --max-percent.")
     for name in ("max_percent", "max_ram_percent", "max_gpu_mem_percent"):
-        if getattr(args, name) > 95.0:
-            raise SystemExit(f"--{name.replace('_', '-')} must stay <= 95 so the PC remains usable.")
+        if getattr(args, name) > 99.0:
+            raise SystemExit(f"--{name.replace('_', '-')} must stay <= 99 so the PC remains usable.")
 
     cpu, ram, gpu = probe(args.probe_seconds)
     args.device = recommended_device(args.device)

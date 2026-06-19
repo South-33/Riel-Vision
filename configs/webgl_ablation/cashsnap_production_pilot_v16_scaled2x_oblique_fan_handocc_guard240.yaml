@@ -1,0 +1,35 @@
+path: ../..
+train: configs/generated_lists/webgl_ablation/cashsnap_production_pilot_v16_scaled2x_oblique_fan_handocc_guard240_train.txt
+val: data/cashsnap_v1/images/val
+test: data/cashsnap_v1/images/test
+names:
+  0: USD_1
+  1: USD_5
+  2: USD_10
+  3: USD_20
+  4: USD_50
+  5: USD_100
+  6: KHR_500
+  7: KHR_1000
+  8: KHR_2000
+  9: KHR_5000
+  10: KHR_10000
+  11: KHR_20000
+  12: KHR_50000
+cashsnap_production_pilot:
+  schema: cashsnap_production_pilot_config_v1
+  tag: cashsnap_production_pilot_v16_scaled2x_oblique_fan_handocc_guard240
+  base_reference_config: configs/webgl_ablation/cashsnap_production_pilot_v16_scaled2x_oblique_fan_handocc.yaml
+  recommended_init_checkpoint: runs/cashsnap/cashsnap_v16_oblique_fan_finetune/weights/best.pt
+  component_sources:
+    inherited_oblique_fan_mix:
+    - configs/generated_lists/webgl_ablation/cashsnap_production_pilot_v16_scaled2x_oblique_fan_train.txt
+    hard_oblique_hand_occlusion_training:
+    - data/synthetic/cashsnap_webgl_hard_oblique_hand_occlusion_candidate_v1/images/train
+    zero_label_money_guard:
+    - configs/generated_lists/audit/cashsnap_zero_label_money_train_hardneg_broad240_v1.txt
+    true_empty_guard:
+    - runs/cashsnap/empty_label_semantic_bridge_train_v1/lists/likely_true_empty.txt
+cashsnap_policy:
+  intended_use: 'Guarded oblique-hand fine-tune: current oblique-fan champion mix plus 2x hard oblique hand/partial occlusion dose and 240+240 train-safe negative guard rows.'
+  promotion_rule: Hard oblique hand/partial eval improves while preserving original hard oblique fan, clean real/source-excluded AP, countable partial behavior, and held-out unknown/empty FP guardrails.

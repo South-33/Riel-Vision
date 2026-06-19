@@ -46,6 +46,10 @@ const WIDTH = Number.parseInt(argValue("--width", "1440"), 10);
 const HEIGHT = Number.parseInt(argValue("--height", "1080"), 10);
 const VISUAL_SCALE = Number.parseFloat(argValue("--visual-scale", "2"));
 const MIN_VISIBLE_PIXELS = Number.parseInt(argValue("--min-visible-pixels", "500"), 10);
+const FAN_SPREAD_MIN = Number.parseFloat(argValue("--fan-spread-min", "1.22"));
+const FAN_SPREAD_MAX = Number.parseFloat(argValue("--fan-spread-max", "1.72"));
+const FAN_NOTE_COUNT_MIN = Number.parseInt(argValue("--fan-note-count-min", "6"), 10);
+const FAN_NOTE_COUNT_MAX = Number.parseInt(argValue("--fan-note-count-max", "9"), 10);
 const CLASS_NAMES = [
   "USD_1",
   "USD_5",
@@ -154,8 +158,9 @@ if (![
   "phone_oblique_30_like",
   "phone_oblique_45_like",
   "phone_low_front_like",
+  "phone_hard_eval_mix",
 ].includes(CAMERA_PROFILE)) {
-  throw new Error("--camera-profile must be one of: generic_phone_jitter, phone_auto, iphone_8_like, iphone_12_wide_like, budget_android_wide_like, browser_upload_resized, phone_closeup_clean_like, phone_clean_base_readable_mix_v1, phone_clean_base_topdown_readable_v1, phone_clean_base_square_topdown_readable_v1, phone_bridge_square_topdown_v1, phone_top_down_like, phone_oblique_30_like, phone_oblique_45_like, phone_low_front_like");
+  throw new Error("--camera-profile must be one of: generic_phone_jitter, phone_auto, iphone_8_like, iphone_12_wide_like, budget_android_wide_like, browser_upload_resized, phone_closeup_clean_like, phone_clean_base_readable_mix_v1, phone_clean_base_topdown_readable_v1, phone_clean_base_square_topdown_readable_v1, phone_bridge_square_topdown_v1, phone_top_down_like, phone_oblique_30_like, phone_oblique_45_like, phone_low_front_like, phone_hard_eval_mix");
 }
 
 if (!["mixed", "scan_fidelity", "pristine_only", "handled_clean", "handled_3d", "heavy_wear", "wet_stress"].includes(NOTE_CONDITION_POLICY)) {
@@ -651,7 +656,7 @@ const CAMERA_PROFILES = {
   },
   phone_top_down_like: {
     source: "cashsnap_viewpoint_v1",
-    weight: 0.20,
+    weight: 0.05,
     targetResolution: [1440, 1080],
     fov: [48, 64],
     positionX: [-0.12, 0.12],
@@ -662,7 +667,7 @@ const CAMERA_PROFILES = {
   },
   phone_oblique_30_like: {
     source: "cashsnap_viewpoint_v1",
-    weight: 0.30,
+    weight: 0.40,
     targetResolution: [1440, 1080],
     fov: [52, 68],
     positionX: [-0.18, 0.18],
@@ -673,7 +678,7 @@ const CAMERA_PROFILES = {
   },
   phone_oblique_45_like: {
     source: "cashsnap_viewpoint_v1",
-    weight: 0.25,
+    weight: 0.45,
     targetResolution: [1440, 1080],
     fov: [58, 76],
     positionX: [-0.22, 0.22],
@@ -684,7 +689,7 @@ const CAMERA_PROFILES = {
   },
   phone_low_front_like: {
     source: "cashsnap_viewpoint_v1",
-    weight: 0.12,
+    weight: 0.30,
     targetResolution: [1440, 1080],
     fov: [64, 82],
     positionX: [-0.25, 0.25],
@@ -696,6 +701,11 @@ const CAMERA_PROFILES = {
 };
 
 function chooseCameraProfile(rng, requestedProfile) {
+  if (requestedProfile === "phone_hard_eval_mix") {
+    const candidates = ["phone_oblique_45_like", "phone_low_front_like"];
+    const name = candidates[Math.floor(rng() * candidates.length)];
+    return { name, ...CAMERA_PROFILES[name] };
+  }
   if (requestedProfile !== "phone_auto") {
     return { name: requestedProfile, ...CAMERA_PROFILES[requestedProfile] };
   }
@@ -2056,13 +2066,15 @@ function negativeOccluders(variant) {
 
 function fanAssets(variant) {
   const rng = mulberry32(26056003 + variant * 173);
-  const noteCount = 5 + variant % 3;
+  const noteCount = FAN_NOTE_COUNT_MIN === FAN_NOTE_COUNT_MAX
+    ? FAN_NOTE_COUNT_MIN
+    : FAN_NOTE_COUNT_MIN + (variant % (FAN_NOTE_COUNT_MAX - FAN_NOTE_COUNT_MIN + 1));
   const pivot = [
     -0.38 + randomBetween(rng, -0.05, 0.04),
     -0.22 + randomBetween(rng, -0.05, 0.05),
   ];
   const localPivot = [-0.48, -0.18];
-  const spread = randomBetween(rng, 0.82, 1.22);
+  const spread = randomBetween(rng, FAN_SPREAD_MIN, FAN_SPREAD_MAX);
   const startAngle = randomBetween(rng, -0.18, 0.08);
   const layerOrder = Array.from({ length: noteCount }, (_, index) => index).sort(() => rng() - 0.5);
   return Array.from({ length: noteCount }, (_, index) => {
@@ -2074,14 +2086,14 @@ function fanAssets(variant) {
     const theta = startAngle + (t - 0.5) * spread + randomBetween(rng, -0.045, 0.045);
     const localPivotRotated = rotate2(localPivot, theta);
     const center = [
-      pivot[0] - localPivotRotated[0] + randomBetween(rng, -0.012, 0.012),
-      pivot[1] - localPivotRotated[1] + randomBetween(rng, -0.012, 0.012),
+      pivot[0] - localPivotRotated[0] + randomBetween(rng, -0.06, 0.06),
+      pivot[1] - localPivotRotated[1] + randomBetween(rng, -0.06, 0.06),
     ];
     return enrichAsset({
       ...base,
       classIndex,
       className,
-      idColor: INSTANCE_ID_COLORS[index],
+      idColor: INSTANCE_ID_COLORS[index % INSTANCE_ID_COLORS.length],
       physicalWidthMm: PHYSICAL_WIDTH_MM[className],
       position: [
         center[0],
@@ -2089,8 +2101,8 @@ function fanAssets(variant) {
         0.03 + layer * 0.040,
       ],
       rotation: [
-        randomBetween(rng, -0.12, 0.12),
-        randomBetween(rng, -0.18, 0.18),
+        randomBetween(rng, -0.15, 0.15),
+        randomBetween(rng, -0.22, 0.22),
         theta,
       ],
       curl: 0.080 + randomBetween(rng, -0.025, 0.045),

@@ -1,4 +1,4 @@
-# CashSnap Model Brain
+# Riel Vision Model Brain
 
 This is the living working memory for model and synthetic-data decisions. Keep it
 short, current, and decision-oriented. Old detail belongs in `docs/archive/`,
@@ -130,6 +130,26 @@ proposal, so deployability is proven but unknown-money rejection is not solved.
 ## Research Frame
 
 ### Current State
+
+The one-model presentation/demo stack now points through
+`configs/cashsnap_oblique_fan_champion_browser_stack.json` to
+`runs/cashsnap/cashsnap_one_model_browsercalib3x_repair_from_demogap_e6/weights/best.pt`,
+exported as `best.onnx`. It was fine-tuned once from the broad
+`cashsnap_v16_oblique_fan_demogap_fast_b32` checkpoint with a small 3x replay of
+the browser scene calibration data. Direct eval: browser-calibration
+`0.994/0.765`, hard oblique fan `0.607/0.415`, clean real `0.959/0.876`,
+source-excluded clean `0.928/0.838`, and countable partial `0.941/0.899`
+mAP50/mAP50-95. The pure teacher-demo calibration checkpoint
+`cashsnap_teacher_demo_browser_scene_calib_e25` is overfit and should not be
+promoted: browser-calibration was `0.994/0.988`, but clean real collapsed to
+`0.502/0.393`, hard oblique fan to `0.348/0.189`, and source-excluded clean to
+`0.385/0.296`. The repair tradeoff is unknown/out-of-schema money: held-out FP
+worsened to `13/465` at conf `0.25` and `10/465` at conf `0.29` versus the
+broad demogap checkpoint's `3/465`.
+
+The KHR_10000/KHR_20000 contrast fine-tune
+`runs/cashsnap/cashsnap_v16_oblique_fan_demogap_khr10k20k_fast_b32_e6/weights/best.pt`
+failed the exact browser-scene KHR_10000 miss and should not be promoted.
 
 The live goal is still one production-pilot detector, and the scorecard now
 needs to be blended like the product: clean/non-overlap positives, countable
@@ -447,6 +467,15 @@ The source FP review queue for the p24 vis70 candidate remains useful:
   `runs/cashsnap/production_pilot_eval_suite_v1/scorecard_summary_V9_V16_V18_current.json`.
   Kill direct train-analog obligation replay as a count-safety mechanism unless
   paired with a genuinely different detector objective or schema policy.
+- **Scaling WebGL synthetic data reveals a clear inflection point and overfitting trends (V16 ablation).** We evaluated scaling WebGL synthetic images from 1x control (V16Control, 280 images) to 2x (V16Scaled2x, 560 images) and 4x (V16Scaled4x, 1120 images) scales:
+  - **Overfitting & Generalization Loss:** Scale expansion causes mAP to degrade on unseen domains. Source-Excluded Clean Test mAP degrades from V9 (`0.7938`) and V16Control (`0.7786`) down to `0.7383` (2x) and `0.7381` (4x). This shows that scaling synthetic datasets beyond a certain point leads the model to overfit to synthetic rendering textures, harming real-world domain generalization.
+  - **Countable Partial Precision Gains:** The main benefit of synthetic scaling is on messy overlaps. Partial Val Precision at conf 0.05 jumps from `0.4502` (V16Control) to `0.5192` (2x) and `0.5354` (4x).
+  - **Inflection Point:** 2x scale (560 unique images) is the optimal recipe. It reaches the highest Strict Clean Test mAP (`0.8712`) and captures the bulk of precision gains on overlaps. Scaling to 4x (1120 images) degrades Full Real Test mAP (from `0.8664` to `0.8602`) and yields only a marginal +1.6% precision gain.
+  - **Evidence:** Compiled scorecard summary is at `runs/cashsnap/production_pilot_eval_suite_v1/scorecard_summary_webgl_ablation_scaled.json`.
+- **Head-to-head benchmarking on splits demonstrates CashSnap's synthetic overlap advantage.** We benchmarked CashSnap v16 against the public Roboflow model (v7), our custom baseline model (trained on 3,420 real images), and untrained Baseline YOLO. Note: The old partial/overlap split (N=100) was deprecated in favor of the new, rigorous WebGL Hard Oblique Fan Split (N=128):
+  - **Clean Split (Non-Overlap):** CashSnap Fine-Tuned reaches **90.46%** mAP50 vs our custom baseline's **48.58%**, Roboflow's **48.49%**, and untrained YOLO26n's **0.52%**.
+  - **WebGL Hard Oblique Fan Split (New Overlap/Occlusion/Angle Eval):** CashSnap Fine-Tuned reaches **58.97%** mAP50 vs our custom baseline's **6.03%** (showing severe real-only baseline collapse), public Roboflow's **1.60%**, and untrained YOLO26n's **0.00%**.
+  - **Evidence:** Clean split results verified in `runs/cashsnap/cashsnap_v16_oblique_ft_hard_eval_v1_metrics.json`, `runs/cashsnap/cashsnap_test_roboflow_core13_realonly_epoch31_best_i416_metrics.json`, and `runs/cashsnap/roboflow_core13_realonly_hard_eval_v1_metrics.json`.
 - **Split unknown-money by product policy.** V6's combined held-out improvement
   comes from true foreign-money suppression, not missing-schema official
   denominations: at `conf=0.25`, foreign Asian currency improves v2 `19/184`,
@@ -479,6 +508,95 @@ The source FP review queue for the p24 vis70 candidate remains useful:
   forced only with severe core-regression, and USD2 pseudo runs light up pseudo
   val with poor precision/calibration. Mapped official21 init preserves more
   old-class signal but is still not a compatible production-pilot result.
+- **Targeted underperf fine-tune (128 synthetic USD_100/KHR_10000 fan images) regressed on the hard eval.**
+  `cashsnap_v16_target_underperf_finetune` was trained from the V16 2x champion for 10 epochs on a
+  targeted mix adding 128 front/back fan images of USD_100 and KHR_10000 with the `phone_auto` camera
+  profile (oblique-weighted, but not extreme). Evaluated on `webgl_hard_eval_v1_v0_127` (128 images,
+  `phone_hard_eval_mix` camera, wider spreads 1.3–1.8x, 6–10 notes/fan): the fine-tuned model *worsened*
+  on the two target classes — USD_100 mAP50 fell from `0.483` (base) to `0.428` (−0.055) and KHR_10000
+  from `0.514` to `0.461` (−0.053). Overall hard-eval mAP50 went from `0.480` to `0.456` (−0.024).
+  The gap comes from the camera mismatch: training used `phone_auto` (mixes top-down and oblique), the
+  hard eval used only the most extreme oblique/low-front angles. Key lesson: adding more examples of a
+  class without matching the target camera distribution does not improve robustness at extreme viewpoints.
+  The hard eval benchmark itself is working as intended — mAP50-95 ~0.27 at these angles is realistic,
+  not inflated. Evidence: `runs/cashsnap/cashsnap_v16_underperf_ft_hard_eval_v1` (fine-tuned) and
+  `runs/cashsnap/cashsnap_v16_base_hard_eval_v1` (base).
+  Do not repeat targeted-class fine-tuning without explicitly sampling from the same oblique camera profile
+  as the eval, or coupling training on hard-eval-sourced images to ensure camera distribution alignment.
+- **Camera-distribution-matched oblique fan training (+11 mAP50 on hard eval, all classes improved).**
+  `cashsnap_v16_oblique_fan_finetune` repeated the fine-tune but replaced the `phone_auto` training fan
+  images with 256 images rendered using `phone_hard_eval_mix` (same camera as the hard eval — extreme
+  oblique and low-front angles, spread 1.3–1.8×, 6–10 notes/fan, all 13 classes). Training mix: 3,420
+  base V16 2× rows + 256 underperf (×2) + 256 oblique fan (×2) = 4,188 exposures. Result on
+  `webgl_hard_eval_v1_v0_127`: overall mAP50 rose from `0.480` (base) to `0.590` (+0.110) and mAP50-95
+  from `0.285` to `0.385` (+0.100). Every single class improved. Biggest gains: KHR_2000 (+0.187),
+  USD_10 (+0.158), KHR_5000 (+0.140), KHR_10000 (+0.110). USD_100 also improved (+0.064). Clean val
+  mAP50-95 held at `0.852`. This is the strongest hard-eval result to date.
+  Evidence: `runs/cashsnap/cashsnap_v16_oblique_fan_finetune/` (weights) and
+  `runs/cashsnap/cashsnap_v16_oblique_ft_hard_eval_v1/` (hard eval results).
+  Key mechanism: camera distribution matching is the critical lever for angle robustness. Adding examples
+  of a class at the right camera angles generalizes across all classes, not just the targeted ones.
+  `cashsnap_v16_oblique_fan_finetune/weights/best.pt` is the new hard-eval champion and now has a
+  full leftover scorecard at `runs/cashsnap/oblique_leftover_eval_v1/scorecard_summary_oblique.json`.
+  It preserves/improves clean gates versus current V9/V16 references: full/strict/source-excluded test
+  mAP50-95 `0.9108`/`0.8861`/`0.8172`, filtered countable-partial test recall/precision at conf
+  `0.05` is `0.9714`/`0.8500`, held-out unknown-money test FP is `1/237` at conf `0.15`/`0.25`
+  (USD2 `0/41`, KHR100 `0/12`, foreign Asian `1/184`), and hard-slice product gate final-NMS is
+  `74/79` exact-value with `0/22` background-FP images. Broad leftover inventory/sweep artifacts are
+  under `runs/cashsnap/oblique_leftover_eval_v1/unique_splits/`; remaining weak pockets are WebGL
+  trainable/smoke evals and bbox-occlusion/countable-partial variants, not the main real held-outs.
+- **Teacher-demo browser export is now the one-model repair at 640px.**
+  The pure browser-scene calibration checkpoint overfit badly, so the active
+  demo/presentation path in `configs/cashsnap_oblique_fan_champion_browser_stack.json`
+  is the conservative repair checkpoint
+  `cashsnap_one_model_browsercalib3x_repair_from_demogap_e6/weights/best.onnx`.
+  Direct eval is clean real `0.959/0.876`, source-excluded clean `0.928/0.838`,
+  hard oblique fan `0.607/0.415`, and browser calibration `0.994/0.765`
+  mAP50/mAP50-95. Roboflow API v7 on the same hard eval is `0.016` mAP50 all-13
+  (`0.021` on its covered classes), so slides should compare one CashSnap model
+  against Roboflow API rather than internal checkpoints. Caveat: held-out
+  unknown/out-of-schema money FP worsened to `13/465` at conf `0.25`.
+- **Hard oblique hand-occlusion synth needs negative pressure; guarded hand is the best robustness candidate, not promoted.**
+  Added 128-image eval and 256-image train roots using `phone_hard_eval_mix`,
+  `hand_occlusion`, handled note condition, print-tone/ISP/lens variation, and
+  balanced 13-class front/back coverage:
+  `data/synthetic/cashsnap_webgl_hard_oblique_hand_occlusion_eval_v1` and
+  `data/synthetic/cashsnap_webgl_hard_oblique_hand_occlusion_candidate_v1`.
+  The current oblique-fan champion scores only `0.333` mAP50 / `0.223`
+  mAP50-95 on this new eval, proving the hand/foreground slice is a real blind
+  spot. A 2x hand dose fine-tune from the oblique champion
+  (`runs/cashsnap/cashsnap_v16_oblique_fan_handocc_finetune/weights/best.pt`)
+  raises that slice to `0.946` / `0.735`, but regresses the original hard-fan
+  eval from `0.590` / `0.385` to `0.567` / `0.369`, full real test from
+  `0.9108` to `0.8990`, and held-out negative guardrails badly: combined
+  unknown-money test FP at conf `0.15` goes `1/237 -> 11/237`, and true-empty
+  test FP goes `4/441 -> 35/441`. Filtered partial test improves slightly, but
+  partial val drops. Adding 240 train-side zero-label-money rows plus 240 likely
+  true-empty rows to the same hand-2x recipe produces the current guarded
+  candidate:
+  `runs/cashsnap/cashsnap_v16_oblique_fan_handocc_guard240_finetune/weights/best.pt`.
+  It keeps the hand win (`0.936` / `0.744`), improves full/strict/source real
+  AP versus the oblique champion (`0.9229`/`0.8974`/`0.8784` vs
+  `0.9108`/`0.8861`/`0.8172`), repairs true-empty test FP (`4/441` at conf
+  `0.15`, `2/441` at `0.25`), and improves partial-test conf `0.15` recall
+  (`0.9714`). It is still not a promotion because original hard-fan remains
+  below the oblique champion (`0.566`/`0.371` vs `0.590`/`0.385`), combined
+  held-out unknown-money test FP is still worse (`3/237` at conf `0.15`, `2/237`
+  at `0.25` vs oblique `1/237`), and hard-slice product final-NMS exact value is
+  only `68/79` KHR-floor or `69/79` USD-risk20 with `0/22` background-FP versus
+  the oblique champion's `74/79`, `0/22`. Evidence:
+  `runs/cashsnap/handocc_guard240_eval_suite/scorecard_summary_handocc_guard240_vs_oblique_handocc2x.json`.
+  A guarded-train-list leftover sweep over all active config val/test splits
+  materialized 51 deduped groups and 33 current-13-class eval groups at
+  `runs/cashsnap/handocc_guard240_leftover_eval_v1/unique_splits/`. On the
+  same held-out map, guarded improves real-ish positive recall slightly
+  (`0.9742` vs `0.9703`) and cuts zero-label FP images (`19/2587` vs `23/2587`),
+  but gives back WebGL/synth positive recall (`0.7805` vs `0.7887`) and remains
+  killed by hard-fan/product exact-value gates. Delta summary:
+  `runs/cashsnap/handocc_guard240_leftover_eval_v1/unique_splits/leftover_sweep_comparison_guard240_vs_oblique_conf015.json`.
+  Lesson: hard synth transfer must be multi-objective from the start; a
+  slice-matched positive dose works only when paired with negative/replay
+  pressure and still must clear product count/value gates.
 
 ### Untested Ideas
 
@@ -643,6 +761,10 @@ Runtime and harness:
 - List-backed YOLO runs can write mixed-image cache files; delete stale
   `data/cashsnap_v1/labels/train.cache`, `data/cashsnap_v1/labels/test.cache`,
   and partial-eval label caches after mixed probes.
+- If someone accidentally runs YOLO with `--cache disk`, Ultralytics writes
+  `.npy` image caches beside images; remove repo-local cache files with a guarded
+  PowerShell sweep over `*.npy` under `\images\` directories before blaming
+  `.cache_runtime/` or Windows temp.
 - Fixed-step `--max-train-batches` is a stop cap, not a data repeater. Set enough
   `--epochs` to reach the cap.
 - Fixed-step preflight reports train-phase summaries for unequal row counts. Use

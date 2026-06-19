@@ -1,0 +1,105 @@
+path: ..
+train:
+- data/synthetic/cashsnap_webgl_clean_base_candidate_v1_scaled4x/images/train
+- data/synthetic/cashsnap_webgl_overlap_stack_candidate_v1_scaled4x/images/train
+- data/synthetic/cashsnap_webgl_fan_fullschema_candidate_v1_scaled4x/images/train
+- data/synthetic/cashsnap_webgl_hand_occlusion_candidate_v1_scaled4x/images/train
+- data/synthetic/cashsnap_webgl_thin_edge_partial_candidate_v1_scaled4x/images/train
+- data/synthetic/cashsnap_webgl_hard_negative_diversity_catalog_gate_v1_scaled4x/images/train
+- data/synthetic/cashsnap_webgl_back_side_confusion_candidate_v1_scaled4x/images/train
+val:
+- data/synthetic/cashsnap_webgl_clean_base_candidate_v1_scaled4x/images/train
+- data/synthetic/cashsnap_webgl_overlap_stack_candidate_v1_scaled4x/images/train
+- data/synthetic/cashsnap_webgl_fan_fullschema_candidate_v1_scaled4x/images/train
+- data/synthetic/cashsnap_webgl_hand_occlusion_candidate_v1_scaled4x/images/train
+- data/synthetic/cashsnap_webgl_thin_edge_partial_candidate_v1_scaled4x/images/train
+- data/synthetic/cashsnap_webgl_hard_negative_diversity_catalog_gate_v1_scaled4x/images/train
+- data/synthetic/cashsnap_webgl_back_side_confusion_candidate_v1_scaled4x/images/train
+names:
+  0: USD_1
+  1: USD_5
+  2: USD_10
+  3: USD_20
+  4: USD_50
+  5: USD_100
+  6: KHR_500
+  7: KHR_1000
+  8: KHR_2000
+  9: KHR_5000
+  10: KHR_10000
+  11: KHR_20000
+  12: KHR_50000
+cashsnap_sources:
+- recipe_id: webgl_clean_base_v1
+  scene_mode: clean
+  root: data/synthetic/cashsnap_webgl_clean_base_candidate_v1_scaled4x
+  data_yaml: data/synthetic/cashsnap_webgl_clean_base_candidate_v1_scaled4x/data.yaml
+  gate_kind: trainable-candidate
+  asset_side_policy: any
+  camera_profile: phone_auto
+  class_sequence: ''
+  train_views:
+  - detect
+  - fragment
+  - obb
+- recipe_id: webgl_overlap_stack_v1
+  scene_mode: stack
+  root: data/synthetic/cashsnap_webgl_overlap_stack_candidate_v1_scaled4x
+  data_yaml: data/synthetic/cashsnap_webgl_overlap_stack_candidate_v1_scaled4x/data.yaml
+  gate_kind: trainable-candidate
+  asset_side_policy: any
+  camera_profile: phone_auto
+  class_sequence: ''
+  train_views:
+  - detect
+  - fragment
+- recipe_id: webgl_fan_fullschema_v1
+  scene_mode: fan
+  root: data/synthetic/cashsnap_webgl_fan_fullschema_candidate_v1_scaled4x
+  data_yaml: data/synthetic/cashsnap_webgl_fan_fullschema_candidate_v1_scaled4x/data.yaml
+  gate_kind: trainable-candidate
+  asset_side_policy: any
+  camera_profile: phone_auto
+  class_sequence: ''
+  train_views:
+  - detect
+- recipe_id: webgl_hand_occlusion_fragments_v1
+  scene_mode: hand_occlusion
+  root: data/synthetic/cashsnap_webgl_hand_occlusion_candidate_v1_scaled4x
+  data_yaml: data/synthetic/cashsnap_webgl_hand_occlusion_candidate_v1_scaled4x/data.yaml
+  gate_kind: trainable-candidate
+  asset_side_policy: any
+  camera_profile: phone_auto
+  class_sequence: ''
+  train_views:
+  - detect
+- recipe_id: webgl_thin_edge_partial_v1
+  scene_mode: thin_edge
+  root: data/synthetic/cashsnap_webgl_thin_edge_partial_candidate_v1_scaled4x
+  data_yaml: data/synthetic/cashsnap_webgl_thin_edge_partial_candidate_v1_scaled4x/data.yaml
+  gate_kind: trainable-candidate
+  asset_side_policy: any
+  camera_profile: phone_auto
+  class_sequence: ''
+  train_views:
+  - detect
+- recipe_id: webgl_hard_negative_replay_v1
+  scene_mode: negative
+  root: data/synthetic/cashsnap_webgl_hard_negative_diversity_catalog_gate_v1_scaled4x
+  data_yaml: data/synthetic/cashsnap_webgl_hard_negative_diversity_catalog_gate_v1_scaled4x/data.yaml
+  gate_kind: trainable-candidate
+  asset_side_policy: any
+  camera_profile: phone_auto
+  class_sequence: ''
+  train_views:
+  - detect
+- recipe_id: webgl_back_side_confusion_v1
+  scene_mode: stack
+  root: data/synthetic/cashsnap_webgl_back_side_confusion_candidate_v1_scaled4x
+  data_yaml: data/synthetic/cashsnap_webgl_back_side_confusion_candidate_v1_scaled4x/data.yaml
+  gate_kind: trainable-candidate
+  asset_side_policy: front_back_mix
+  camera_profile: phone_auto
+  class_sequence: ''
+  train_views:
+  - detect

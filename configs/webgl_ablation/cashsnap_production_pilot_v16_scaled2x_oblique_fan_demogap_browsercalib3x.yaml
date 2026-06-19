@@ -1,0 +1,27 @@
+path: ../..
+train: configs/generated_lists/webgl_ablation/cashsnap_production_pilot_v16_scaled2x_oblique_fan_demogap_browsercalib3x_train.txt
+val: data/cashsnap_v1/images/val
+test: data/cashsnap_v1/images/test
+names:
+  0: USD_1
+  1: USD_5
+  2: USD_10
+  3: USD_20
+  4: USD_50
+  5: USD_100
+  6: KHR_500
+  7: KHR_1000
+  8: KHR_2000
+  9: KHR_5000
+  10: KHR_10000
+  11: KHR_20000
+  12: KHR_50000
+cashsnap_policy:
+  intended_use: One-model repair fine-tune from broad demogap best with a small 3x
+    browser scene calibration replay dose.
+  base_train_rows: 5212
+  browser_calibration_unique: 72
+  browser_calibration_repeated_exposures: 216
+  total_rows: 5428
+  promotion_rule: Promote only if browser scene improves while clean real, source-excluded,
+    countable partial, and hard oblique fan remain close to broad best.

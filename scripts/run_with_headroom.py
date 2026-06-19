@@ -281,8 +281,8 @@ def parse_args() -> argparse.Namespace:
     if args.resume_percent >= args.max_percent:
         raise SystemExit("--resume-percent must be lower than --max-percent.")
     for name in ("max_percent", "max_ram_percent", "max_gpu_mem_percent"):
-        if getattr(args, name) > 95.0:
-            raise SystemExit(f"--{name.replace('_', '-')} must stay <= 95 so the PC remains usable.")
+        if getattr(args, name) > 99.0:
+            raise SystemExit(f"--{name.replace('_', '-')} must stay <= 99 so the PC remains usable.")
     if args.memory_clean_cooldown_seconds < 0:
         raise SystemExit("--memory-clean-cooldown-seconds must be >= 0.")
     if args.memory_clean_min_free_ram_gb < 0:

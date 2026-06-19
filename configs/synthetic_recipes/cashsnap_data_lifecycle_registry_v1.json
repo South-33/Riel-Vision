@@ -274,6 +274,14 @@
       "checks": ["exists"]
     },
     {
+      "id": "cashsnap_core14_khr100_one_model_v1",
+      "path": "data/processed/cashsnap_core14_khr100_one_model_v1",
+      "state": "working",
+      "kind": "real_synth_yolo_train_eval_bridge",
+      "purpose": "Promoted one-detector training/eval view combining the current 13-class demo mix with labeled KHR_100 rows; excludes official classes with zero labels instead of advertising unsupported notes.",
+      "checks": ["exists"]
+    },
+    {
       "id": "numista_current_cutout_bank_v1",
       "path": "data/asset_candidates/numista_current_cutout_bank_v1",
       "state": "working",
@@ -719,6 +727,78 @@
       "state": "diagnostic",
       "kind": "webgl_visible_fan_yolo_dataset",
       "purpose": "Accepted WebGL trainable-candidate fan root with exact visible-mask labels; use only through suite gates and matched diagnostic controls.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "cashsnap_webgl_underperf_target_fan_candidate_v1",
+      "path": "data/synthetic/cashsnap_webgl_underperf_target_fan_candidate_v1",
+      "state": "diagnostic",
+      "kind": "webgl_visible_fan_yolo_dataset",
+      "purpose": "Targeted USD_100/KHR_10000 phone_auto fan candidate kept as a negative lesson: class targeting did not help hard oblique eval when camera distribution was mismatched.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "webgl_hard_eval_v1_v0_127",
+      "path": "data/synthetic/webgl_hard_eval_v1_v0_127",
+      "state": "diagnostic",
+      "kind": "webgl_visible_oblique_fan_eval_yolo_dataset",
+      "purpose": "Held-out 128-image hard oblique fan eval root using phone_hard_eval_mix; use as a diagnostic scorecard target, not training data.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "cashsnap_webgl_oblique_fan_full_candidate_v1",
+      "path": "data/synthetic/cashsnap_webgl_oblique_fan_full_candidate_v1",
+      "state": "diagnostic",
+      "kind": "webgl_visible_oblique_fan_yolo_dataset",
+      "purpose": "Accepted WebGL oblique fan trainable-candidate root that matched the hard-eval camera distribution and produced the current hard-angle champion.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "cashsnap_webgl_demo_gap_khr_fan_candidate_v1",
+      "path": "data/synthetic/cashsnap_webgl_demo_gap_khr_fan_candidate_v1",
+      "state": "diagnostic",
+      "kind": "webgl_visible_oblique_fan_yolo_dataset",
+      "purpose": "Targeted final demo-gap trainable-candidate root for front-side KHR_5000/KHR_10000 separation in wide no-hand oblique fans; dose only through the oblique-fan champion fine-tune comparison.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "cashsnap_webgl_demo_gap_khr10k20k_clean_candidate_v1",
+      "path": "data/synthetic/cashsnap_webgl_demo_gap_khr10k20k_clean_candidate_v1",
+      "state": "diagnostic",
+      "kind": "webgl_visible_clean_yolo_dataset",
+      "purpose": "Tight clean multi-note contrast root for the browser demo miss where clear KHR_10000 instances are confused with KHR_20000.",
+      "checks": ["exists", "yolo_dataset"]
+    },
+    {
+      "id": "cashsnap_webgl_demo_gap_khr10k20k_fan_candidate_v1",
+      "path": "data/synthetic/cashsnap_webgl_demo_gap_khr10k20k_fan_candidate_v1",
+      "state": "diagnostic",
+      "kind": "webgl_visible_oblique_fan_yolo_dataset",
+      "purpose": "Tight oblique-fan contrast root for KHR_10000/KHR_20000 separation in the browser fan demo and hard oblique slice.",
+      "checks": ["exists", "yolo_dataset"]
+    },
+    {
+      "id": "cashsnap_browser_scene_calibration_v1",
+      "path": "data/synthetic/cashsnap_browser_scene_calibration_v1",
+      "state": "diagnostic",
+      "kind": "browser_demo_scene_yolo_dataset",
+      "purpose": "Tiny demo-only YOLO calibration root from saved browser clean/fan scene renders after broad KHR_10000/KHR_20000 contrast synth failed to fix the visible teacher-demo miss; not production evidence.",
+      "checks": ["exists", "yolo_dataset"]
+    },
+    {
+      "id": "cashsnap_webgl_hard_oblique_hand_occlusion_eval_v1",
+      "path": "data/synthetic/cashsnap_webgl_hard_oblique_hand_occlusion_eval_v1",
+      "state": "diagnostic",
+      "kind": "webgl_visible_oblique_hand_occlusion_eval_yolo_dataset",
+      "purpose": "Held-out hard oblique hand/partial-occlusion eval root for phone-held bills with front/back mix, handled note texture, phone ISP, lens warp, and exact visible-mask labels.",
+      "checks": ["exists"]
+    },
+    {
+      "id": "cashsnap_webgl_hard_oblique_hand_occlusion_candidate_v1",
+      "path": "data/synthetic/cashsnap_webgl_hard_oblique_hand_occlusion_candidate_v1",
+      "state": "diagnostic",
+      "kind": "webgl_visible_oblique_hand_occlusion_yolo_dataset",
+      "purpose": "Matching trainable-candidate root for the hard oblique hand/partial-occlusion eval slice; dose only through controlled ablations and full scorecard guardrails.",
       "checks": ["exists"]
     },
     {

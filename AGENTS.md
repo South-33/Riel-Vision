@@ -11,3 +11,5 @@ This is the project's AGENTS.md
 - Do not add new active model-planning docs under `docs/`; archive/reference material can live there, but active model memory belongs in `model.md`.
 - Before using a new data root for training/rendering, register or classify it in `configs/synthetic_recipes/cashsnap_data_lifecycle_registry_v1.json` and run `scripts/check_data_lifecycle_registry.py`.
 - Before claiming a currency class exists or is missing, run `scripts/check_currency_taxonomy_coverage.py`; raw Numista, active cutout bank, and YOLO schema coverage intentionally differ.
+- Launch the v6 presentation via a local server (e.g. startRielVision.bat at root or autostart.bat in submission/v6). Three.js textures and ONNX model fail due to CORS when opened directly via file://.
+

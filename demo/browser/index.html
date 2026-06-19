@@ -17,7 +17,7 @@
             <p class="eyebrow">CashSnap alpha</p>
             <h1>Bill counter</h1>
           </div>
-          <div class="status" id="modelStatus">Loading models</div>
+          <div class="status" id="modelStatus">Loading CashSnap model</div>
         </header>
 
         <div class="controls" aria-label="Detection controls">
@@ -27,15 +27,15 @@
           </label>
           <label class="threshold">
             <span>Confidence</span>
-            <input id="confSlider" type="range" min="0.01" max="0.80" step="0.01" value="0.05" />
-            <output id="confValue">0.05</output>
+            <input id="confSlider" type="range" min="0.01" max="0.80" step="0.01" value="0.15" />
+            <output id="confValue">0.15</output>
           </label>
           <button id="runButton" type="button" disabled>Run</button>
         </div>
 
         <div class="stage">
           <canvas id="imageCanvas" width="1280" height="840" aria-label="Detection preview"></canvas>
-          <div class="empty" id="emptyState">Load a spread or overlap photo to run the exported ONNX model in this browser.</div>
+          <div class="empty" id="emptyState">Load a spread or overlap photo to run the exported CashSnap ONNX model in this browser.</div>
         </div>
       </section>
 
@@ -49,13 +49,13 @@
           <strong id="totalValue">KHR 0</strong>
         </div>
         <div class="note">
-          Two-stage diagnostic: detector proposals plus KHR fragment re-read. Treat results as review hints.
+          One local CashSnap detector. Treat results as review hints.
         </div>
         <div class="counts" id="countsList"></div>
       </aside>
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
-    <script src="./app.js"></script>
+    <script src="./app.js?v=core14-khr100-e8"></script>
   </body>
 </html>

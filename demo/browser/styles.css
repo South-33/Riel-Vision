@@ -40,10 +40,10 @@ body {
 
 .shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 18px;
   min-height: 100vh;
-  padding: 24px;
+  padding: 18px;
 }
 
 .workbench,
@@ -53,7 +53,7 @@ body {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   box-shadow: var(--shadow-card);
-  border-radius: 20px;
+  border-radius: 14px;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
@@ -73,9 +73,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px;
   border-bottom: 1px solid var(--border-glass);
-  padding: 20px 24px;
+  padding: 16px 20px;
 }
 
 .eyebrow {
@@ -90,7 +90,7 @@ body {
 
 h1 {
   margin: 0;
-  font-size: 30px;
+  font-size: 34px;
   font-weight: 800;
   letter-spacing: -0.5px;
   background: linear-gradient(135deg, #ffffff 30%, #a5b4fc 100%);
@@ -128,7 +128,7 @@ h1 {
   flex-wrap: wrap;
   justify-content: flex-start;
   background: rgba(255, 255, 255, 0.01);
-  gap: 24px;
+  gap: 18px;
 }
 
 .file-button {
@@ -145,14 +145,14 @@ h1 {
 .file-button span,
 button {
   display: inline-grid;
-  min-height: 44px;
+  min-height: 46px;
   place-items: center;
   border: none;
-  border-radius: 12px;
+  border-radius: 10px;
   color: #0b0f17;
-  padding: 0 22px;
+  padding: 0 24px;
   font-weight: 800;
-  font-size: 14px;
+  font-size: 15px;
   letter-spacing: 0.5px;
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -194,7 +194,7 @@ button:disabled {
 
 .threshold {
   display: grid;
-  grid-template-columns: auto minmax(140px, 200px) 48px;
+  grid-template-columns: auto minmax(180px, 240px) 54px;
   align-items: center;
   gap: 12px;
   font-size: 13px;
@@ -240,11 +240,11 @@ button:disabled {
 .stage {
   position: relative;
   display: grid;
-  min-height: 480px;
+  min-height: 520px;
   place-items: center;
   overflow: auto;
   background: #06070a;
-  border-radius: 0 0 20px 20px;
+  border-radius: 0 0 14px 14px;
 }
 
 canvas {
@@ -275,15 +275,15 @@ canvas {
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 24px;
+  gap: 16px;
+  padding: 18px;
 }
 
 .metric {
   border: 1px solid var(--border-glass);
   background: rgba(255, 255, 255, 0.02);
-  border-radius: 16px;
-  padding: 18px;
+  border-radius: 12px;
+  padding: 16px;
   transition: all 0.3s ease;
 }
 
@@ -304,7 +304,7 @@ canvas {
 
 .metric strong {
   display: block;
-  font-size: 36px;
+  font-size: 38px;
   font-weight: 800;
   color: #ffffff;
 }
@@ -326,9 +326,9 @@ canvas {
 .note {
   border-left: 4px solid var(--accent-orange);
   background: rgba(245, 158, 11, 0.05);
-  padding: 14px 16px;
+  padding: 12px 14px;
   color: #fcd34d;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 1.5;
   border-radius: 0 12px 12px 0;
@@ -379,7 +379,7 @@ canvas {
 @media (max-width: 960px) {
   .shell {
     grid-template-columns: 1fr;
-    padding: 16px;
+    padding: 12px;
   }
 
   .topbar,

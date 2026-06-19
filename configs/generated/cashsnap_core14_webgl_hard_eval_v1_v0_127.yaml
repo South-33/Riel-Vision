@@ -1,0 +1,22 @@
+path: ../..
+train: data/processed/cashsnap_core14_webgl_hard_eval_v1_v0_127/images/train
+val: data/processed/cashsnap_core14_webgl_hard_eval_v1_v0_127/images/val
+test: data/processed/cashsnap_core14_webgl_hard_eval_v1_v0_127/images/test
+names:
+  0: USD_1
+  1: USD_5
+  2: USD_10
+  3: USD_20
+  4: USD_50
+  5: USD_100
+  6: KHR_100
+  7: KHR_500
+  8: KHR_1000
+  9: KHR_2000
+  10: KHR_5000
+  11: KHR_10000
+  12: KHR_20000
+  13: KHR_50000
+cashsnap_policy:
+  intended_use: core13 eval remapped for the promoted core14 + KHR_100 detector
+  note: KHR_100 is absent from this source eval; old KHR ids are shifted by one.

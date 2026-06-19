@@ -209,6 +209,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--intended-use", default="", help="Short intended-use note to write into recipe.json.")
     parser.add_argument("--notes", default="", help="Optional short recipe notes to write into recipe.json.")
+    parser.add_argument("--fan-spread-min", default="1.22", help="Minimum fan layout spread.")
+    parser.add_argument("--fan-spread-max", default="1.72", help="Maximum fan layout spread.")
+    parser.add_argument("--fan-note-count-min", type=int, default=6, help="Minimum notes per fan scene.")
+    parser.add_argument("--fan-note-count-max", type=int, default=9, help="Maximum notes per fan scene.")
     parser.add_argument(
         "--fragment-review-policy",
         choices=["diagnostic", "ignore"],
@@ -465,6 +469,14 @@ def append_common_render_args(
         args.negative_prop_label_policy,
         "--texture-qa-effects",
         args.texture_qa_effects,
+        "--fan-spread-min",
+        args.fan_spread_min,
+        "--fan-spread-max",
+        args.fan_spread_max,
+        "--fan-note-count-min",
+        str(args.fan_note_count_min),
+        "--fan-note-count-max",
+        str(args.fan_note_count_max),
     ])
     if args.class_sequence.strip():
         cmd.extend(["--class-sequence", args.class_sequence])

@@ -67,4 +67,5 @@ WEBGL_CAMERA_PROFILES = {
     "phone_oblique_30_like",
     "phone_oblique_45_like",
     "phone_low_front_like",
+    "phone_hard_eval_mix",
 }

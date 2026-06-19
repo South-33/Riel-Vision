@@ -1,0 +1,59 @@
+{
+  "name": "cashsnap_oblique_fan_champion_browser_stack",
+  "status": "teacher_demo_detector_only",
+  "detector": {
+    "format": "onnx",
+    "path": "runs/cashsnap/cashsnap_core14_khr100_one_model_meanbias4_cls1_e8/weights/best.onnx",
+    "input_size": 640,
+    "classes": [
+      "USD_1",
+      "USD_5",
+      "USD_10",
+      "USD_20",
+      "USD_50",
+      "USD_100",
+      "KHR_100",
+      "KHR_500",
+      "KHR_1000",
+      "KHR_2000",
+      "KHR_5000",
+      "KHR_10000",
+      "KHR_20000",
+      "KHR_50000"
+    ],
+    "proposal_confidence": 0.15,
+    "proposal_iou": 0.7,
+    "agnostic_nms": false,
+    "class_min_conf": {
+      "KHR_100": 0.15,
+      "KHR_1000": 0.15,
+      "KHR_2000": 0.15,
+      "KHR_20000": 0.15,
+      "KHR_50000": 0.15
+    }
+  },
+  "fragment_classifier": null,
+  "fusion": {
+    "detector_override_confidence": 0.05,
+    "nms_iou": 0.7,
+    "nms_score": "detector_conf",
+    "fragment_override_enabled": false,
+    "reject_fragment_classes": [],
+    "reject_fragment_class_min_conf": 0.72,
+    "reject_after_nms": false
+  },
+  "evidence": {
+    "detector_checkpoint": "runs/cashsnap/cashsnap_core14_khr100_one_model_meanbias4_cls1_e8/weights/best.pt",
+    "detector_onnx_export": "runs/cashsnap/cashsnap_core14_khr100_one_model_meanbias4_cls1_e8/weights/best.onnx",
+    "training_mix": "configs/generated/cashsnap_core14_khr100_one_model_v1.yaml",
+    "browser_scene_calibration_dataset": "data/synthetic/cashsnap_browser_scene_calibration_v1",
+    "core14_clean_khr100_test_eval": "runs/cashsnap/eval_core14_khr100_one_model_meanbias4_cls1_e8_test_i640/metrics.json",
+    "hard_fan_eval": "runs/cashsnap/eval_core14_khr100_one_model_meanbias4_cls1_e8_hard_oblique_fan_i640/metrics.json",
+    "summary": "Single CashSnap detector exported at 640px for the teacher demo. The promoted model uses the current real/synthetic demo mix plus labeled KHR_100 data, then runs directly in the browser as one detector-only ONNX file."
+  },
+  "known_limits": [
+    "Prototype classroom demo model, not production banking software.",
+    "USD_2, KHR_50, KHR_200, KHR_15000, KHR_30000, KHR_100000, and KHR_200000 are still not supported because this run did not have enough labeled training data for them.",
+    "Hard fanned photos remain imperfect; this is a demo model, not a production banking system."
+  ]
+}

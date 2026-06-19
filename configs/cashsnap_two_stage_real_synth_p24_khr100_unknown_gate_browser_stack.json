@@ -3,7 +3,7 @@
   "status": "diagnostic_current_product_clue_tuned_operating_point_not_production",
   "detector": {
     "format": "onnx",
-    "path": "runs/cashsnap/fixed_step_real_p24_plus_strictbest_synth_p24_from_clean_e1_i416_b2_w0_adamw_lr5e5_nowarmup_noamp_cachefalse_steps318_seed0/weights/last.onnx",
+    "path": "runs/cashsnap/cashsnap_full_v16_scaled2x_from_base/weights/best.onnx",
     "input_size": 416,
     "classes": [
       "USD_1",

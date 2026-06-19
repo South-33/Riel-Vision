@@ -23,6 +23,17 @@ data/inbox/
 *.pt
 *.pth
 *.onnx
+data/real_fan_benchmark/
+data/review/
+data/sampled/
+data/inbox/
+
+# Keep manifests and reproducible scripts in git; keep downloaded/generated data local.
+
+# Model weights
+*.pt
+*.pth
+*.onnx
 *.tflite
 *.mlmodel
 
@@ -31,6 +42,8 @@ runs/
 
 # Scratch / temp
 tmp/
+scratch/
+.longrun/
 .cache_migrated/
 .cache_runtime/
 
@@ -69,3 +82,4 @@ data/archive/
 data/proposal_gate/
 debug.log
 presentation.html
+submission/

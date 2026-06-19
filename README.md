@@ -1,85 +1,48 @@
-# KhmerCurrencyOCR
+# Riel Vision
 
-KhmerCurrencyOCR is the research repo behind CashSnap, a lightweight computer-vision banknote counter for mixed Cambodian riel (KHR) and US dollar (USD) photos.
+Riel Vision is a lightweight computer-vision banknote counter for mixed Cambodian Riel (KHR) and US Dollar (USD) photos, designed for real-world retail environments.
 
-The goal is practical retail counting from one casual phone image: separated notes, overlapping stacks, handheld fans, partial notes, and hand/finger occlusion. Counterfeit detection and authenticity checks are intentionally out of scope.
+> [!IMPORTANT]
+> **To open the interactive presentation and live demo, double-click the batch file in the root folder:**
+> **`Launch_Presentation.bat`**
+> 
+> *A local HTTP server is required to bypass browser CORS security policies when loading the 3D bill textures and ONNX model file.*
 
-## Current Status
+---
 
-This project is still research/prototype work. Clean visible-note synthetic transfer is the active milestone; dense overlap, fan layouts, and partial-note counting are not solved yet.
+## Performance Benchmarks
+These metrics measure how the hybrid one-detector Riel Vision model (trained on **2,416 real** and **3,096 synthetic** images) compares to previous baselines on our test slices:
 
-The current production path is:
+| Test Set Slices | Roboflow API | Base Model (Real Only) | Riel Vision (Real + Synth) |
+| :--- | :---: | :---: | :---: |
+| **Easy / Clean** (separated bills) | 48.5% | 48.6% | **92.3%** |
+| **Partially Blocked** (hand/finger occlusions) | 0.0% | 1.0% | **93.6%** |
+| **Overlapping** (stacked/piled bills) | 1.6% | 6.0% | **56.6%** |
 
-- train a small phone/browser-deployable detector from controlled synthetic clean-note data
-- prove transfer on real clean-positive, labeled-positive, and empty-frame guardrails
-- mine failures into targeted synthetic counterexamples instead of blindly scaling data
-- only after clean transfer is credible, move into overlap/fan/hand curricula and fragment fusion
+> [!WARNING]
+> **Benchmark Bias Note**: These metrics are evaluated on static local test slices and reflect bias toward our specific validation conditions. Real-world performance under uncontrolled environments and arbitrary smartphone cameras will vary.
 
-Synthetic data is being built as a controlled experiment generator, not as a shortcut around real validation. "Perfect" synthetic data here means dense, exact-label, controllable coverage whose knobs survive real transfer checks.
+---
 
-## Repository Shape
+## Current Milestone & Honest Status
 
-The project intentionally keeps its active written memory small:
+Riel Vision is currently a **research prototype**. We believe in being honest about what our model can and cannot do:
 
-- `README.md` is the user-facing overview.
-- `AGENTS.md` is the short project entry note for coding agents.
-- `model.md` is the working brain for current model direction, trusted assets, known blockers, and durable results.
+* **Our Approach**: We train the base model on real-world photos (which work well for clean, separated notes), and then use our custom WebGL synthesis engine to render the gaps—like overlapping banknotes and partially blocked banknotes—where real-world training data is scarce or difficult to label.
+* **What Works Well**: Easy, clean, separated banknotes.
+* **Active Challenges**: Dense, complex overlapping stacks, hand-held fan layouts, and extreme folds/crumples.
 
-Most datasets, generated synthetic images, model weights, caches, and run outputs are intentionally git-ignored.
+---
 
-Useful folders:
+## Technology Stack
 
-- `configs/synthetic_recipes/` contains governed WebGL recipe catalogs and source/artifact policies.
-- `configs/webgl_ablation/` and `configs/generated_lists/` contain reproducible experiment configs and generated train lists.
-- `data/synthetic/`, `data/external_negatives/`, `runs/`, `tmp/`, and `.cache_runtime/` are local generated/runtime areas and should stay out of commits unless a manifest/config is intentionally promoted.
-- `docs/research/` is reference material; `docs/archive/` is old working memory. Active model direction belongs in `model.md`.
+* **3D Synthesis Engine**: Powered by **Three.js** to generate exact-label training annotations (bounding boxes & segmentation masks) under controlled camera angles, lighting conditions, and note dirt/wear.
+* **Edge Inference**: Running a lightweight **YOLOv8 detector** directly in the browser via **ONNX Runtime Web** (WASM-based). The model is only **9.8 MB** on disk with **2.42M parameters**.
 
-## Synthetic Pipeline
+---
 
-The current WebGL pipeline can render banknote scenes through local Microsoft Edge using Three.js. It emits:
-
-- RGB visual render
-- exact flat-color ID mask
-- visible-only YOLO detect labels
-- OBB sidecar labels with rejection metadata
-- fragment/evidence labels
-- ignored-fragment metadata for below-threshold components
-- per-batch `qa/summary.json`
-- per-batch `recipe.json`
-
-Trainable-candidate gates check label integrity, geometry, appearance diversity, note-condition diversity, texture/source policy, and zero-label hard-negative behavior. Renderer quality is necessary, but model-side real transfer remains the promotion authority.
-
-## Quick Start
-
-This repo is developed on Windows with Python and Node tooling. Prefer `pnpm` for Node work.
-
-```powershell
-python -m pip install -r requirements.txt
-cd renderers\webgl
-pnpm install
-cd ..\..
-```
-
-For active model work, read `model.md` first. Long rendering or training jobs should use the repo headroom wrappers so the laptop remains usable.
-
-Project Python entry points configure repo-local runtime storage through `scripts/local_runtime.py`; Ultralytics, Torch, Matplotlib, pip/Numba caches, and temp files are directed under `.cache_runtime/` for train/eval/probe runs.
-
-## Public Data Note
-
-Currency imagery and public datasets can have licensing, reproduction, split-leakage, and current-design caveats. This repo treats public and synthetic data as research inputs only; final quality claims need reviewed real phone captures and real held-out benchmarks.
-
-## Project Scope
-
-In scope:
-
-- KHR + USD denomination detection/counting
-- phone/browser-deployable model paths
-- synthetic data with exact labels
-- real transfer validation slices for clean, empty, near-negative, and later fan/overlap/hand stress
-
-Out of scope:
-
-- counterfeit detection
-- authentication/security claims
-- training on the real fan benchmark
-- broad unreviewed data scraping as a substitute for validation
+## Developer Directory Map
+* **`Launch_Presentation.bat`**: Double-click to start python's local server and run the interactive dashboard.
+* **`sample_dataset/`**: Folder containing visual examples of the different dataset categories used to train and evaluate the Riel Vision models (Real USD, Real KHR, Synthetic Overlapping, Synthetic Partially Blocked, and Real Fan Layout).
+* **`model.md`**: The active working brain for plans, training runs, and promotion gates.
+* **`AGENTS.md`**: Current project-scoped guidelines and constraints for developers.

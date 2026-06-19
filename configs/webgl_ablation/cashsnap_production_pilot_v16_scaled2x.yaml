@@ -1,0 +1,85 @@
+path: ../..
+train: configs/generated_lists/webgl_ablation/cashsnap_production_pilot_v16_scaled2x_train.txt
+val: data/cashsnap_v1/images/val
+test: data/cashsnap_v1/images/test
+names:
+  0: USD_1
+  1: USD_5
+  2: USD_10
+  3: USD_20
+  4: USD_50
+  5: USD_100
+  6: KHR_500
+  7: KHR_1000
+  8: KHR_2000
+  9: KHR_5000
+  10: KHR_10000
+  11: KHR_20000
+  12: KHR_50000
+cashsnap_production_pilot:
+  schema: cashsnap_production_pilot_config_v1
+  tag: cashsnap_production_pilot_v16_scaled2x
+  base_reference_config: configs/webgl_ablation/cashsnap_production_pilot_v2_hardneg_guard.yaml
+  recommended_init_checkpoint: runs/cashsnap/fixed_step_countsafe_vis70_p24_from_last_e50_i416_b2_w0_adamw_lr5e6_nowarmup_noamp_cachefalse_freeze22_steps318_seed0/weights/last.pt
+  component_sources:
+    clean_real_replay:
+    - configs/generated_lists/webgl_ablation/cashsnap_v1_balanced_real_only_probe_train.txt
+    strictbest_synth_replay:
+    - data/synthetic/cashsnap_webgl_clean_base_candidate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_overlap_stack_candidate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_fan_fullschema_candidate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_hand_occlusion_candidate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_thin_edge_partial_candidate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_hard_negative_diversity_catalog_gate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_back_side_confusion_candidate_v1_scaled4x/images/train
+    countable_partial_replay:
+    - configs/generated_lists/webgl_ablation/cashsnap_countsafe_vis70_p24_v1_extra.txt
+    - configs/generated_lists/webgl_ablation/cashsnap_countsafe_vis70_plus_center50_p24_v1_extra.txt
+    - configs/generated_lists/webgl_ablation/cashsnap_reviewed_countable_khr_borderpartial24_v1_extra.txt
+    - configs/generated_lists/webgl_ablation/cashsnap_reviewed_visibleevidence_obvioussafe_v1_extra.txt
+    - runs/cashsnap/visible_evidence_qa_mined_partialstress_cap8_v1/strict_partial_khr_codex_reviewed_v1_images.txt
+    - runs/cashsnap/real_overlap_focus_materialized_reviewed_v1/train_anchor_candidate_images.txt
+    train_safe_hard_negative_replay:
+    - runs/cashsnap/visible_evidence_qa_lowrisk_empty_candidates_v1/coin_hardneg12_codex_reviewed_v1_images.txt
+    - configs/generated_lists/webgl_ablation/cashsnap_reviewed_foreignhardneg_koreanwon24_v1_extra.txt
+    - configs/generated_lists/audit/cashsnap_foreign_asian_currency_top33_from_bgfp_v1.txt
+    - configs/generated_lists/audit/cashsnap_countable_center50_fpneg32_added_negative_v1.txt
+    - runs/cashsnap/ve_v4_trainanchors_guard_v2/champion_train_empty_fp_analogs_allclasses_conf015_v1.json
+    high_risk_class_protectors:
+    - configs/generated_lists/webgl_ablation/cashsnap_v1_balanced_real_only_probe_train.txt
+  summary:
+    seed: 20260611
+    rows: 3420
+    unique_rows: 1294
+    duplicate_exposures: 2126
+    empty_rows: 740
+    class_counts:
+      USD_1: 544
+      USD_5: 374
+      USD_10: 376
+      USD_20: 370
+      USD_50: 404
+      USD_100: 387
+      KHR_500: 690
+      KHR_1000: 574
+      KHR_2000: 366
+      KHR_5000: 658
+      KHR_10000: 608
+      KHR_20000: 684
+      KHR_50000: 389
+    strict_synth_unique: 560
+    strict_synth_repeated_exposures: 1120
+  label_policy:
+  - Train from existing train-split/list-backed rows only; no new data root is introduced.
+  - Human-countable partial positives are allowed; unreviewed corner_*.vis0p5 rows
+    are blocked.
+  - Hard-negative rows must be zero-label train-split rows.
+  - Eval/failure-slice-mined rows are kept out of hard-negative training unless they
+    are train-split analogs.
+cashsnap_policy:
+  intended_use: 'Production Pilot v16 scaled2x training recipe: clean real + WebGL
+    synthetic candidates at scaled 2x.'
+  promotion_rule: Compare against the p24 synth+real champion and p24 vis70 clue on
+    full real, strict clean, source-excluded clean, filtered countable partial, source-FP
+    review queue, hard-slice count/value, and per-class guards; kill if gains come
+    from duplicate or wrong-denomination boxes.

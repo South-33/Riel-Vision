@@ -688,7 +688,38 @@
       "current_blocker": "Diagnostic only until visual review and real-transfer/model-side tests show lens warp improves target-device robustness."
     },
     {
+      "id": "webgl_underperf_target_fan_v1",
+      "target_condition_ids": ["handheld_fan", "repeated_same_denomination"],
+      "artifact_status": "trainable-candidate",
+      "scene_modes": ["fan"],
+      "asset_side_policy": "front_back_mix",
+      "camera_profile": "phone_auto",
+      "render_pool_count": 128,
+      "class_sequence": ["USD_100", "KHR_10000"],
+      "intended_use": "Targeted fan of underperforming USD_100 and KHR_10000 classes with front/back mix and weird oblique viewpoints."
+    },
+    {
+      "id": "webgl_hard_eval_v1",
+      "target_condition_ids": ["handheld_fan", "repeated_same_denomination"],
+      "artifact_status": "diagnostic",
+      "scene_modes": ["fan"],
+      "asset_side_policy": "front_back_mix",
+      "camera_profile": "phone_hard_eval_mix",
+      "render_pool_count": 128,
+      "fan_spread_min": "1.3",
+      "fan_spread_max": "1.8",
+      "fan_note_count_min": "6",
+      "fan_note_count_max": "10",
+      "intended_use": "Hard synthetic evaluation split with wider fanned layouts, higher note counts, oblique viewpoints, and front/back mixes for all 13 core classes."
+    },
+    {
       "id": "webgl_calibration_mix_v1",
+      "target_condition_ids": [
+        "clean_single_or_separated_notes",
+        "loose_counter_stack_overlap",
+        "handheld_fan",
+        "hard_negatives_and_non_banknote_paper"
+      ],
       "target_condition_ids": [
         "clean_single_or_separated_notes",
         "loose_counter_stack_overlap",
@@ -702,6 +733,126 @@
       "intended_use": "Light-dose synthetic mix with clean replay for candidate training.",
       "promotion_gate": "real partial/fan improves and clean validation/browser guards stay within budget",
       "current_blocker": "Depends on promoted component recipes and dose sweep."
+    },
+    {
+      "id": "webgl_oblique_fan_full_v1",
+      "target_condition_ids": [
+        "handheld_fan",
+        "repeated_same_denomination"
+      ],
+      "artifact_status": "trainable-candidate",
+      "scene_modes": ["fan"],
+      "asset_side_policy": "front_back_mix",
+      "camera_profile": "phone_hard_eval_mix",
+      "fan_spread_min": "1.3",
+      "fan_spread_max": "1.8",
+      "fan_note_count_min": "6",
+      "fan_note_count_max": "10",
+      "render_pool_count": 256,
+      "intended_use": "Full 13-class oblique fan training set matching the hard-eval camera distribution (phone_hard_eval_mix). Closes the camera distribution gap between phone_auto-trained models and extreme oblique viewpoints."
+    },
+    {
+      "id": "webgl_demo_gap_khr_fan_v1",
+      "target_condition_ids": [
+        "handheld_fan",
+        "repeated_same_denomination",
+        "front_back_and_old_common_confusion"
+      ],
+      "artifact_status": "trainable-candidate",
+      "scene_modes": ["fan"],
+      "asset_side_policy": "front_only",
+      "camera_profile": "phone_hard_eval_mix",
+      "camera_isp_policy": "phone_dynamic_range_v2",
+      "note_condition_policy": "handled_clean",
+      "note_print_tone_policy": "real_bridge_print_contrast_v1",
+      "lens_distortion_policy": "phone_mild",
+      "occluder_policy": "no_hand",
+      "fan_spread_min": "1.45",
+      "fan_spread_max": "2.05",
+      "fan_note_count_min": "6",
+      "fan_note_count_max": "8",
+      "class_sequence": [
+        "KHR_5000",
+        "KHR_10000",
+        "KHR_5000",
+        "KHR_10000",
+        "KHR_20000",
+        "KHR_50000",
+        "USD_100",
+        "KHR_1000"
+      ],
+      "render_pool_count": 512,
+      "intended_use": "Targeted final demo-gap fan dose: front-side KHR_5000/KHR_10000 repeated near each other in wide no-hand oblique fans, with the same KHR/USD distractors visible in browser demo screenshots.",
+      "promotion_gate": "browser fan demo and hard oblique fan eval improve without clean real regression",
+      "current_blocker": "Needs one controlled fine-tune on top of the oblique-fan champion."
+    },
+    {
+      "id": "webgl_hard_oblique_hand_occlusion_eval_v1",
+      "target_condition_ids": [
+        "finger_or_hand_split_occlusion",
+        "front_back_and_old_common_confusion"
+      ],
+      "artifact_status": "diagnostic",
+      "scene_modes": ["hand_occlusion"],
+      "asset_side_policy": "front_back_mix",
+      "camera_profile": "phone_hard_eval_mix",
+      "camera_isp_policy": "phone_dynamic_range_v2",
+      "note_condition_policy": "handled_3d",
+      "note_print_tone_policy": "real_bridge_print_contrast_v1",
+      "lens_distortion_policy": "phone_mild",
+      "class_sequence": [
+        "USD_1",
+        "USD_5",
+        "USD_10",
+        "USD_20",
+        "USD_50",
+        "USD_100",
+        "KHR_500",
+        "KHR_1000",
+        "KHR_2000",
+        "KHR_5000",
+        "KHR_10000",
+        "KHR_20000",
+        "KHR_50000"
+      ],
+      "render_pool_count": 128,
+      "intended_use": "Held-out hard oblique phone-hand occlusion eval: front/back mixed notes, handled texture, phone dynamic range, mild lens warp, and visible-mask labels for missed easy partials.",
+      "promotion_gate": "Use only as a diagnostic target; candidate training must improve this slice while preserving clean real, source-excluded, count/value, and unknown/empty guardrails.",
+      "current_blocker": "Needs first baseline measurement with the current oblique fan champion before training against the matching candidate root."
+    },
+    {
+      "id": "webgl_hard_oblique_hand_occlusion_train_v1",
+      "target_condition_ids": [
+        "finger_or_hand_split_occlusion",
+        "front_back_and_old_common_confusion"
+      ],
+      "artifact_status": "trainable-candidate",
+      "scene_modes": ["hand_occlusion"],
+      "asset_side_policy": "front_back_mix",
+      "camera_profile": "phone_hard_eval_mix",
+      "camera_isp_policy": "phone_dynamic_range_v2",
+      "note_condition_policy": "handled_3d",
+      "note_print_tone_policy": "real_bridge_print_contrast_v1",
+      "lens_distortion_policy": "phone_mild",
+      "class_sequence": [
+        "USD_1",
+        "USD_5",
+        "USD_10",
+        "USD_20",
+        "USD_50",
+        "USD_100",
+        "KHR_500",
+        "KHR_1000",
+        "KHR_2000",
+        "KHR_5000",
+        "KHR_10000",
+        "KHR_20000",
+        "KHR_50000"
+      ],
+      "render_pool_count": 256,
+      "intended_use": "Matching trainable-candidate slice for hard oblique phone-hand occlusion failures; intended as a controlled dose on top of the oblique fan champion mix.",
+      "promotion_gate": "hard oblique hand/partial eval improves without regressions on clean real, source-excluded strict clean, filtered countable-partial, count/value, or unknown/empty guardrails.",
+      "current_blocker": "Render/QA and baseline eval are required before any fine-tune promotion."
     }
   ]
 }

@@ -1,4 +1,5 @@
-const STACK_CONFIG_URL = "/configs/cashsnap_two_stage_real_synth_p24_khr100_unknown_gate_browser_stack.json";
+const BASE_PATH = window.location.protocol === "file:" ? "../../" : "/";
+const STACK_CONFIG_URL = BASE_PATH + "configs/cashsnap_oblique_fan_champion_browser_stack.json";
 const DEFAULT_CLASS_NAMES = [
   "USD_1",
   "USD_5",
@@ -6,6 +7,7 @@ const DEFAULT_CLASS_NAMES = [
   "USD_20",
   "USD_50",
   "USD_100",
+  "KHR_100",
   "KHR_500",
   "KHR_1000",
   "KHR_2000",
@@ -21,6 +23,7 @@ const VALUES = {
   USD_20: 20,
   USD_50: 50,
   USD_100: 100,
+  KHR_100: 100,
   KHR_500: 500,
   KHR_1000: 1000,
   KHR_2000: 2000,
@@ -29,7 +32,7 @@ const VALUES = {
   KHR_20000: 20000,
   KHR_50000: 50000,
 };
-const COUNTING_MODE = "post_nms_detector_proposals_with_fragment_class_override";
+const COUNTING_MODE = "detector_only_nms";
 const COUNT_SOURCE = "final_nms_detections";
 const COLORS = [
   "#e43d30",
@@ -51,9 +54,10 @@ const state = {
   config: null,
   detectorSession: null,
   classifierSession: null,
+  useClassifier: false,
   image: null,
   detections: [],
-  conf: 0.05,
+  conf: 0.15,
   autoRunRequested: false,
   autoRunDone: false,
   debug: {},
@@ -71,10 +75,22 @@ const totalCount = document.getElementById("totalCount");
 const totalValue = document.getElementById("totalValue");
 const countsList = document.getElementById("countsList");
 
+function repoUrl(path) {
+  if (!path) return "";
+  const cleanPath = path.startsWith("/") ? path.slice(1) : path;
+  const url = BASE_PATH + cleanPath;
+  const assetVersion = queryText("assetVersion", "v");
+  if (!assetVersion) {
+    return url;
+  }
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}v=${encodeURIComponent(assetVersion)}`;
+}
+
 async function loadModel() {
   try {
     ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/";
-    const configResponse = await fetch(stackConfigUrl());
+    const configResponse = await fetch(stackConfigUrl(), { cache: "no-store" });
     if (!configResponse.ok) {
       throw new Error(`Config HTTP ${configResponse.status}`);
     }
@@ -87,11 +103,12 @@ async function loadModel() {
       executionProviders: ["wasm"],
       graphOptimizationLevel: "all",
     };
-    [state.detectorSession, state.classifierSession] = await Promise.all([
-      ort.InferenceSession.create(repoUrl(state.config.detector.path), options),
-      ort.InferenceSession.create(repoUrl(state.config.fragment_classifier.path), options),
-    ]);
-    modelStatus.textContent = "Models ready";
+    state.useClassifier = Boolean(state.config.fragment_classifier?.path);
+    state.detectorSession = await ort.InferenceSession.create(repoUrl(state.config.detector.path), options);
+    state.classifierSession = state.useClassifier
+      ? await ort.InferenceSession.create(repoUrl(state.config.fragment_classifier.path), options)
+      : null;
+    modelStatus.textContent = state.useClassifier ? "Models ready" : "Model ready";
     modelStatus.className = "status ready";
     updateRunState();
     maybeAutoRun();
@@ -150,6 +167,7 @@ function applyConfigOverrides() {
     state.config.detector.path = detectorModel;
   }
   if (fragmentClassifierModel) {
+    state.config.fragment_classifier = state.config.fragment_classifier || {};
     state.config.fragment_classifier.path = fragmentClassifierModel;
   }
   if (detectorOverride !== null) {
@@ -168,23 +186,20 @@ function applyConfigOverrides() {
     state.config.fusion.nms_iou = nmsIou;
   }
   if (cropPadding !== null) {
+    state.config.fragment_classifier = state.config.fragment_classifier || {};
     state.config.fragment_classifier.crop_padding = cropPadding;
   }
 }
 
 function updateRunState() {
-  runButton.disabled = !state.detectorSession || !state.classifierSession || !state.image;
+  runButton.disabled = !state.detectorSession || !state.image;
 }
 
 function maybeAutoRun() {
-  if (state.autoRunRequested && !state.autoRunDone && state.detectorSession && state.classifierSession && state.image) {
+  if (state.autoRunRequested && !state.autoRunDone && state.detectorSession && state.image) {
     state.autoRunDone = true;
     runModel();
   }
-}
-
-function repoUrl(path) {
-  return `/${path.replaceAll("\\", "/").replace(/^\/+/, "")}`;
 }
 
 function sourceImageData(image) {
@@ -520,7 +535,7 @@ function loadImageUrl(path) {
 }
 
 async function runModel() {
-  if (!state.detectorSession || !state.classifierSession || !state.image) {
+  if (!state.detectorSession || !state.image) {
     return;
   }
   runButton.disabled = true;
@@ -530,7 +545,7 @@ async function runModel() {
   const outputs = await state.detectorSession.run(feeds);
   const output = outputs[state.detectorSession.outputNames[0]];
   const proposals = parseOutput(output, meta);
-  const classified = await classifyFragments(proposals);
+  const classified = state.useClassifier ? await classifyFragments(proposals) : proposals;
   const unclassifiedMinConf = state.config?.fusion?.unclassified_min_conf ?? 0;
   const rejectAfterNms = state.config?.fusion?.reject_after_nms ?? false;
   const filtered = classified.map((detection) => {

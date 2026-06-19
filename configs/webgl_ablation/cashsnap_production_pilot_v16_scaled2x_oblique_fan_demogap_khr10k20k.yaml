@@ -1,0 +1,91 @@
+path: ../..
+train: configs/generated_lists/webgl_ablation/cashsnap_production_pilot_v16_scaled2x_oblique_fan_demogap_khr10k20k_train.txt
+val: data/cashsnap_v1/images/val
+test: data/cashsnap_v1/images/test
+names:
+  0: USD_1
+  1: USD_5
+  2: USD_10
+  3: USD_20
+  4: USD_50
+  5: USD_100
+  6: KHR_500
+  7: KHR_1000
+  8: KHR_2000
+  9: KHR_5000
+  10: KHR_10000
+  11: KHR_20000
+  12: KHR_50000
+cashsnap_production_pilot:
+  schema: cashsnap_production_pilot_config_v1
+  tag: cashsnap_production_pilot_v16_scaled2x_oblique_fan_demogap_khr10k20k
+  base_reference_config: configs/webgl_ablation/cashsnap_production_pilot_v16_scaled2x_oblique_fan_demogap.yaml
+  recommended_init_checkpoint: runs/cashsnap/cashsnap_v16_oblique_fan_demogap_fast_b32/weights/best.pt
+  component_sources:
+    clean_real_replay:
+    - configs/generated_lists/webgl_ablation/cashsnap_v1_balanced_real_only_probe_train.txt
+    strictbest_synth_replay:
+    - data/synthetic/cashsnap_webgl_clean_base_candidate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_overlap_stack_candidate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_fan_fullschema_candidate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_hand_occlusion_candidate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_thin_edge_partial_candidate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_hard_negative_diversity_catalog_gate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_back_side_confusion_candidate_v1_scaled4x/images/train
+    - data/synthetic/cashsnap_webgl_underperf_target_fan_candidate_v1/images/train
+    oblique_fan_training:
+    - data/synthetic/cashsnap_webgl_oblique_fan_full_candidate_v1/images/train
+    countable_partial_replay:
+    - configs/generated_lists/webgl_ablation/cashsnap_countsafe_vis70_p24_v1_extra.txt
+    - configs/generated_lists/webgl_ablation/cashsnap_countsafe_vis70_plus_center50_p24_v1_extra.txt
+    - configs/generated_lists/webgl_ablation/cashsnap_reviewed_countable_khr_borderpartial24_v1_extra.txt
+    - configs/generated_lists/webgl_ablation/cashsnap_reviewed_visibleevidence_obvioussafe_v1_extra.txt
+    - runs/cashsnap/visible_evidence_qa_mined_partialstress_cap8_v1/strict_partial_khr_codex_reviewed_v1_images.txt
+    - runs/cashsnap/real_overlap_focus_materialized_reviewed_v1/train_anchor_candidate_images.txt
+    train_safe_hard_negative_replay:
+    - runs/runs/visible_evidence_qa_lowrisk_empty_candidates_v1/coin_hardneg12_codex_reviewed_v1_images.txt
+    - configs/generated_lists/webgl_ablation/cashsnap_reviewed_foreignhardneg_koreanwon24_v1_extra.txt
+    - configs/generated_lists/audit/cashsnap_foreign_asian_currency_top33_from_bgfp_v1.txt
+    - configs/generated_lists/audit/cashsnap_countable_center50_fpneg32_added_negative_v1.txt
+    - runs/cashsnap/ve_v4_trainanchors_guard_v2/champion_train_empty_fp_analogs_allclasses_conf015_v1.json
+    high_risk_class_protectors:
+    - configs/generated_lists/webgl_ablation/cashsnap_v1_balanced_real_only_probe_train.txt
+    targeted_demo_gap_oblique_fan:
+    - data/synthetic/cashsnap_webgl_demo_gap_khr_fan_candidate_v1/images/train
+    targeted_khr10k20k_clean_contrast:
+    - data/synthetic/cashsnap_webgl_demo_gap_khr10k20k_clean_candidate_v1/images/train
+    targeted_khr10k20k_fan_contrast:
+    - data/synthetic/cashsnap_webgl_demo_gap_khr10k20k_fan_candidate_v1/images/train
+  summary:
+    rows: 6492
+    unique_rows: 2702
+    duplicate_exposures: 3790
+    empty_rows: 740
+    class_counts:
+      USD_1: 820
+      USD_5: 638
+      USD_10: 640
+      USD_20: 642
+      USD_50: 676
+      USD_100: 2825
+      KHR_500: 922
+      KHR_1000: 2189
+      KHR_2000: 620
+      KHR_5000: 2885
+      KHR_10000: 5032
+      KHR_20000: 3352
+      KHR_50000: 2104
+    base_rows: 5212
+    targeted_khr10k20k_clean_contrast:
+      unique: 256
+      repeat: 3
+      repeated_exposures: 768
+    targeted_khr10k20k_fan_contrast:
+      unique: 256
+      repeat: 2
+      repeated_exposures: 512
+cashsnap_policy:
+  intended_use: 'Short final contrast fine-tune: current demo-gap mix plus tight clean/fan
+    KHR_10000-vs-KHR_20000 synthetic dose for browser demo class confusion.'
+  promotion_rule: Promote only if exact browser clean/fan smoke improves and hard
+    oblique plus clean real guardrails do not materially regress.

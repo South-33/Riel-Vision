@@ -74,6 +74,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--texture-qa-effects", default="", help="Override texture_qa effect-ladder stage.")
     parser.add_argument("--occluder-policy", default="", help="Override catalog primitive occluder policy.")
     parser.add_argument("--negative-prop-policy", default="", help="Override catalog zero-label negative prop policy.")
+    parser.add_argument("--fan-spread-min", default="", help="Override catalog fan spread minimum.")
+    parser.add_argument("--fan-spread-max", default="", help="Override catalog fan spread maximum.")
+    parser.add_argument("--fan-note-count-min", default="", help="Override catalog fan note count minimum.")
+    parser.add_argument("--fan-note-count-max", default="", help="Override catalog fan note count maximum.")
     parser.add_argument("--artifact-status", choices=["smoke", "diagnostic", "trainable-candidate"], default="")
     parser.add_argument("--background-dir", type=Path, default=None)
     parser.add_argument("--environment-dir", type=Path, default=None, help="Optional equirectangular environment map directory for visual lighting/reflections.")
@@ -234,6 +238,10 @@ def main() -> int:
     negative_prop_policy = args.negative_prop_policy.strip() or str(recipe.get("negative_prop_policy", "classic")).strip() or "classic"
     if negative_prop_policy not in WEBGL_NEGATIVE_PROP_POLICIES:
         raise SystemExit(f"unsupported negative_prop_policy: {negative_prop_policy}")
+    fan_spread_min = args.fan_spread_min.strip() or str(recipe.get("fan_spread_min", "1.22")).strip() or "1.22"
+    fan_spread_max = args.fan_spread_max.strip() or str(recipe.get("fan_spread_max", "1.72")).strip() or "1.72"
+    fan_note_count_min = args.fan_note_count_min.strip() or str(recipe.get("fan_note_count_min", "6")).strip() or "6"
+    fan_note_count_max = args.fan_note_count_max.strip() or str(recipe.get("fan_note_count_max", "9")).strip() or "9"
     count = int(args.count if args.count is not None else recipe.get("render_pool_count", 4))
     if count < 1:
         raise SystemExit("--count must be positive")
@@ -318,6 +326,14 @@ def main() -> int:
         negative_prop_policy,
         "--texture-qa-effects",
         texture_qa_effects,
+        "--fan-spread-min",
+        fan_spread_min,
+        "--fan-spread-max",
+        fan_spread_max,
+        "--fan-note-count-min",
+        fan_note_count_min,
+        "--fan-note-count-max",
+        fan_note_count_max,
         "--recipe-name",
         args.recipe_id,
         "--artifact-status",
