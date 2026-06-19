@@ -56,6 +56,7 @@
         }
 
         body {
+            opacity: 0;
             background-color: var(--white);
             color: var(--blue);
             font-family: 'Space Mono', monospace;
@@ -1279,6 +1280,35 @@
         };
 
         document.addEventListener("DOMContentLoaded", () => {
+            // Smooth page fade-in from blank
+            gsap.to("body", { opacity: 1, duration: 1.2, ease: "power2.out" });
+
+            // CORS File:// protocol check and UI warning
+            if (window.location.protocol === 'file:') {
+                const tvStatus = document.getElementById('tv-status');
+                if (tvStatus) {
+                    tvStatus.innerHTML = 'ERROR: LOCAL SERVER REQUIRED';
+                    tvStatus.className = 'text-k-red font-bold uppercase';
+                }
+                const uploadState = document.getElementById('upload-state');
+                if (uploadState) {
+                    uploadState.innerHTML = `
+                        <div class="flex flex-col items-center justify-center p-6 md:p-8 bg-k-white border-4 border-k-red text-center max-w-lg shadow-[8px_8px_0_var(--red)] relative z-50">
+                            <span class="text-k-red font-bold text-3xl md:text-4xl mb-3 md:mb-4">⚠️</span>
+                            <h3 class="font-mono font-bold text-k-red text-base md:text-lg mb-2">CORS SECURITY ERROR: LOCAL SERVER REQUIRED</h3>
+                            <p class="font-mono text-dark-gray text-xs leading-relaxed mb-4">
+                                You have opened this page directly as a local file (file://). Browsers block WebGL textures and local ONNX model loading in this mode for security.
+                            </p>
+                            <div class="bg-k-red/10 border border-k-red p-3 w-full text-left font-mono text-[10px] md:text-xs text-dark-gray leading-normal">
+                                <strong>How to fix:</strong><br>
+                                1. Double-click <strong>autostart.bat</strong> in this folder.<br>
+                                2. Open this URL: <strong>http://127.0.0.1:8000/Presentation/RielVision.html</strong>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
             // Start the auto animation loop (stops on interaction, resumes on idle)
             window.animateHeroSlider();
             gsap.registerPlugin(ScrollTrigger);

@@ -20,7 +20,7 @@ cashsnap_production_pilot:
   schema: cashsnap_production_pilot_config_v1
   tag: cashsnap_production_pilot_full_v16_scaled2x_from_base
   base_reference_config: configs/webgl_ablation/cashsnap_production_pilot_v16_scaled2x.yaml
-  recommended_init_checkpoint: yolo26n.pt
+  recommended_init_checkpoint: models/yolo26n.pt
   component_sources:
     full_real_images:
     - configs/generated_lists/cashsnap_v1_full_real_only_seed_train.txt

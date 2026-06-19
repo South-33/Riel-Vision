@@ -46,7 +46,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Probe this machine and run YOLO training through the headroom governor."
     )
-    parser.add_argument("--model", default="yolo26n.pt")
+    parser.add_argument("--model", default="models/yolo26n.pt")
     parser.add_argument("--data", required=True)
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--imgsz", type=int, default=416)

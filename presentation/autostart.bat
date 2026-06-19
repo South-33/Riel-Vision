@@ -10,9 +10,9 @@ cd /d "%~dp0\..\.."
 echo Starting local HTTP server at project root...
 echo.
 echo Launching presentation in your default browser:
-echo      http://127.0.0.1:8000/submission/v6/RielVision.html
+echo      http://127.0.0.1:8000/presentation/RielVision.html
 echo.
-start "" "http://127.0.0.1:8000/submission/v6/RielVision.html"
+start "" "http://127.0.0.1:8000/presentation/RielVision.html"
 echo.
 echo Press Ctrl+C in this terminal to stop the server.
 echo.

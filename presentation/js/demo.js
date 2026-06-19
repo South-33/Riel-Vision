@@ -25,7 +25,7 @@ let isModelLoading = false;
 let CONF_THRESHOLD = 0.20;
 let currentBoxes = [];
 let currentInferenceTime = 0;
-const MODEL_URL = '../models/rielvision_core14_khr100_final_i640.onnx';
+const MODEL_URL = '../models/rielvision.onnx';
 
 const uploadInput = document.getElementById('demo-upload');
 const uploadState = document.getElementById('upload-state');

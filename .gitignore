@@ -35,6 +35,7 @@ data/inbox/
 *.pth
 *.onnx
 !models/*.onnx
+!models/*.pt
 *.tflite
 *.mlmodel
 

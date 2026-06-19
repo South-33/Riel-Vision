@@ -61,7 +61,7 @@ def no_validation_trainer(base_trainer):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a YOLO detector for CashSnap.")
     parser.add_argument("--data", default="configs/cashsnap_v1.yaml", help="YOLO dataset YAML path.")
-    parser.add_argument("--model", default="yolo26n.pt", help="Pretrained YOLO weights.")
+    parser.add_argument("--model", default="models/yolo26n.pt", help="Pretrained YOLO weights.")
     parser.add_argument("--epochs", type=int, default=80)
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--batch", default="auto", help="Integer batch size or 'auto' for the local hardware profile.")

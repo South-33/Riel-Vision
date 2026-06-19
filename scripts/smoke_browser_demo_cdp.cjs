@@ -237,7 +237,7 @@ async function connectCdp(debugPort, timeoutMs) {
   while (Date.now() - started < timeoutMs) {
     try {
       const pages = await (await fetch(`http://127.0.0.1:${debugPort}/json`)).json();
-      const page = pages.find((item) => (item.url || "").includes("/demo/browser/")) || pages[0];
+      const page = pages.find((item) => (item.url || "").includes("/tests/browser/")) || pages[0];
       if (page?.webSocketDebuggerUrl) {
         const ws = new WebSocket(page.webSocketDebuggerUrl);
         await new Promise((resolve, reject) => {
@@ -655,7 +655,7 @@ function browserUrl(args) {
   if (args.unclassifiedMinConf) params.set("unclassifiedMinConf", args.unclassifiedMinConf);
   if (args.nmsIou) params.set("nmsIou", args.nmsIou);
   if (args.cropPadding) params.set("cropPadding", args.cropPadding);
-  return `http://127.0.0.1:${args.port}/demo/browser/?${params.toString()}`;
+  return `http://127.0.0.1:${args.port}/tests/browser/?${params.toString()}`;
 }
 
 async function main() {
@@ -674,7 +674,7 @@ async function main() {
   });
   let edge = null;
   try {
-    await waitForHttp(`http://127.0.0.1:${args.port}/demo/browser/index.html`, 15000);
+    await waitForHttp(`http://127.0.0.1:${args.port}/tests/browser/index.html`, 15000);
     const url = browserUrl(args);
     edge = spawn(
       args.edge,
