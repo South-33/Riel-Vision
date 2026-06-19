@@ -1,0 +1,1607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RIEL VISION</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&family=VT323&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- GSAP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+    
+    <!-- THREE.JS IMPORT MAP -->
+    <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+    </script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'k-blue': '#0000ff',
+                        'k-red': '#ff0000',
+                        'k-white': '#f8f8f8',
+                        'dark-gray': '#1e1e1e',
+                    },
+                    fontFamily: {
+                        mono: ['"Space Mono"', 'monospace'],
+                        pixel: ['"VT323"', 'monospace'],
+                        sans: ['"Outfit"', 'sans-serif'],
+                    },
+                    backgroundImage: {
+                        'grid-pattern': "linear-gradient(to right, #0000ff11 1px, transparent 1px), linear-gradient(to bottom, #0000ff11 1px, transparent 1px)",
+                        'stripe-red': "repeating-linear-gradient(45deg, #ff0000, #ff0000 10px, transparent 10px, transparent 20px)",
+                        'stripe-blue': "repeating-linear-gradient(45deg, #0000ff, #0000ff 10px, transparent 10px, transparent 20px)"
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        :root {
+            --blue: #0000ff;
+            --red: #ff0000;
+            --white: #f8f8f8;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background-color: var(--white);
+            color: var(--blue);
+            font-family: 'Space Mono', monospace;
+            overflow-x: hidden;
+            cursor: crosshair;
+            margin: 0;
+            padding: 0;
+        }
+
+        ::-webkit-scrollbar { width: 12px; }
+        ::-webkit-scrollbar-track { background: var(--white); border-left: 2px solid var(--blue); }
+        ::-webkit-scrollbar-thumb { background: var(--blue); }
+
+        /* Smooth Scroll Fade Animations */
+        .gsap-fade-up, .gsap-challenge-card {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.8s ease, box-shadow 0.8s ease;
+            will-change: opacity, transform;
+        }
+        .gsap-fade-up.is-visible, .gsap-challenge-card.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .gsap-fade-up:hover, .gsap-challenge-card:hover {
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transition-delay: 0s !important;
+        }
+
+        /* Brutalist Styles */
+
+        .text-highlight { background-color: var(--blue); color: var(--white); padding: 0 6px; display: inline-block; }
+        .text-highlight-red { background-color: var(--red); color: var(--white); padding: 0 6px; display: inline-block; }
+
+        .border-brutal { border: 3px solid var(--blue); box-shadow: 6px 6px 0 var(--blue); }
+        .border-brutal-red { border: 3px solid var(--red); box-shadow: 6px 6px 0 var(--red); }
+        .border-brutal-dashed { border: 3px dashed var(--blue); }
+
+        .duotone-blue { position: relative; background-color: var(--blue); overflow: hidden; }
+        .duotone-blue img { width: 100%; height: 100%; object-fit: cover; mix-blend-mode: screen; filter: grayscale(100%) contrast(1.25); opacity: 0.85; }
+        
+        .bg-k-blue/5 { position: relative; background-color: var(--red); overflow: hidden; }
+        .bg-k-blue/5 img { width: 100%; height: 100%; object-fit: cover; mix-blend-mode: screen; filter: grayscale(100%) contrast(1.5); opacity: 0.9; }
+
+        .scan-line {
+            position: absolute; top: 0; left: 0; width: 100%; height: 3px;
+            background-color: var(--red); box-shadow: 0 0 12px var(--red); z-index: 10;
+            animation: scan 4s linear infinite;
+        }
+        @keyframes scan { 0% { top: 0%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
+
+        .marquee-container {
+            overflow: hidden; white-space: nowrap; border-top: 3px solid var(--blue); border-bottom: 3px solid var(--blue);
+            padding: 8px 0; background: var(--white);
+        }
+        .marquee-content { display: inline-flex; animation: marquee 25s linear infinite; }
+        @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+
+        .box-overlay { 
+            position: absolute; 
+            border: 2px solid var(--red); 
+            color: var(--red); 
+            font-family: 'Space Mono', monospace;
+            font-size: 0.65rem; 
+            display: flex; 
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 2px; 
+            background: rgba(255, 0, 0, 0.15); 
+            box-shadow: 0 0 8px rgba(255, 0, 0, 0.3);
+            text-transform: uppercase;
+        }
+
+        .crosshair { position: absolute; width: 12px; height: 12px; }
+        .crosshair::before, .crosshair::after { content: ''; position: absolute; background: var(--red); }
+        .crosshair::before { top: 50%; left: 0; width: 100%; height: 1px; }
+        .crosshair::after { top: 0; left: 50%; width: 1px; height: 100%; }
+
+        .glitch-text { position: relative; }
+        .glitch-text::before, .glitch-text::after {
+            content: attr(data-text);
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            pointer-events: none;
+            color: transparent; /* only show text-shadows, preventing double rendering */
+        }
+        .glitch-text::before {
+            left: 3px;
+            text-shadow: -2px 0 var(--red);
+            clip-path: inset(20% 0 50% 0);
+            animation: glitch-anim-2 3s infinite linear alternate-reverse;
+        }
+        .glitch-text::after {
+            left: -3px;
+            text-shadow: -2px 0 var(--blue);
+            clip-path: inset(60% 0 10% 0);
+            animation: glitch-anim 2.5s infinite linear alternate-reverse;
+        }
+
+        @keyframes glitch-anim {
+            0% { clip-path: inset(10% 0 85% 0); }
+            20% { clip-path: inset(60% 0 20% 0); }
+            40% { clip-path: inset(15% 0 80% 0); }
+            60% { clip-path: inset(80% 0 5% 0); }
+            80% { clip-path: inset(30% 0 55% 0); }
+            100% { clip-path: inset(70% 0 15% 0); }
+        }
+        @keyframes glitch-anim-2 {
+            0% { clip-path: inset(25% 0 58% 0); }
+            20% { clip-path: inset(15% 0 70% 0); }
+            40% { clip-path: inset(70% 0 5% 0); }
+            60% { clip-path: inset(45% 0 45% 0); }
+            80% { clip-path: inset(10% 0 80% 0); }
+            100% { clip-path: inset(80% 0 10% 0); }
+        }
+
+        /* Chart specific */
+        .chart-bar-container { position: relative; height: 100%; display: flex; align-items: flex-end; justify-content: space-around; width: 100%; }
+        .chart-bar { width: 32px; transition: height 1.5s cubic-bezier(0.16, 1, 0.3, 1); height: 0%; position: relative; }
+        .chart-label { text-align: center; width: 100%; font-size: 0.65rem; font-family: 'Space Mono', monospace; font-weight: bold; }
+        .chart-value { text-align: center; width: 100%; font-size: 0.7rem; font-family: 'Space Mono', monospace; font-weight: bold; opacity: 0; transition: opacity 0.5s ease 1s;}
+
+
+
+        /* ── WebGL 3D Scene Styles ── */
+        #threejs-canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .scene-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .scene-btn.active {
+            color: #ffffff !important;
+            border-color: #ffffff !important;
+            background-color: rgba(255, 255, 255, 0.15) !important;
+        }
+
+        .top-nav {
+            gap: 0.75rem;
+        }
+        .top-nav-links {
+            min-width: 0;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .top-nav-links::-webkit-scrollbar {
+            display: none;
+        }
+        .top-nav-links a {
+            white-space: nowrap;
+        }
+        .scene-frame {
+            min-height: 320px;
+        }
+        .scene-controls,
+        .demo-controls,
+        .demo-stat-group {
+            min-width: 0;
+        }
+        .demo-stat {
+            min-width: 11rem;
+        }
+        .demo-value {
+            min-width: 15rem;
+        }
+        .demo-conf {
+            min-width: 14rem;
+        }
+        @media (max-width: 900px) {
+            .top-nav {
+                align-items: flex-start;
+                padding: 0.65rem 0.75rem;
+            }
+            .top-nav-brand {
+                font-size: 1rem;
+            }
+            .top-nav-links {
+                width: 100%;
+                padding-bottom: 0.25rem;
+            }
+            .page-after-nav {
+                padding-top: 5.5rem;
+            }
+            .scene-frame {
+                height: min(68vh, 460px) !important;
+                min-height: 300px;
+            }
+            .scene-controls {
+                align-items: stretch;
+            }
+            .scene-controls > div {
+                width: 100%;
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+            .demo-shell {
+                box-shadow: 8px 8px 0 var(--blue) !important;
+            }
+            .demo-controls {
+                align-items: stretch;
+            }
+            .demo-stat-group {
+                display: grid !important;
+                grid-template-columns: 1fr;
+                gap: 0.75rem;
+            }
+            .demo-stat,
+            .demo-value,
+            .demo-conf {
+                width: 100%;
+                min-width: 0;
+            }
+        }
+        @media (max-width: 520px) {
+            .scene-frame {
+                height: 360px !important;
+                min-height: 360px;
+            }
+            .scene-hint {
+                display: none;
+            }
+            .scene-controls {
+                font-size: 0.7rem;
+            }
+            .demo-container {
+                aspect-ratio: 4 / 3;
+            }
+        }
+        
+        .demo-container.drag-over {
+            background-color: rgba(0, 0, 255, 0.1) !important;
+            outline: 4px dashed var(--red) !important;
+            outline-offset: -8px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+</head>
+<body class="bg-grid-pattern bg-[size:40px_40px] selection:bg-k-red selection:text-k-white">
+    
+
+
+    <!-- NAVIGATION -->
+    <nav class="top-nav fixed top-0 w-full z-50 bg-k-white/95 backdrop-blur-sm border-b-3 border-k-blue flex flex-col lg:flex-row lg:justify-between lg:items-center gap-3 px-4 md:px-6 py-3 text-sm md:text-base">
+        <div class="flex space-x-6 items-center">
+            <a href="#" class="top-nav-brand font-mono font-bold tracking-widest flex items-center gap-2 text-lg md:text-xl hover:text-k-red transition-colors duration-200">
+                <svg class="w-6 h-6 text-k-red" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.251.11a3.375 3.375 0 003.497-1.307 3.375 3.375 0 000-4.764 3.375 3.375 0 00-3.497-1.307A3.375 3.375 0 009 8.758V12m6 2.818l-.251-.11a3.375 3.375 0 01-3.497 1.307 3.375 3.375 0 010-4.764 3.375 3.375 0 013.497 1.307A3.375 3.375 0 0115 15.242V12"></path></svg>
+                RIEL VISION
+            </a>
+        </div>
+        <div class="top-nav-links flex flex-wrap justify-center gap-x-3 gap-y-2 md:gap-x-5 font-mono font-bold text-xs md:text-sm lg:text-base">
+            <a href="#scope" class="hover:bg-k-blue hover:text-k-white px-2 py-1 transition-colors duration-200">SCOPE</a>
+            <a href="#adversities" class="hover:bg-k-blue hover:text-k-white px-2 py-1 transition-colors duration-200">CHALLENGES</a>
+            <a href="#pipeline" class="hover:bg-k-blue hover:text-k-white px-2 py-1 transition-colors duration-200">METHOD</a>
+            <a href="#generalization" class="hover:bg-k-blue hover:text-k-white px-2 py-1 transition-colors duration-200">EVALUATION</a>
+            <a href="#results" class="hover:bg-k-blue hover:text-k-white px-2 py-1 transition-colors duration-200">BENCHMARKS</a>
+            <a href="#demo" class="border-2 border-k-red text-k-red hover:bg-k-red hover:text-k-white px-3 py-1 transition-colors duration-200">PROTOTYPE_DEMO</a>
+        </div>
+    </nav>
+
+    <!-- BANNER MARQUEE -->
+    <div class="page-after-nav pt-24 lg:pt-16">
+        <div class="marquee-container font-mono font-bold uppercase tracking-wider text-k-blue select-none text-sm md:text-base">
+            <div class="marquee-content">
+                <span class="pr-4">RIEL VISION LOCAL RUNTIME OPERATIONAL // DETECTOR ACCURACY: 96.8% ON CLEAN TESTS // RUNS 100% IN BROWSER VIA ONNX WEBWASM // 14 CURRENCY NOTES SUPPORTED (USD + KHR) // ZERO SERVER COGNITION REQUIRED // &nbsp;</span>
+                <span class="pr-4">RIEL VISION LOCAL RUNTIME OPERATIONAL // DETECTOR ACCURACY: 96.8% ON CLEAN TESTS // RUNS 100% IN BROWSER VIA ONNX WEBWASM // 14 CURRENCY NOTES SUPPORTED (USD + KHR) // ZERO SERVER COGNITION REQUIRED // &nbsp;</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- HERO SECTION -->
+    <section class="min-h-[85vh] flex flex-col justify-center px-6 md:px-16 relative overflow-hidden">
+        <div class="absolute inset-0 pointer-events-none opacity-5 flex justify-center items-center font-pixel text-[55vw] leading-none text-k-blue select-none">
+            ៛
+        </div>
+        
+        <div class="max-w-7xl mx-auto w-full z-10 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center mt-6">
+            <div class="lg:col-span-6 gsap-hero bg-k-white/90 p-6 border-l-4 border-k-blue backdrop-blur-sm">
+                <p class="mb-4 tracking-widest font-mono font-bold text-k-red text-sm md:text-base">// REAL-TIME MULTI-CURRENCY DETECTOR ENGINE</p>
+                <h1 class="text-6xl md:text-8xl lg:text-[10rem] font-bold font-pixel leading-none mb-6 glitch-text relative z-10" data-text="RIEL VISION">
+                    <span class="text-highlight">RIEL</span><br>VISION
+                </h1>
+                <p class="font-semibold mb-8 max-w-lg border-l-4 border-k-red pl-4 leading-snug uppercase text-k-blue text-lg md:text-xl">
+                    A small local banknote detector that runs in the browser, finds banknotes, and estimates the total value from a single photo.
+                </p>
+                <div class="flex flex-col sm:flex-row gap-4 font-mono font-bold">
+                    <a href="#demo" class="border-3 border-k-blue px-8 py-4 bg-k-red text-k-white hover:bg-k-white hover:text-k-red shadow-[8px_8px_0_var(--blue)] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[10px_10px_0_var(--blue)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--blue)] transition-all duration-150 text-center tracking-widest uppercase text-lg md:text-xl">TRY PROTOTYPE</a>
+                </div>
+            </div>
+            
+            <div class="lg:col-span-6 relative w-full border-brutal p-2 bg-k-white gsap-hero-img shadow-[15px_15px_0_var(--blue)] flex flex-col justify-between">
+                <!-- Selector Tabs at the Top -->
+                <div class="flex justify-between items-center mb-2 font-mono border-b-2 border-k-blue pb-2 text-sm md:text-base">
+                    <span class="font-bold text-k-blue">// FANNED DETECTION PREVIEW</span>
+                    <div class="flex space-x-1" id="hero-slider-selectors">
+                        <button class="px-2 py-1 bg-k-blue text-k-white font-bold transition-all border border-k-blue" onclick="switchHeroSlider(this, 'khr1000')">1K RIEL</button>
+                        <button class="px-2 py-1 bg-k-white text-k-blue hover:bg-k-blue hover:text-k-white transition-all border border-k-blue" onclick="switchHeroSlider(this, 'khr5000')">5K RIEL</button>
+                        <button class="px-2 py-1 bg-k-white text-k-blue hover:bg-k-blue hover:text-k-white transition-all border border-k-blue" onclick="switchHeroSlider(this, 'khr500')">500 RIEL</button>
+                    </div>
+                </div>
+
+                <!-- Slider Container -->
+                <div class="relative w-full aspect-square overflow-hidden cursor-col-resize select-none border-2 border-k-blue" 
+                     id="hero-comparison-slider" 
+                     style="--clip-percent: 50%;" 
+                     onmousemove="handleHeroSliderMove(event, this); isHeroSliderInteracted = true;" 
+                     ontouchmove="handleHeroSliderMove(event, this); isHeroSliderInteracted = true;"
+                     onmousedown="startHeroSliderDrag(event, this); isHeroSliderInteracted = true;"
+                     onmouseup="stopHeroSliderDrag()"
+                     onmouseleave="stopHeroSliderDrag(); scheduleResumeAutoSlider();">
+                     
+                    <!-- Bottom Image Layer (Annotated) -->
+                    <div class="absolute inset-0 overflow-hidden pointer-events-none">
+                        <img id="hero-img-annotated" src="images/img_e10671fb28b7.jpeg" class="w-full h-full object-cover scale-[1.15] pointer-events-none" alt="Annotated Banknotes">
+                    </div>
+                    
+                    <!-- Top Image Layer (Raw) -->
+                    <div class="absolute inset-0 overflow-hidden pointer-events-none" style="clip-path: polygon(0 0, var(--clip-percent) 0, var(--clip-percent) 100%, 0 100%);">
+                        <img id="hero-img-raw" src="images/img_b431d864af85.jpeg" class="w-full h-full object-cover scale-[1.15] pointer-events-none" alt="Raw Banknotes">
+                    </div>
+                    
+                    <!-- Tech vectors on top of everything -->
+                    <svg class="absolute inset-0 w-full h-full pointer-events-none mix-blend-difference" style="stroke: var(--white); stroke-width: 1.5; fill: none; z-index: 8;">
+                        <circle cx="50%" cy="50%" r="140" stroke-dasharray="6 6" opacity="0.3"/>
+                        <circle cx="50%" cy="50%" r="130" stroke-dasharray="1 8" opacity="0.5"/>
+                        <line x1="0" y1="50%" x2="100%" y2="50%" opacity="0.4" stroke-dasharray="4 4" />
+                        <line x1="50%" y1="0" x2="50%" y2="100%" opacity="0.4" stroke-dasharray="4 4" />
+                    </svg>
+
+                    <!-- Scan line positioned on the slider handle to look like a laser scanning! -->
+                    <div class="absolute top-0 bottom-0 left-[var(--clip-percent)] w-0.5 bg-k-red z-10 pointer-events-none shadow-[0_0_10px_var(--red)]" style="transform: translateX(-50%);"></div>
+
+                    <!-- Slide comparison badge -->
+                    <div class="absolute top-2 right-2 bg-k-blue text-k-white font-mono font-bold px-2 py-0.5 z-10 pointer-events-none uppercase tracking-wider text-sm md:text-base">// SWIPE TO DETECT</div>
+
+                    <!-- Slider Handle button -->
+                    <div class="absolute top-1/2 left-[var(--clip-percent)] -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-k-red text-k-white border-2 border-k-white flex items-center justify-center pointer-events-none z-20 shadow-[0_3px_8px_rgba(0,0,0,0.5)]">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path>
+                        </svg>
+                        <svg class="w-4 h-4 -ml-1" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+    </section>
+
+    <!-- HORIZONTAL BLUE DIVIDER -->
+    <div class="w-full border-t-3 border-k-blue"></div>
+
+    <!-- SCOPE SECTION -->
+    <section id="scope" class="py-16 px-6 md:px-16 bg-k-white border-b-3 border-k-blue relative">
+        <div class="max-w-7xl mx-auto z-10 relative">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 border-b-4 border-k-blue pb-4 gsap-fade-up">
+                <div>
+                    <p class="font-mono tracking-widest text-k-red mb-1 uppercase text-sm md:text-base">// SCOPE</p>
+                    <h2 class="font-mono font-bold uppercase leading-none text-2xl md:text-4xl">14 Supported Banknote Classes</h2>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-7 gap-6 mb-8 items-stretch">
+                <!-- USD CARD -->
+                <div class="border-brutal p-6 bg-k-white relative flex flex-col justify-between lg:col-span-3">
+                    <div>
+                        <div class="absolute -top-4 left-6 bg-k-blue text-k-white px-3 py-1 font-mono font-bold uppercase tracking-wider text-sm md:text-base">United States Dollar (USD)</div>
+                        <div class="flex items-center gap-4 mb-6 mt-2">
+                            <span class="text-2xl md:text-4xl">🇺🇸</span>
+                            <div class="font-mono opacity-75 font-bold uppercase text-sm md:text-base">// 6 DENOMINATIONS IN SCOPE</div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                            <!-- $1 -->
+                            <div class="border border-k-blue bg-k-white hover:-translate-y-1 hover:border-k-red transition duration-200 [transform:translateZ(0)] [backface-visibility:hidden] flex flex-col justify-between h-full cursor-pointer" onclick="openNoteLightbox('images/img_9bbb829fe03d.jpeg', 'USD $1', 'UNITED STATES OF AMERICA', 'DIMENSIONS: 156 × 66.3 MM // 75% COTTON, 25% LINEN', false)">
+                                <div class="w-full aspect-[2.35/1] bg-k-blue/5 border-b border-k-blue/15 flex items-center justify-center p-0.5 overflow-hidden">
+                                    <img src="images/img_9bbb829fe03d.jpeg" alt="$1" class="max-w-full max-h-full object-contain pointer-events-none [backface-visibility:hidden] [transform:translateZ(0)]">
+                                </div>
+                                <div class="py-2 text-center font-mono font-bold text-sm md:text-base">USD $1</div>
+                            </div>
+                            <!-- $5 -->
+                            <div class="border border-k-blue bg-k-white hover:-translate-y-1 hover:border-k-red transition duration-200 [transform:translateZ(0)] [backface-visibility:hidden] flex flex-col justify-between h-full cursor-pointer" onclick="openNoteLightbox('images/img_b785c67bb2bf.jpeg', 'USD $5', 'UNITED STATES OF AMERICA', 'DIMENSIONS: 156 × 66.3 MM // PORTRAIT: ABRAHAM LINCOLN', false)">
+                                <div class="w-full aspect-[2.35/1] bg-k-blue/5 border-b border-k-blue/15 flex items-center justify-center p-0.5 overflow-hidden">
+                                    <img src="images/img_b785c67bb2bf.jpeg" alt="$5" class="max-w-full max-h-full object-contain pointer-events-none [backface-visibility:hidden] [transform:translateZ(0)]">
+                                </div>
+                                <div class="py-2 text-center font-mono font-bold text-sm md:text-base">USD $5</div>
+                            </div>
+                            <!-- $10 -->
+                            <div class="border border-k-blue bg-k-white hover:-translate-y-1 hover:border-k-red transition duration-200 [transform:translateZ(0)] [backface-visibility:hidden] flex flex-col justify-between h-full cursor-pointer" onclick="openNoteLightbox('images/img_4d4980f8911e.jpeg', 'USD $10', 'UNITED STATES OF AMERICA', 'DIMENSIONS: 156 × 66.3 MM // PORTRAIT: ALEXANDER HAMILTON', false)">
+                                <div class="w-full aspect-[2.35/1] bg-k-blue/5 border-b border-k-blue/15 flex items-center justify-center p-0.5 overflow-hidden">
+                                    <img src="images/img_4d4980f8911e.jpeg" alt="$10" class="max-w-full max-h-full object-contain pointer-events-none [backface-visibility:hidden] [transform:translateZ(0)]">
+                                </div>
+                                <div class="py-2 text-center font-mono font-bold text-sm md:text-base">USD $10</div>
+                            </div>
+                            <!-- $20 -->
+                            <div class="border border-k-blue bg-k-white hover:-translate-y-1 hover:border-k-red transition duration-200 [transform:translateZ(0)] [backface-visibility:hidden] flex flex-col justify-between h-full cursor-pointer" onclick="openNoteLightbox('images/img_ae6ec2ec34a4.jpeg', 'USD $20', 'UNITED STATES OF AMERICA', 'DIMENSIONS: 156 × 66.3 MM // PORTRAIT: ANDREW JACKSON', false)">
+                                <div class="w-full aspect-[2.35/1] bg-k-blue/5 border-b border-k-blue/15 flex items-center justify-center p-0.5 overflow-hidden">
+                                    <img src="images/img_ae6ec2ec34a4.jpeg" alt="$20" class="max-w-full max-h-full object-contain pointer-events-none [backface-visibility:hidden] [transform:translateZ(0)]">
+                                </div>
+                                <div class="py-2 text-center font-mono font-bold text-sm md:text-base">USD $20</div>
+                            </div>
+                            <!-- $50 -->
+                            <div class="border border-k-blue bg-k-white hover:-translate-y-1 hover:border-k-red transition duration-200 [transform:translateZ(0)] [backface-visibility:hidden] flex flex-col justify-between h-full cursor-pointer" onclick="openNoteLightbox('images/img_76d9f4e30dbd.jpeg', 'USD $50', 'UNITED STATES OF AMERICA', 'DIMENSIONS: 156 × 66.3 MM // PORTRAIT: ULYSSES S. GRANT', false)">
+                                <div class="w-full aspect-[2.35/1] bg-k-blue/5 border-b border-k-blue/15 flex items-center justify-center p-0.5 overflow-hidden">
+                                    <img src="images/img_76d9f4e30dbd.jpeg" alt="$50" class="max-w-full max-h-full object-contain pointer-events-none [backface-visibility:hidden] [transform:translateZ(0)]">
+                                </div>
+                                <div class="py-2 text-center font-mono font-bold text-sm md:text-base">USD $50</div>
+                            </div>
+                            <!-- $100 -->
+                            <div class="border border-k-blue bg-k-white hover:-translate-y-1 hover:border-k-red transition duration-200 [transform:translateZ(0)] [backface-visibility:hidden] flex flex-col justify-between h-full cursor-pointer" onclick="openNoteLightbox('images/img_1ea2f70bb2f7.jpeg', 'USD $100', 'UNITED STATES OF AMERICA', 'DIMENSIONS: 156 × 66.3 MM // PORTRAIT: BENJAMIN FRANKLIN', false)">
+                                <div class="w-full aspect-[2.35/1] bg-k-blue/5 border-b border-k-blue/15 flex items-center justify-center p-0.5 overflow-hidden">
+                                    <img src="images/img_1ea2f70bb2f7.jpeg" alt="$100" class="max-w-full max-h-full object-contain pointer-events-none [backface-visibility:hidden] [transform:translateZ(0)]">
+                                </div>
+                                <div class="py-2 text-center font-mono font-bold text-sm md:text-base">USD $100</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KHR CARD -->
+                <div class="border-brutal-red p-6 bg-k-white relative flex flex-col justify-between lg:col-span-4">
+                    <div>
+                        <div class="absolute -top-4 left-6 bg-k-red text-k-white px-3 py-1 font-mono font-bold uppercase tracking-wider text-sm md:text-base">Cambodian Riel (KHR)</div>
+                        <div class="flex items-center gap-4 mb-6 mt-2">
+                            <span class="text-2xl md:text-4xl">🇰🇭</span>
+                            <div class="font-mono opacity-75 font-bold uppercase text-sm md:text-base">// 8 DENOMINATIONS IN SCOPE</div>
+                        </div>
+
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            <!-- 100 Riels -->
+                            <div class="border border-k-red bg-k-white hover:-translate-y-1 hover:border-k-blue transition duration-200 [transform:translateZ(0)] [backface-visibility:hidden] flex flex-col justify-between h-full cursor-pointer" onclick="openNoteLightbox('images/img_fe1787bebfeb.jpeg', 'KHR 100៛', 'KINGDOM OF CAMBODIA', 'DIMENSIONS: 138 × 63 MM // PORTRAIT: NORODOM SIHAMONI', true)">
+                                <div class="w-full aspect-[2.35/1] bg-k-red/5 border-b border-k-red/15 flex items-center justify-center p-0.5 overflow-hidden">
+                                    <img src="images/img_fe1787bebfeb.jpeg" alt="100៛" class="max-w-full max-h-full object-contain pointer-events-none [backface-visibility:hidden] [transform:translateZ(0)]">
+                                </div>
+                                <div class="py-2 text-center font-mono font-bold text-sm md:text-base">KHR 100៛</div>
+                            </div>
+                            <!-- 500 Riels -->
+                            <div class="border border-k-red bg-k-white hover:-translate-y-1 hover:border-k-blue transition duration-200 [transform:translateZ(0)] [backface-visibility:hidden] flex flex-col justify-between h-full cursor-pointer" onclick="openNoteLightbox('images/img_42190c1fbfeb.jpeg', 'KHR 500៛', 'KINGDOM OF CAMBODIA', 'DIMENSIONS: 140 × 64 MM // FRONT: NEAK LEOUNG BRIDGE', true)">
+                                <div class="w-full aspect-[2.35/1] bg-k-red/5 border-b border-k-red/15 flex items-center justify-center p-0.5 overflow-hidden">
+                                    <img src="images/img_42190c1fbfeb.jpeg" alt="500៛" class="max-w-full max-h-full object-contain pointer-events-none [backface-visibility:hidden] [transform:translateZ(0)]">
+                                </div>
+                                <div class="py-2 text-center font-mono font-bold text-sm md:text-base">KHR 500៛</div>
+                            </div>
+                            <!-- 1,000 Riels -->
+                            <div class="border border-k-red bg-k-white hover:-translate-y-1 hover:border-k-blue transition duration-200 [transform:translateZ(0)] [backface-visibility:hidden] flex flex-col justify-between h-full cursor-pointer" onclick="openNoteLightbox('images/img_6eb4a86b54e6.jpeg', 'KHR 1,000៛', 'KINGDOM OF CAMBODIA', 'DIMENSIONS: 146 × 68 MM // FRONT: ROYAL PALACE', true)">
+                                <div class="w-full aspect-[2.35/1] bg-k-red/5 border-b border-k-red/15 flex items-center justify-center p-0.5 overflow-hidden">
+                                    <img src="images/img_6eb4a86b54e6.jpeg" alt="1,000៛" class="max-w-full max-h-full object-contain pointer-events-none [backface-visibility:hidden] [transform:translateZ(0)]">
+                                </div>
+                                <div class="py-2 text-center font-mono font-bold text-sm md:text-base">KHR 1,000៛</div>
+                            </div>
+                            <!-- 2,000 Riels -->
+                            <div class="border border-k-red bg-k-white hover:-translate-y-1 hover:border-k-blue transition duration-200 [transform:translateZ(0)] [backface-visibility:hidden] flex flex-col justify-between h-full cursor-pointer" onclick="openNoteLightbox('images/img_b304927deeb4.jpeg', 'KHR 2,000៛', 'KINGDOM OF CAMBODIA', 'DIMENSIONS: 146 × 68 MM // THEME: INDEPENDENCE MONUMENT', true)">
+                                <div class="w-full aspect-[2.35/1] bg-k-red/5 border-b border-k-red/15 flex items-center justify-center p-0.5 overflow-hidden">
+                                    <img src="images/img_b304927deeb4.jpeg" alt="2,000៛" class="max-w-full max-h-full object-contain pointer-events-none [backface-visibility:hidden] [transform:translateZ(0)]">
+                                </div>
+                                <div class="py-2 text-center font-mono font-bold text-sm md:text-base">KHR 2,000៛</div>
+                            </div>
+                            <!-- 5,000 Riels -->
+                            <div class="border border-k-red bg-k-white hover:-translate-y-1 hover:border-k-blue transition duration-200 [transform:translateZ(0)] [backface-visibility:hidden] flex flex-col justify-between h-full cursor-pointer" onclick="openNoteLightbox('images/img_d9f6c02e6226.jpeg', 'KHR 5,000៛', 'KINGDOM OF CAMBODIA', 'DIMENSIONS: 146 × 68 MM // PORTRAIT: NORODOM SIHANOUK', true)">
+                                <div class="w-full aspect-[2.35/1] bg-k-red/5 border-b border-k-red/15 flex items-center justify-center p-0.5 overflow-hidden">
+                                    <img src="images/img_d9f6c02e6226.jpeg" alt="5,000៛" class="max-w-full max-h-full object-contain pointer-events-none [backface-visibility:hidden] [transform:translateZ(0)]">
+                                </div>
+                                <div class="py-2 text-center font-mono font-bold text-sm md:text-base">KHR 5,000៛</div>
+                            </div>
+                            <!-- 10,000 Riels -->
+                            <div class="border border-k-red bg-k-white hover:-translate-y-1 hover:border-k-blue transition duration-200 [transform:translateZ(0)] [backface-visibility:hidden] flex flex-col justify-between h-full cursor-pointer" onclick="openNoteLightbox('images/img_d7b5ad7db2e9.jpeg', 'KHR 10,000៛', 'KINGDOM OF CAMBODIA', 'DIMENSIONS: 146 × 68 MM // PORTRAIT: NORODOM SIHAMONI', true)">
+                                <div class="w-full aspect-[2.35/1] bg-k-red/5 border-b border-k-red/15 flex items-center justify-center p-0.5 overflow-hidden">
+                                    <img src="images/img_d7b5ad7db2e9.jpeg" alt="10,000៛" class="max-w-full max-h-full object-contain pointer-events-none [backface-visibility:hidden] [transform:translateZ(0)]">
+                                </div>
+                                <div class="py-2 text-center font-mono font-bold text-sm md:text-base">KHR 10,000៛</div>
+                            </div>
+                            <!-- 20,000 Riels -->
+                            <div class="border border-k-red bg-k-white hover:-translate-y-1 hover:border-k-blue transition duration-200 [transform:translateZ(0)] [backface-visibility:hidden] flex flex-col justify-between h-full cursor-pointer" onclick="openNoteLightbox('images/img_4e560d0aacf6.jpeg', 'KHR 20,000៛', 'KINGDOM OF CAMBODIA', 'DIMENSIONS: 155 × 72 MM // FRONT: DECORATIVE ANGKORIAN LION', true)">
+                                <div class="w-full aspect-[2.35/1] bg-k-red/5 border-b border-k-red/15 flex items-center justify-center p-0.5 overflow-hidden">
+                                    <img src="images/img_4e560d0aacf6.jpeg" alt="20,000៛" class="max-w-full max-h-full object-contain pointer-events-none [backface-visibility:hidden] [transform:translateZ(0)]">
+                                </div>
+                                <div class="py-2 text-center font-mono font-bold text-sm md:text-base">KHR 20,000៛</div>
+                            </div>
+                            <!-- 50,000 Riels -->
+                            <div class="border border-k-red bg-k-white hover:-translate-y-1 hover:border-k-blue transition duration-200 [transform:translateZ(0)] [backface-visibility:hidden] flex flex-col justify-between h-full cursor-pointer" onclick="openNoteLightbox('images/img_c1131f357730.jpeg', 'KHR 50,000៛', 'KINGDOM OF CAMBODIA', 'DIMENSIONS: 150 × 70 MM // THEME: BAKONG TEMPLE', true)">
+                                <div class="w-full aspect-[2.35/1] bg-k-red/5 border-b border-k-red/15 flex items-center justify-center p-0.5 overflow-hidden">
+                                    <img src="images/img_c1131f357730.jpeg" alt="50,000៛" class="max-w-full max-h-full object-contain pointer-events-none [backface-visibility:hidden] [transform:translateZ(0)]">
+                                </div>
+                                <div class="py-2 text-center font-mono font-bold text-sm md:text-base">KHR 50,000៛</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Out of scope callout -->
+            <div class="border-2 border-k-blue/30 p-4 bg-k-blue/5 text-k-blue font-mono font-bold uppercase mt-4 text-sm md:text-base">
+                <strong>OUTSIDE THE CURRENT DEMO SCOPE:</strong> USD 2, KHR 50, KHR 200, KHR 15,000, KHR 30,000, KHR 100,000, and KHR 200,000.
+            </div>
+        </div>
+    </section>
+
+    <!-- PROBLEMS FACED (CHALLENGES) -->
+    <section id="adversities" class="py-16 px-6 md:px-16 bg-k-white border-b-3 border-k-blue">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 border-b-4 border-k-blue pb-4 gsap-fade-up">
+                <div>
+                    <p class="font-mono tracking-widest text-k-red mb-1 uppercase text-sm md:text-base">// CHALLENGES</p>
+                    <h2 class="font-mono font-bold uppercase leading-none text-2xl md:text-4xl">The Limits of Traditional OCR</h2>
+                </div>
+                <span class="text-k-blue font-mono font-bold mt-4 md:mt-0 text-lg md:text-xl">[CHALLENGE_LOG_01]</span>
+            </div>
+            <p class="font-bold mb-12 text-k-red leading-relaxed text-lg md:text-xl">
+                Standard banknote scanners and OCR systems only work if the bills are clean, flat, and fully visible. Our project is designed for the real world: we train our model to recognize currency even when bills are partially covered, stacked on top of each other, or tilted at weird camera angles.
+            </p>
+
+            <!-- Large Showcase Card: Clean Photos -->
+            <div class="border-brutal p-6 md:p-8 bg-k-white hover:border-k-red hover:shadow-[6px_6px_0_var(--red)] transition duration-200 [transform:translateZ(0)] [backface-visibility:hidden] mb-12 flex flex-col justify-between gsap-fade-up">
+                <div class="mb-6">
+                    <h3 class="font-mono font-bold mb-2 uppercase text-k-blue text-lg md:text-xl">Clean Scan Baseline</h3>
+                    <p class="leading-relaxed text-dark-gray font-sans text-sm md:text-base">
+                        Traditional OCR expects flat, isolated, and fully visible banknotes.
+                    </p>
+                </div>
+                
+                <!-- Clean note image display below text -->
+                <div class="w-full aspect-[2.35/1] md:aspect-[3.5/1] bg-k-blue/5 border border-k-blue/15 flex items-center justify-center p-4 overflow-hidden relative">
+                    <img src="images/img_c1131f357730.jpeg" alt="Too Easy Scanned Notes" class="max-w-full max-h-full object-contain pointer-events-none shadow-md [transform:translateZ(0)]">
+                </div>
+            </div>
+
+            <!-- Three Column Grid for Real Challenges -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Card 1 -->
+                <div class="border-2 border-k-blue p-2 bg-k-white gsap-challenge-card group hover:bg-k-blue transition-colors duration-300" style="transition-delay: 0ms;">
+                    <div class="bg-k-blue/5 w-full aspect-video relative overflow-hidden">
+                        <img src="images/img_af89a58c7cc8.jpeg" alt="Partial Visibility" class="group-hover:scale-110 transition-transform duration-700 w-full h-full object-cover">
+                        <div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMSIvPgo8L3N2Zz4=')] opacity-50 mix-blend-overlay"></div>
+                    </div>
+                    <div class="p-4 group-hover:text-k-white">
+                        <h3 class="font-bold font-mono mb-2 border-b border-current pb-1 text-k-blue group-hover:text-k-white text-lg md:text-xl">01. PARTIAL VISIBILITY</h3>
+                        <p class="font-mono opacity-80 uppercase text-k-blue group-hover:text-k-white text-sm md:text-base">Training the model to recognize a banknote from isolated fragments—like a portrait crop, color strip, or security band—instead of requiring the entire note.</p>
+                        <div class="mt-4 font-bold tracking-widest uppercase text-k-red group-hover:text-k-white text-sm md:text-base">// CLUE DETECTION</div>
+                    </div>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="border-2 border-k-blue p-2 bg-k-white gsap-challenge-card group hover:bg-k-blue transition-colors duration-300" style="transition-delay: 150ms;">
+                    <div class="bg-k-blue/5 w-full aspect-video relative overflow-hidden">
+                        <img src="images/img_a672262e9539.jpeg" alt="Bill Overlap" class="group-hover:scale-110 transition-transform duration-700 w-full h-full object-cover">
+                        <div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMSIvPgo8L3N2Zz4=')] opacity-50 mix-blend-overlay"></div>
+                    </div>
+                    <div class="p-4 group-hover:text-k-white">
+                        <h3 class="font-bold font-mono mb-2 border-b border-current pb-1 text-k-blue group-hover:text-k-white text-lg md:text-xl">02. BILL OVERLAP</h3>
+                        <p class="font-mono opacity-80 uppercase text-k-blue group-hover:text-k-white text-sm md:text-base">Teaching the model to segment overlapping boundaries and count individual bills correctly, preventing them from merging into a single box.</p>
+                        <div class="mt-4 font-bold tracking-widest uppercase text-k-red group-hover:text-k-white text-sm md:text-base">// ANCHOR SEPARATION</div>
+                    </div>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="border-2 border-k-blue p-2 bg-k-white gsap-challenge-card group hover:bg-k-blue transition-colors duration-300" style="transition-delay: 300ms;">
+                    <div class="bg-k-blue/5 w-full aspect-video relative overflow-hidden">
+                        <img src="images/img_133edf63a877.png" alt="Camera Angles" class="group-hover:scale-110 transition-transform duration-700 w-full h-full object-cover">
+                        <div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMSIvPgo8L3N2Zz4=')] opacity-50 mix-blend-overlay"></div>
+                        <div class="absolute top-2 right-2 bg-k-red text-k-white px-2 py-0.5 font-mono font-bold uppercase tracking-widest z-10 text-sm md:text-base">// SYNTHETIC</div>
+                    </div>
+                    <div class="p-4 group-hover:text-k-white">
+                        <h3 class="font-bold font-mono mb-2 border-b border-current pb-1 text-k-blue group-hover:text-k-white text-lg md:text-xl">03. CAMERA ANGLES</h3>
+                        <p class="font-mono opacity-80 uppercase text-k-blue group-hover:text-k-white text-sm md:text-base">Adapting the detector to handle tilted, rotated, or slanted camera perspective angles typical of casual mobile photos rather than top-down document scans.</p>
+                        <div class="mt-4 font-bold tracking-widest uppercase text-k-red group-hover:text-k-white text-sm md:text-base">// ROTATION MATRIX</div>
+                    </div>
+                </div>
+</div>
+        </div>
+    </div>
+</section>
+
+    <!-- APPROACH SECTION (METHOD) -->
+    <section id="pipeline" class="py-16 px-6 md:px-16 bg-grid-pattern bg-[size:20px_20px] border-b-4 border-k-red relative">
+        <div class="absolute inset-0 bg-k-white opacity-95 z-0"></div>
+        <div class="max-w-7xl mx-auto relative z-10">
+            <h2 class="font-mono font-bold mt-6 mb-4 text-center bg-k-white py-2 px-6 border-2 border-k-blue mx-auto block w-fit text-2xl md:text-4xl">
+                Methodology
+            </h2>
+            <p class="text-center mb-12 font-bold w-fit max-w-full mx-auto bg-k-white p-3 px-6 md:px-8 border-2 border-k-red uppercase text-k-blue tracking-wider text-sm md:text-base">
+                Use real data to train the base model to generalize, then fill in the gaps where it fails with synthetic data.
+            </p>
+
+            <div class="max-w-5xl mx-auto space-y-16">
+                
+                <!-- STEP 1: DATA SCRAPING & AUDIT -->
+                <div class="border-brutal bg-k-white p-6 md:p-8 relative gsap-pipeline shadow-[6px_6px_0_var(--blue)]">
+                    <div class="absolute -top-3 left-6 bg-k-white border border-k-blue px-2 py-0.5 font-mono font-bold uppercase tracking-wider text-sm md:text-base">// STEP 01 // DATA SCRAPING & AUDIT</div>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center mt-2">
+                        <div class="lg:col-span-7">
+                            <h3 class="font-mono font-bold mb-3 text-k-blue uppercase text-lg md:text-xl">1. Building the Real-World Foundation</h3>
+                            <p class="text-dark-gray font-sans leading-relaxed mb-4 text-sm md:text-base">
+                                Standard currency OCR projects fail because real Cambodian Riel (KHR) and USD banknote photos are scarce, badly cropped, or mislabeled. We scoured the internet to compile every available source across Roboflow and Hugging Face.
+                            </p>
+                            <p class="text-dark-gray font-sans leading-relaxed mb-4 text-sm md:text-base">
+                                Through a rigorous manual audit, we cleaned up bounding boxes, corrected denomination labels, and removed duplicates to assemble a clean baseline dataset.
+                            </p>
+                            <div class="font-mono opacity-80 space-y-1.5 border-t border-k-blue/20 pt-4 text-sm md:text-base mt-6">
+                                <p class="text-k-blue font-bold">AUDIT REPORT:</p>
+                                <p>➔ <strong>3,420</strong> verified real-world banknote photos compiled</p>
+                                <p>➔ <strong>100%</strong> label and coordinate verification</p>
+                                <p>➔ Corrected major schema issues (like missing USD 1/20/50 classes in public sets)</p>
+                            </div>
+                        </div>
+                        
+                        <div class="lg:col-span-5 bg-[#f4f4f4] border-t-4 border-k-blue p-5 font-mono shadow-sm">
+                            <div class="font-bold text-k-blue mb-4 uppercase tracking-wider text-xs border-b border-k-blue/20 pb-2">// SCOURED DATA SOURCES</div>
+                            <div class="flex flex-col gap-3 font-bold text-dark-gray text-[10px] lg:text-xs">
+                                <div class="flex justify-between items-start gap-2">
+                                    <span>📂 roboflow/cambodia-currency</span>
+                                    <span class="text-k-blue shrink-0">// KHR REAL</span>
+                                </div>
+                                <div class="flex justify-between items-start gap-2">
+                                    <span>📂 roboflow/khmer-us-currency</span>
+                                    <span class="text-k-blue shrink-0">// KHR/USD REAL</span>
+                                </div>
+                                <div class="flex justify-between items-start gap-2">
+                                    <span>📂 roboflow/khmer-scan</span>
+                                    <span class="text-k-blue shrink-0">// KHR REAL</span>
+                                </div>
+                                <div class="flex justify-between items-start gap-2">
+                                    <span>📂 roboflow/cashcountingxl</span>
+                                    <span class="text-k-blue shrink-0">// USD REAL</span>
+                                </div>
+                                <div class="flex justify-between items-start gap-2">
+                                    <span>📂 roboflow/billsbank</span>
+                                    <span class="text-k-blue shrink-0">// USD REAL</span>
+                                </div>
+                                <div class="flex justify-between items-start gap-2">
+                                    <span>📂 roboflow/usd-total</span>
+                                    <span class="text-k-blue shrink-0">// USD REAL</span>
+                                </div>
+                                <div class="flex justify-between items-start gap-2 opacity-50">
+                                    <span>📂 roboflow/asian-currency</span>
+                                    <span class="text-k-blue shrink-0">// NEGATIVES</span>
+                                </div>
+                                <div class="flex justify-between items-start gap-2 opacity-50">
+                                    <span>📂 hf/usd-side-coco</span>
+                                    <span class="text-k-blue shrink-0">// USD EXTRA</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 2: BASE MODEL & EVALUATIONS -->
+                <div class="border-brutal bg-k-white p-6 md:p-8 relative gsap-pipeline shadow-[6px_6px_0_var(--blue)]">
+                    <div class="absolute -top-3 left-6 bg-k-blue text-k-white px-2 py-0.5 font-mono font-bold uppercase tracking-wider text-sm md:text-base">// STEP 02 // BASELINE MODEL</div>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center mt-2">
+                        <div class="lg:col-span-7">
+                            <h3 class="font-mono font-bold mb-3 text-k-blue uppercase text-lg md:text-xl">2. Establish Baseline & Weak Spots</h3>
+                            <p class="text-dark-gray font-sans leading-relaxed mb-4 text-sm md:text-base">
+                                We trained our custom baseline model exclusively on our 3,420 scoured and audited real-world photos. This model acts as our performance floor.
+                            </p>
+                            <p class="text-dark-gray font-sans leading-relaxed mb-4 text-sm md:text-base">
+                                Evaluating this baseline model on our clean splits revealed its critical limitations: it performs decently on isolated flat notes but collapses when banknotes overlap.
+                            </p>
+                            <!-- Full width warning inside text column -->
+                            <div class="w-full bg-k-red/5 border-l-4 border-k-red p-3 mt-6 font-mono text-dark-gray text-xs md:text-sm">
+                                ⚠️ <strong>CRITICAL FAILURES:</strong> The base model is blind to partially covered banknote borders, overlapping notes, fanned stacks, and tilted smartphone angles.
+                            </div>
+                        </div>
+                        
+                        <div class="lg:col-span-5 bg-[#f4f4f4] border-t-4 border-k-blue p-4 shadow-sm overflow-x-auto">
+                            <div class="font-bold text-k-blue font-mono mb-4 uppercase tracking-wider text-xs border-b border-k-blue/20 pb-2">// REAL-ONLY BASELINE SCORES</div>
+                            
+                            <table class="w-full text-left font-mono text-[10px] lg:text-xs">
+                                <thead>
+                                    <tr class="text-k-blue border-b border-k-blue/20">
+                                        <th class="pb-2 font-bold uppercase tracking-wider whitespace-nowrap">Model Split</th>
+                                        <th class="pb-2 text-center font-bold uppercase tracking-wider whitespace-nowrap">Flat</th>
+                                        <th class="pb-2 text-right font-bold uppercase tracking-wider text-k-red whitespace-nowrap">Overlap</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="border-b border-white border-2 border-x-0 font-bold bg-k-blue/10">
+                                        <td class="py-2.5 px-2 whitespace-nowrap">Our Custom Base</td>
+                                        <td class="py-2.5 text-center text-k-blue whitespace-nowrap">48.5%</td>
+                                        <td class="py-2.5 text-right text-k-white whitespace-nowrap"><span class="bg-k-red px-2 py-1 shadow-sm">6.0%</span></td>
+                                    </tr>
+                                    <tr class="border-b border-k-blue/10 text-dark-gray">
+                                        <td class="py-2.5 px-2 whitespace-nowrap">Public Roboflow</td>
+                                        <td class="py-2.5 text-center whitespace-nowrap">48.4%</td>
+                                        <td class="py-2.5 text-right whitespace-nowrap">1.6%</td>
+                                    </tr>
+                                    <tr class="text-dark-gray/60">
+                                        <td class="py-2.5 px-2 whitespace-nowrap">Untrained YOLO</td>
+                                        <td class="py-2.5 text-center whitespace-nowrap">0.5%</td>
+                                        <td class="py-2.5 text-right whitespace-nowrap">0.0%</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 3: THE WEBGL SYNTHESIS ENGINE -->
+                <div class="border-brutal bg-k-white p-6 md:p-8 relative gsap-pipeline shadow-[6px_6px_0_var(--blue)]">
+                    <div class="absolute -top-3 left-6 bg-k-white border border-k-blue px-2 py-0.5 font-mono font-bold text-k-blue uppercase tracking-wider text-sm md:text-base">// STEP 03 // WebGL SYNTHESIS ENGINE</div>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start mt-2">
+                        <div class="lg:col-span-4">
+                            <h3 class="font-mono font-bold mb-3 text-k-blue uppercase text-lg md:text-xl">3. Targeted Synthetic Scenes</h3>
+                            <p class="text-dark-gray font-sans leading-relaxed mb-4 text-sm md:text-base">
+                                Instead of scraping web photos, we build a deterministic WebGL rendering pipeline to generate banknote training data under controlled camera setups.
+                            </p>
+                            
+                            <!-- Badges/Tags of Synthetic Capabilities -->
+                            <div class="flex flex-col gap-2 mt-6">
+                                <span class="bg-k-blue/5 border-l-4 border-k-blue text-k-blue px-3 py-2 font-mono uppercase tracking-wider text-xs font-bold shadow-sm">✦ Realistic Lighting & Shadows</span>
+                                <span class="bg-k-blue/5 border-l-4 border-k-blue text-k-blue px-3 py-2 font-mono uppercase tracking-wider text-xs font-bold shadow-sm">✦ HD Note Texture Maps</span>
+                                <span class="bg-k-blue/5 border-l-4 border-k-blue text-k-blue px-3 py-2 font-mono uppercase tracking-wider text-xs font-bold shadow-sm">✦ Algorithmic Stack & Fan</span>
+                                <span class="bg-k-blue/5 border-l-4 border-k-blue text-k-blue px-3 py-2 font-mono uppercase tracking-wider text-xs font-bold shadow-sm">✦ Simulated Dirt, Wear & Crumples</span>
+                                <span class="bg-k-blue/5 border-l-4 border-k-blue text-k-blue px-3 py-2 font-mono uppercase tracking-wider text-xs font-bold shadow-sm">✦ 3D Smartphone Camera Tilts</span>
+                                <span class="bg-k-blue/5 border-l-4 border-k-blue text-k-blue px-3 py-2 font-mono uppercase tracking-wider text-xs font-bold shadow-sm">✦ Perfect Auto-Bounding Boxes</span>
+                            </div>
+                        </div>
+                        
+                        <!-- 3D Scene Viewport Container -->
+                        <div class="scene-frame lg:col-span-8 relative w-full h-[400px] lg:h-[500px] border-4 border-k-blue bg-[#07070F] overflow-hidden group shadow-[4px_4px_0_var(--blue)]">
+                            <div id="scene-loading" class="absolute inset-0 z-10 flex items-center justify-center bg-[#07070F] font-mono uppercase tracking-widest text-k-white/40 pointer-events-none transition-opacity duration-500 text-sm md:text-base">Initialising 3D Scene...</div>
+                            
+                            <!-- Bbox Overlay (2D HTML overlays for perfect labels) -->
+                            <div id="bbox-overlay" class="absolute inset-0 pointer-events-none z-20 hidden"></div>
+                            
+                            <canvas id="threejs-canvas"></canvas>
+                            
+                            
+                            <div class="scene-hint absolute top-4 right-4 z-10 font-mono uppercase tracking-widest text-k-white/40 pointer-events-none bg-[#07070F]/50 px-2 py-1 text-[10px] md:text-xs">Drag &middot; Scroll &middot; Right-drag</div>
+                            
+                            <div id="scene-bar" class="scene-controls absolute bottom-0 left-0 right-0 z-10 flex flex-wrap items-center justify-between gap-2 bg-[#07070F]/90 border-t border-k-blue/30 p-2.5 backdrop-blur-sm">
+                                <div class="flex gap-2">
+                                    <button class="scene-btn px-2 py-1 font-mono border border-k-white/20 text-k-white/60 uppercase hover:text-k-white hover:border-k-white active text-xs md:text-sm" data-scene="clean">Clean</button>
+                                    <button class="scene-btn px-2 py-1 font-mono border border-k-white/20 text-k-white/60 uppercase hover:text-k-white hover:border-k-white text-xs md:text-sm" data-scene="fan">Fan</button>
+                                </div>
+                                <div class="flex gap-2 items-center">
+                                    <button class="scene-btn px-2 py-1 font-mono border border-k-white/20 text-k-white/60 uppercase hover:text-k-white hover:border-k-white text-xs md:text-sm" id="bg-btn"><span id="bg-btn-text">BACKDROP: DARK</span></button>
+                                    
+                                    <div class="w-[1px] h-3 bg-k-white/20 mx-1 hidden sm:block"></div>
+                                    <!-- Toggle Bounding Boxes View Switch -->
+                                    <button id="bbox-toggle-btn" class="bg-k-blue border border-k-white/30 text-k-white px-2 py-1 font-mono font-bold uppercase transition-all flex items-center justify-center hover:border-k-white shadow-[2px_2px_0_rgba(255,255,255,0.2)] text-xs md:text-sm">
+                                        SHOW BOXES
+                                    </button>
+                                    <button class="bg-k-red border border-k-red hover:bg-red-700 text-k-white px-2 py-1 font-mono font-bold uppercase transition-all text-xs md:text-sm" id="capture-btn">CAPTURE</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- SYNTHETIC DATA TIMELINE (GENERALIZATION) -->
+    <section id="generalization" class="py-16 px-6 md:px-16 bg-k-white border-b-3 border-k-blue relative">
+        <div class="max-w-4xl mx-auto">
+            <h2 class="font-mono font-bold mb-12 uppercase text-center text-k-blue text-2xl md:text-4xl">How well does synthetic data transfer to real data?</h2>
+
+            <!-- Timeline Container -->
+            <div class="relative pl-8 border-l-4 border-k-blue space-y-16 py-2">
+                
+                <!-- Step 1 -->
+                <div class="relative text-k-blue">
+                    <div class="absolute -left-[48px] top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-k-white border-4 border-k-blue flex items-center justify-center z-10"></div>
+                    
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+                        <div class="w-full lg:w-48 h-32 bg-k-white border-2 border-k-blue flex items-center justify-center shrink-0 relative shadow-[4px_4px_0_var(--blue)]">
+                            <svg viewBox="0 0 160 100" class="w-full h-full">
+                                <defs>
+                                    <pattern id="grid1" width="10" height="10" patternUnits="userSpaceOnUse">
+                                        <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#0000FF" stroke-width="0.5" opacity="0.1"/>
+                                    </pattern>
+                                </defs>
+                                <rect width="100%" height="100%" fill="url(#grid1)"/>
+                                <rect x="30" y="30" width="100" height="40" fill="#FFFFFF" stroke="#0000FF" stroke-width="2" rx="2"/>
+                                <circle cx="50" cy="50" r="10" fill="none" stroke="#0000FF" stroke-width="2"/>
+                                <rect x="70" y="46" width="40" height="8" fill="none" stroke="#0000FF" stroke-width="2"/>
+                                <text x="80" y="20" font-family="monospace" font-size="8" fill="#0000FF" text-anchor="middle" font-weight="bold">TOO PERFECT</text>
+                                <path d="M 100 60 L 120 80 M 120 60 L 100 80" stroke="#FF0000" stroke-width="4" opacity="0.8"/>
+                            </svg>
+                        </div>
+                        <div class="flex-grow max-w-xl">
+                            <h3 class="font-mono font-bold text-k-blue uppercase text-lg md:text-xl">01. Starting with 3D Images</h3>
+                            <p class="text-dark-gray leading-relaxed font-sans mt-2 text-sm md:text-base">
+                                At first, we generated basic 3D images of banknotes floating on a blank screen. It was an easy way to make lots of data. But when we tested the model on actual photos from a phone, it failed. The 3D images were too perfect, so the model got confused by real lighting, shadows, and messy backgrounds.
+                            </p>
+                            <div class="inline-flex items-center mt-4 px-3 py-1 bg-k-blue/5 border border-k-blue text-k-blue font-mono font-bold uppercase tracking-wider shadow-[2px_2px_0_var(--blue)] text-sm md:text-base">
+                                ➔ ACCURACY FLOOR: 14.2%
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="relative text-k-blue">
+                    <div class="absolute -left-[48px] top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-k-red border-4 border-k-red flex items-center justify-center z-10"></div>
+                    
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+                        <div class="w-full lg:w-48 h-32 bg-k-white border-2 border-k-red flex items-center justify-center shrink-0 relative shadow-[4px_4px_0_var(--red)]">
+                            <svg viewBox="0 0 160 100" class="w-full h-full">
+                                <!-- Camera icon -->
+                                <path d="M 70 5 L 90 5 L 90 15 L 70 15 Z" fill="none" stroke="#0000FF" stroke-width="1.5"/>
+                                <circle cx="80" cy="10" r="3" fill="#0000FF"/>
+
+                                <!-- Distractors BEHIND the bill -->
+                                <polygon points="115,25 135,55 95,55" fill="#FF0000" opacity="0.3"/>
+                                <circle cx="40" cy="65" r="12" fill="#FF0000" opacity="0.3"/>
+
+                                <!-- Banknote (Tilted) -->
+                                <g transform="translate(80, 50) rotate(-10) translate(-80, -50)">
+                                    <rect x="35" y="35" width="90" height="40" fill="#000000" opacity="0.1" rx="2"/>
+                                    <rect x="30" y="30" width="90" height="40" fill="#FFFFFF" stroke="#0000FF" stroke-width="2" rx="2"/>
+                                    <circle cx="50" cy="50" r="8" fill="none" stroke="#0000FF" stroke-width="2"/>
+                                    <rect x="70" y="46" width="30" height="8" fill="none" stroke="#0000FF" stroke-width="2"/>
+                                </g>
+
+                                <!-- Distractors IN FRONT of the bill -->
+                                <circle cx="55" cy="38" r="15" fill="#FF0000" opacity="0.3"/>
+                                <rect x="95" y="60" width="25" height="25" fill="#FF0000" opacity="0.3" transform="rotate(15 107 72)"/>
+                                
+                                <!-- Detection Box (Top layer) -->
+                                <g transform="translate(80, 50) rotate(-10) translate(-80, -50)">
+                                    <rect x="26" y="26" width="98" height="48" fill="none" stroke="#FF0000" stroke-width="2" stroke-dasharray="4 2"/>
+                                    <text x="36" y="22" font-family="monospace" font-size="7" fill="#FF0000" font-weight="bold">FOUND IT</text>
+                                </g>
+                            </svg>
+                        </div>
+                        <div class="flex-grow max-w-xl">
+                            <h3 class="font-mono font-bold text-k-red uppercase text-lg md:text-xl">02. Making It Look Real</h3>
+                            <p class="text-dark-gray leading-relaxed font-sans mt-2 text-sm md:text-base">
+                                To fix this, we made the 3D scenes look more like a real smartphone photo. We matched the camera angle, added shadows, and most importantly, threw in random "junk" objects behind the money. This taught the model to ignore background mess and focus only on the banknote. This simple trick was a huge success.
+                            </p>
+                            <div class="inline-flex items-center mt-4 px-3 py-1 bg-k-red/10 border border-k-red text-k-red font-mono font-bold uppercase tracking-wider shadow-[2px_2px_0_var(--red)] text-sm md:text-base">
+                                ➔ ACCURACY JUMPED TO 50.3%
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Step 3 -->
+                <div class="relative text-k-blue">
+                    <div class="absolute -left-[48px] top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-k-blue border-4 border-k-blue flex items-center justify-center z-10"></div>
+                    
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+                        <div class="w-full lg:w-48 h-32 bg-k-white border-2 border-k-blue flex items-center justify-center shrink-0 relative shadow-[4px_4px_0_var(--blue)]">
+                            <svg viewBox="0 0 160 100" class="w-full h-full">
+                                <!-- 3D DATA box -->
+                                <g transform="translate(12, 18)">
+                                    <rect width="46" height="24" fill="#F0F4FF" stroke="#0000FF" stroke-width="2" rx="2"/>
+                                    <text x="23" y="12" dy="0.3em" font-family="monospace" font-size="6" fill="#0000FF" text-anchor="middle" font-weight="bold">3D DATA</text>
+                                </g>
+                                
+                                <!-- REAL PHOTOS box -->
+                                <g transform="translate(12, 58)">
+                                    <rect width="46" height="24" fill="#FFF0F0" stroke="#FF0000" stroke-width="2" rx="2"/>
+                                    <text x="23" y="12" dy="0.3em" font-family="monospace" font-size="6" fill="#FF0000" text-anchor="middle" font-weight="bold">REAL PHOTOS</text>
+                                </g>
+
+                                <!-- Converging Paths (Funnel) -->
+                                <path d="M 58 30 C 75 30 75 50 90 50" fill="none" stroke="#0000FF" stroke-width="2" stroke-dasharray="3 2"/>
+                                <path d="M 58 70 C 75 70 75 50 90 50" fill="none" stroke="#FF0000" stroke-width="2" stroke-dasharray="3 2"/>
+                                
+                                <!-- Arrow to final model -->
+                                <path d="M 90 50 L 102 50" fill="none" stroke="#000000" stroke-width="3"/>
+                                <polygon points="102,46 110,50 102,54" fill="#000000"/>
+
+                                <!-- Final Output -->
+                                <g transform="translate(116, 34)">
+                                    <rect width="32" height="32" fill="#FFFFFF" stroke="#0000FF" stroke-width="3" rx="6" style="filter:drop-shadow(2px 2px 0px #0000FF);"/>
+                                    <path d="M 8 16 L 14 22 L 24 10" fill="none" stroke="#FF0000" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                                </g>
+                            </svg>
+                        </div>
+                        <div class="flex-grow max-w-xl">
+                            <h3 class="font-mono font-bold text-k-blue uppercase text-lg md:text-xl">03. Combining Both Worlds</h3>
+                            <p class="text-dark-gray leading-relaxed font-sans mt-2 text-sm md:text-base">
+                                Since the 3D data was now working well, we used it to fix our biggest problem: messy piles of real cash. We mixed the tough 3D images with our real photos. The 3D data acted like a tutor, filling in the gaps where the real photos struggled. The result was a model that could read almost anything.
+                            </p>
+                            <div class="inline-flex items-center mt-4 px-3 py-1 bg-k-blue/5 border border-k-blue text-k-blue font-mono font-bold uppercase tracking-wider shadow-[2px_2px_0_var(--blue)] text-sm md:text-base">
+                                ➔ HYBRID EVAL SCORE: 90.5%
+                            </div>
+
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- FINAL MODEL & PERFORMANCE BENCHMARKS -->
+    <section id="results" class="py-24 px-4 md:px-12 bg-k-white border-t-4 border-b-4 border-k-red relative z-10">
+        <div class="max-w-7xl mx-auto">
+            <h2 class="font-pixel mb-4 text-2xl md:text-4xl"><span class="bg-k-red text-k-white px-2">PERFORMANCE_ANALYTICS</span></h2>
+            <p class="mb-16 max-w-2xl border-l-4 border-k-blue pl-4 font-mono text-k-blue text-sm md:text-base">Measured tests for the final one-detector Riel Vision model. These numbers come from fixed evaluation sets, not from the live browser playground.</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-12 lg:gap-16 h-auto md:h-96 text-k-blue">
+                
+                <!-- Graph 1: Clean Data -->
+                <div class="flex flex-col h-64 md:h-full border-b-2 border-l-2 border-k-blue p-4 relative">
+                    <div class="absolute -top-6 left-0 font-mono font-bold bg-k-white border border-k-blue px-2 py-1 uppercase tracking-wider text-sm md:text-base">TEST_SET: EASY/CLEAN</div>
+                    <div class="chart-bar-container gap-2 md:gap-4 h-full">
+                        <div class="w-1/3 flex flex-col items-center justify-end h-full relative group">
+                            <div class="chart-value group-hover:opacity-100 font-mono text-sm md:text-base">48.5%</div>
+                            <div class="chart-bar bg-k-blue/50 border border-k-blue w-full max-w-[40px]" data-height="48.5%"></div>
+                            <div class="chart-label hidden md:block mt-2 font-bold font-mono text-center text-sm md:text-base">ROBOFLOW<br/>API</div>
+                        </div>
+                        <div class="w-1/3 flex flex-col items-center justify-end h-full relative group">
+                            <div class="chart-value group-hover:opacity-100 font-mono text-sm md:text-base">48.6%</div>
+                            <div class="chart-bar bg-k-blue border border-k-blue w-full max-w-[40px]" data-height="48.6%"></div>
+                            <div class="chart-label hidden md:block mt-2 font-bold font-mono text-center text-sm md:text-base">BASE<br/>MODEL</div>
+                        </div>
+                        <div class="w-1/3 flex flex-col items-center justify-end h-full relative group">
+                            <div class="chart-value opacity-100 text-k-red font-mono font-bold text-sm md:text-base">92.3%</div>
+                            <div class="chart-bar bg-k-red border-2 border-k-red shadow-[0_0_15px_var(--red)] w-full max-w-[40px]" data-height="92.3%"></div>
+                            <div class="chart-label hidden md:block mt-2 font-bold text-k-red bg-k-white z-10 font-mono text-center text-sm md:text-base">REAL+SYNTH<br/>MODEL</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Graph 2: Overlapping -->
+                <div class="flex flex-col h-64 md:h-full border-b-2 border-l-2 border-k-blue p-4 relative">
+                    <div class="absolute -top-6 left-0 font-mono font-bold bg-k-white border border-k-blue px-2 py-1 uppercase tracking-wider text-sm md:text-base">TEST_SET: OVERLAPPING</div>
+                    <div class="chart-bar-container gap-2 md:gap-4 h-full">
+                        <div class="w-1/3 flex flex-col items-center justify-end h-full relative group">
+                            <div class="chart-value group-hover:opacity-100 font-mono text-sm md:text-base">1.6%</div>
+                            <div class="chart-bar bg-k-blue/50 border border-k-blue w-full max-w-[40px]" data-height="1.6%"></div>
+                            <div class="chart-label hidden md:block mt-2 font-bold font-mono text-center text-sm md:text-base">ROBOFLOW<br/>API</div>
+                        </div>
+                        <div class="w-1/3 flex flex-col items-center justify-end h-full relative group">
+                            <div class="chart-value group-hover:opacity-100 font-mono text-sm md:text-base">6.0%</div>
+                            <div class="chart-bar bg-k-blue border border-k-blue w-full max-w-[40px]" data-height="6.0%"></div>
+                            <div class="chart-label hidden md:block mt-2 font-bold font-mono text-center text-sm md:text-base">BASE<br/>MODEL</div>
+                        </div>
+                        <div class="w-1/3 flex flex-col items-center justify-end h-full relative group">
+                            <div class="chart-value opacity-100 text-k-red font-mono font-bold text-sm md:text-base">56.6%</div>
+                            <div class="chart-bar bg-stripe-red border-2 border-k-red w-full max-w-[40px]" data-height="56.6%"></div>
+                            <div class="chart-label hidden md:block mt-2 font-bold text-k-red bg-k-white z-10 font-mono text-center text-sm md:text-base">REAL+SYNTH<br/>MODEL</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Graph 3: Occluded -->
+                <div class="flex flex-col h-64 md:h-full border-b-2 border-l-2 border-k-blue p-4 relative">
+                    <div class="absolute -top-6 left-0 font-mono font-bold bg-k-white border border-k-blue px-2 py-1 uppercase tracking-wider text-sm md:text-base">TEST_SET: Partially Blocked</div>
+                    <div class="chart-bar-container gap-2 md:gap-4 h-full">
+                        <div class="w-1/3 flex flex-col items-center justify-end h-full relative group">
+                            <div class="chart-value group-hover:opacity-100 font-mono text-sm md:text-base">0.0%</div>
+                            <div class="chart-bar bg-k-blue/50 border border-k-blue w-full max-w-[40px]" data-height="0%"></div>
+                            <div class="chart-label hidden md:block mt-2 font-bold font-mono text-center text-sm md:text-base">ROBOFLOW<br/>API</div>
+                        </div>
+                        <div class="w-1/3 flex flex-col items-center justify-end h-full relative group">
+                            <div class="chart-value group-hover:opacity-100 font-mono text-sm md:text-base">1.0%</div>
+                            <div class="chart-bar bg-k-blue border border-k-blue w-full max-w-[40px]" data-height="1.0%"></div>
+                            <div class="chart-label hidden md:block mt-2 font-bold font-mono text-center text-sm md:text-base">BASE<br/>MODEL</div>
+                        </div>
+                        <div class="w-1/3 flex flex-col items-center justify-end h-full relative group">
+                            <div class="chart-value opacity-100 text-k-red font-mono font-bold text-sm md:text-base">93.6%</div>
+                            <div class="chart-bar bg-k-red border-2 border-k-red w-full max-w-[40px]" data-height="93.6%"></div>
+                            <div class="chart-label hidden md:block mt-2 font-bold text-k-red bg-k-white z-10 font-mono text-center text-sm md:text-base">REAL+SYNTH<br/>MODEL</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-16 w-full bg-k-blue text-k-white p-2 text-center font-bold font-mono uppercase tracking-widest text-sm md:text-base">
+                * Final training used 5,512 images: about 2,416 real images and 3,096 synthetic images. We tuned on 1,011 validation images, then did the final check on 833 test images.
+            </div>
+        </div>
+    </section>
+    <!-- INTERACTIVE PROTOTYPE DEMO -->
+    <section id="demo" class="py-20 px-6 md:px-16 bg-k-white border-t-4 border-k-red">
+        <div class="max-w-6xl mx-auto">
+            <div class="flex flex-col items-center mb-12">
+                <div class="flex flex-col md:flex-row items-center gap-4 mb-2">
+                    <p class="font-mono tracking-widest text-k-red uppercase text-sm md:text-base">// IN-BROWSER PROTOTYPE</p>
+                </div>
+                <h2 class="font-mono font-bold text-center border-b-4 border-k-red pb-2 text-2xl md:text-4xl"><span class="text-highlight uppercase px-4">PROTOTYPE DEMO</span></h2>
+                <p class="mt-5 max-w-3xl text-center font-mono text-k-blue text-sm md:text-base uppercase">
+                    This is the same local detector used in testing: <strong>9.8 MB</strong> on disk, about <strong>2.42 million</strong> learned parameters, and roughly <strong>110 MB</strong> extra memory in our local CPU test. Browser memory depends on the device. Very wide screenshots and heavy overlap can still cause missed or merged bills.
+                </p>
+            </div>
+
+            <!-- TV Container -->
+            <div class="demo-shell w-full border-4 border-k-blue p-2 bg-k-white relative group cursor-crosshair shadow-[15px_15px_0_var(--blue)] max-w-5xl mx-auto">
+                <div id="demo-container" class="demo-container relative w-full aspect-video bg-[#e0e0e0] overflow-hidden flex justify-center items-center">
+                    
+                    <!-- Base Image -->
+                    <img id="demo-image" class="hidden w-full h-full object-contain transition-all duration-1000 relative z-10" src="" alt="Demo Bill">
+                    <canvas id="demo-canvas" class="hidden absolute top-0 left-0 w-full h-full object-contain z-20"></canvas>
+
+                    <!-- Upload State -->
+                    <div id="upload-state" class="absolute inset-0 flex flex-col items-center justify-center z-30 transition-opacity duration-300">
+                        <label for="demo-upload" class="cursor-pointer group/btn flex flex-col items-center justify-center w-full h-full bg-k-white/50 hover:bg-k-blue/5 transition-all">
+                            <div class="w-16 h-16 border-2 border-k-blue flex items-center justify-center mb-4 group-hover/btn:bg-k-blue transition-colors relative shadow-[4px_4px_0_var(--red)]">
+                                <span class="text-k-blue group-hover/btn:text-k-white font-light mt-[-4px] text-lg md:text-xl">+</span>
+                            </div>
+                            <span class="text-k-blue font-mono font-bold uppercase tracking-widest group-hover/btn:tracking-[0.2em] transition-all text-sm md:text-base">UPLOAD TEST IMAGE</span>
+                            <input type="file" id="demo-upload" class="hidden" accept="image/*" />
+                        </label>
+                    </div>
+
+                    <!-- Crosshairs decoration -->
+                    <div class="crosshair top-4 left-4"></div>
+                    <div class="crosshair top-4 right-4"></div>
+                    <div class="crosshair bottom-4 left-4"></div>
+                    <div class="crosshair bottom-4 right-4"></div>
+
+                    <!-- Grid overlay -->
+                    <div class="absolute inset-0 bg-grid-pattern opacity-30 pointer-events-none mix-blend-difference z-0"></div>
+                </div>
+
+                <!-- Controls -->
+                <div class="demo-controls flex flex-col md:flex-row justify-between items-center mt-2 border-t-2 border-k-blue pt-4 gap-4 bg-k-white">
+                    <div class="demo-stat-group flex flex-wrap gap-3 w-full md:w-auto">
+                        <div class="demo-stat font-mono bg-k-blue/10 px-2 py-1 border border-k-blue flex flex-row items-center gap-2 text-xs lg:text-sm whitespace-nowrap">STATUS: <span id="tv-status" class="text-k-blue font-bold uppercase">WAITING FOR UPLOAD</span></div>
+                        <div class="demo-stat demo-value font-mono bg-k-blue/10 px-2 py-1 border border-k-blue flex flex-row items-center gap-2 text-xs lg:text-sm whitespace-nowrap">VALUE: <span id="tv-value" class="font-bold text-k-red uppercase">KHR 0 / USD 0</span></div>
+                        <div class="demo-stat demo-conf font-mono bg-k-blue/10 px-2 py-1 border border-k-blue flex items-center space-x-2 text-xs lg:text-sm whitespace-nowrap">
+                            <span>CONF: <span id="conf-val" class="font-bold text-k-blue">0.20</span></span>
+                            <input type="range" id="conf-slider" min="0.01" max="0.99" step="0.01" value="0.20" class="w-20 md:w-24 accent-k-red cursor-pointer">
+                        </div>
+                    </div>
+                    <button id="reset-btn" class="hidden bg-k-red text-k-white px-6 py-2 font-mono font-bold hover:bg-k-blue transition-colors border-2 border-transparent hover:border-k-blue w-full md:w-auto uppercase tracking-widest shadow-[4px_4px_0_var(--blue)] text-sm md:text-base">UPLOAD ANOTHER</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- LIMITATIONS (WHAT STILL NEEDS WORK) -->
+    <section class="py-16 px-6 md:px-16 bg-k-white border-t-3 border-k-blue relative">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-16 border-b-4 border-k-blue pb-4 gsap-fade-up">
+                <div>
+                    <p class="font-mono tracking-widest text-k-red mb-1 uppercase text-sm md:text-base">// CURRENT LIMITATIONS</p>
+                    <h2 class="font-mono font-bold uppercase leading-none text-k-red text-2xl md:text-4xl">What Still Needs Work</h2>
+                </div>
+                <span class="text-k-blue font-mono font-bold mt-4 md:mt-0 text-lg md:text-xl">[ERR_LIMIT_06]</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Card 1 -->
+                <div class="border-brutal-red p-5 bg-k-white hover:bg-k-red hover:text-k-white transition-all duration-300 gsap-fade-up">
+                    <h3 class="font-mono font-bold mb-2 border-b border-current pb-1 uppercase text-lg md:text-xl">Heavy Overlap</h3>
+                    <p class="opacity-90 leading-relaxed font-sans text-sm md:text-base">
+                        If most of a bill is hidden, the detector can easily miss it or mistakenly merge it with another bill.
+                    </p>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="border-brutal-red p-5 bg-k-white hover:bg-k-red hover:text-k-white transition-all duration-300 gsap-fade-up">
+                    <h3 class="font-mono font-bold mb-2 border-b border-current pb-1 uppercase text-lg md:text-xl">Unsupported Bills</h3>
+                    <p class="opacity-90 leading-relaxed font-sans text-sm md:text-base">
+                        Rare or unsupported notes (like USD 2 or KHR 100,000) may be guessed as one of the known classes, causing estimation errors.
+                    </p>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="border-brutal-red p-5 bg-k-white hover:bg-k-red hover:text-k-white transition-all duration-300 gsap-fade-up">
+                    <h3 class="font-mono font-bold mb-2 border-b border-current pb-1 uppercase text-lg md:text-xl">More Real Data</h3>
+                    <p class="opacity-90 leading-relaxed font-sans text-sm md:text-base">
+                        More real fanned and overlapping photos would help close the gap between demo scenes and real-world cash counts.
+                    </p>
+                </div>
+            </div>
+
+            <p class="font-mono font-bold uppercase text-center mt-16 text-k-red glitch-text text-2xl md:text-4xl" data-text="RIEL VISION IS DEMO-READY, BUT NOT FINISHED.">
+                RIEL VISION IS A WORKING PROTOTYPE, NOT FINISHED.
+            </p>
+        </div>
+    </section>
+
+    <!-- CLOSING TAKEAWAY & FOOTER -->
+    <footer class="border-t-4 border-k-red bg-k-blue text-k-white pt-16 pb-8 px-6 md:px-16 relative z-20 text-sm md:text-base">
+        <div class="max-w-4xl mx-auto text-center mb-12 border-b border-k-white/20 pb-12 space-y-6">
+            <p class="font-mono tracking-widest text-k-red uppercase text-sm md:text-base">// FINAL TAKEAWAY</p>
+            <h2 class="font-mono font-bold uppercase leading-tight text-2xl md:text-4xl">
+                The goal was a small local model that works better on the messy photos people actually take.
+            </h2>
+            <p class="leading-relaxed font-sans text-k-white/85 max-w-2xl mx-auto text-sm md:text-base">
+                Real data gave the model the banknote appearance. Synthetic data helped create the fanned and overlapping cases we could not collect enough of. The final result is one compact browser model with honest strengths, visible limits, and a clear path for improvement.
+            </p>
+        </div>
+
+        <div class="max-w-7xl mx-auto text-center font-mono flex flex-col md:flex-row justify-between items-center gap-4 text-sm md:text-base">
+            <div class="opacity-75">©2026 RIEL VISION OPEN SOURCE PROTOTYPE.</div>
+            <div class="flex gap-4">
+                <span class="w-6 h-6 bg-k-white inline-block hover:rotate-45 transition-transform duration-200"></span>
+                <span class="w-6 h-6 bg-k-red inline-block hover:rotate-45 transition-transform duration-200"></span>
+                <span class="w-6 h-6 border-2 border-k-white inline-block hover:rotate-45 transition-transform duration-200"></span>
+            </div>
+            <div class="text-k-red glitch-text" data-text="[ Kong Sophanith ]">[ Kong Sophanith ]</div>
+        </div>
+    </footer>
+
+    <!-- JS Logic -->
+    <script>
+        // Hero Comparison Slider
+        let isHeroSliderDragging = false;
+        let isHeroSliderInteracted = false;
+        let heroSliderAngle = 0;
+        let currentClipPercent = 50;
+        let resumeTimeout;
+        
+        window.startHeroSliderDrag = function(e, container) {
+            isHeroSliderDragging = true;
+            isHeroSliderInteracted = true;
+            clearTimeout(resumeTimeout);
+            window.handleHeroSliderMove(e, container);
+        };
+        
+        window.stopHeroSliderDrag = function() {
+            isHeroSliderDragging = false;
+            window.scheduleResumeAutoSlider();
+        };
+        
+        window.handleHeroSliderMove = function(e, container) {
+            if (e.type === 'mousemove' && !isHeroSliderDragging && e.buttons !== 1) {
+                // Hover move: suspend resume
+                clearTimeout(resumeTimeout);
+                isHeroSliderInteracted = true;
+                return;
+            }
+            const rect = container.getBoundingClientRect();
+            let clientX = 0;
+            if (e.changedTouches && e.changedTouches.length) {
+                clientX = e.changedTouches[0].clientX;
+            } else if (e.touches && e.touches.length) {
+                clientX = e.touches[0].clientX;
+            } else {
+                clientX = e.clientX;
+            }
+            const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+            const percent = (x / rect.width) * 100;
+            currentClipPercent = percent;
+            container.style.setProperty('--clip-percent', percent + '%');
+        };
+
+        window.switchHeroSlider = function(btn, type) {
+            const selectors = document.getElementById('hero-slider-selectors');
+            selectors.querySelectorAll('button').forEach(b => {
+                b.classList.remove('bg-k-blue', 'text-k-white');
+                b.classList.add('bg-k-white', 'text-k-blue');
+            });
+            btn.classList.add('bg-k-blue', 'text-k-white');
+            btn.classList.remove('bg-k-white', 'text-k-blue');
+            
+            const annotated = document.getElementById('hero-img-annotated');
+            const raw = document.getElementById('hero-img-raw');
+            const caption = document.getElementById('hero-slider-caption');
+            
+            let newAnnotatedSrc = '';
+            let newRawSrc = '';
+            let newCaption = '';
+            
+            if (type === 'khr1000') {
+                newAnnotatedSrc = 'images/img_e10671fb28b7.jpeg';
+                newRawSrc = 'images/img_b431d864af85.jpeg';
+                newCaption = '// FIG 1.0: COMPARATIVE DETECTOR OUTPUT (1K RIEL OVERLAP)';
+            } else if (type === 'khr5000') {
+                newAnnotatedSrc = 'images/img_f1b71cfc9071.jpeg';
+                newRawSrc = 'images/img_c127dc283e3e.jpeg';
+                newCaption = '// FIG 1.0: COMPARATIVE DETECTOR OUTPUT (5K RIEL OVERLAP)';
+            } else if (type === 'khr500') {
+                newAnnotatedSrc = 'images/img_83e840387891.jpeg';
+                newRawSrc = 'images/img_4c7b035f76f5.jpeg';
+                newCaption = '// FIG 1.0: COMPARATIVE DETECTOR OUTPUT (500 RIEL OVERLAP)';
+            }
+            
+            // GSAP Transition
+            gsap.to([annotated, raw], {
+                opacity: 0,
+                scale: 1.05,
+                duration: 0.2,
+                ease: "power2.in",
+                onComplete: () => {
+                    annotated.src = newAnnotatedSrc;
+                    raw.src = newRawSrc;
+                    if (caption) caption.textContent = newCaption;
+                    
+                    gsap.to([annotated, raw], {
+                        opacity: 1,
+                        scale: 1.15,
+                        duration: 0.35,
+                        ease: "back.out(1.5)"
+                    });
+                }
+            });
+        };
+
+        window.scheduleResumeAutoSlider = function() {
+            clearTimeout(resumeTimeout);
+            resumeTimeout = setTimeout(() => {
+                isHeroSliderInteracted = false;
+                const ratio = Math.max(-1, Math.min(1, (currentClipPercent - 50) / 25));
+                heroSliderAngle = Math.asin(ratio);
+                requestAnimationFrame(window.animateHeroSlider);
+            }, 3000); // 3 seconds idle time before resuming
+        };
+
+        window.animateHeroSlider = function() {
+            if (isHeroSliderInteracted || isHeroSliderDragging) return;
+            // Slower auto move speed (decreased step from 0.015 to 0.007 for gentle sway)
+            heroSliderAngle += 0.007;
+            const percent = 50 + 25 * Math.sin(heroSliderAngle);
+            currentClipPercent = percent;
+            const container = document.getElementById('hero-comparison-slider');
+            if (container) {
+                container.style.setProperty('--clip-percent', percent + '%');
+            }
+            requestAnimationFrame(window.animateHeroSlider);
+        };
+
+        document.addEventListener("DOMContentLoaded", () => {
+            // Start the auto animation loop (stops on interaction, resumes on idle)
+            window.animateHeroSlider();
+            gsap.registerPlugin(ScrollTrigger);
+
+            // Hero animations
+            gsap.from(".gsap-hero > *", {
+                y: 40,
+                opacity: 0,
+                duration: 1,
+                stagger: 0.15,
+                ease: "power3.out",
+                delay: 0.2
+            });
+
+            gsap.from(".gsap-hero-img", {
+                x: 100,
+                rotation: 5,
+                opacity: 0,
+                duration: 1.2,
+                ease: "power3.out",
+                delay: 0.4
+            });
+
+            // Native Intersection Observer for smooth and simple fade-ins on scroll
+            const scrollObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('is-visible');
+                        // Remove inline transition delay after the animation completes (1.2s)
+                        setTimeout(() => {
+                            entry.target.style.transitionDelay = '';
+                        }, 1200);
+                        scrollObserver.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.05, rootMargin: "0px 0px -40px 0px" });
+
+            document.querySelectorAll('.gsap-fade-up, .gsap-challenge-card').forEach(el => {
+                scrollObserver.observe(el);
+            });
+
+            // Pipeline flow animation
+            gsap.from(".gsap-pipeline", {
+                scrollTrigger: { trigger: "#pipeline", start: "top 70%" },
+                x: -50, opacity: 0, duration: 0.8, stagger: 0.3, ease: "power2.out"
+            });
+
+            // Animate Vertical Charts
+            ScrollTrigger.create({
+                trigger: "#results",
+                start: "top 70%",
+                onEnter: () => {
+                    document.querySelectorAll('#results .chart-bar').forEach(bar => {
+                        const targetHeight = bar.getAttribute('data-height');
+                        bar.style.height = targetHeight;
+                    });
+                    document.querySelectorAll('#results .chart-value').forEach(val => {
+                        val.style.opacity = '1';
+                    });
+                }
+            });
+            ScrollTrigger.create({
+                trigger: "#generalization",
+                start: "top 70%",
+                onEnter: () => {
+                    document.querySelectorAll('#generalization .chart-bar-horizontal').forEach(bar => {
+                        const targetWidth = bar.getAttribute('data-width');
+                        bar.style.width = targetWidth;
+                    });
+                }
+            });
+
+            // Interactive Demo Logic
+            const btnScan = document.getElementById('btn-scan');
+            const scanner = document.getElementById('demo-scanner');
+            const scanline = document.getElementById('demo-scanline');
+            const statusText = document.getElementById('demo-status');
+            const hudBills = document.getElementById('hud-bills');
+            const hudValue = document.getElementById('hud-value');
+            const img = document.getElementById('demo-img');
+            
+            const btnImg1 = document.getElementById('btn-select-img1');
+            const btnImg2 = document.getElementById('btn-select-img2');
+
+            let currentImg = 1; // 1 = Overlap Riels, 2 = USD 100
+            let isScanning = false;
+
+            // Handle switching images
+            btnImg1.addEventListener('click', () => {
+                if (isScanning) return;
+                currentImg = 1;
+                img.src = "images/img_31b4008b8e30.jpeg";
+                btnImg1.classList.replace('bg-k-white', 'bg-k-blue');
+                btnImg1.classList.replace('text-k-blue', 'text-k-white');
+                btnImg2.classList.replace('bg-k-blue', 'bg-k-white');
+                btnImg2.classList.replace('text-k-white', 'text-k-blue');
+                resetDemo();
+            });
+
+            btnImg2.addEventListener('click', () => {
+                if (isScanning) return;
+                currentImg = 2;
+                img.src = "images/img_2b48e3e0a3e0.jpeg";
+                btnImg2.classList.replace('bg-k-white', 'bg-k-blue');
+                btnImg2.classList.replace('text-k-blue', 'text-k-white');
+                btnImg1.classList.replace('bg-k-blue', 'bg-k-white');
+                btnImg1.classList.replace('text-k-white', 'text-k-blue');
+                resetDemo();
+            });
+
+            function resetDemo() {
+                const boxes = document.querySelectorAll('.demo-box');
+                gsap.set(boxes, { opacity: 0, scale: 1.1 });
+                statusText.innerHTML = 'IDLE';
+                statusText.className = 'text-k-blue font-bold uppercase';
+                hudBills.innerText = '0';
+                hudValue.innerText = '-';
+                btnScan.innerText = 'RUN_INFERENCE()';
+                btnScan.classList.replace('bg-k-red', 'bg-k-blue');
+                img.style.filter = "grayscale(100%) contrast(1.2)";
+            }
+
+            btnScan.addEventListener('click', () => {
+                if (isScanning) return;
+                isScanning = true;
+                
+                const activeBoxes = currentImg === 1 ? document.querySelectorAll('.img1-box') : document.querySelectorAll('.img2-box');
+                const inactiveBoxes = currentImg === 1 ? document.querySelectorAll('.img2-box') : document.querySelectorAll('.img1-box');
+                
+                // Reset State
+                gsap.set(activeBoxes, { opacity: 0, scale: 1.15 });
+                gsap.set(inactiveBoxes, { opacity: 0 });
+                img.style.filter = "contrast(1.1) grayscale(0.2)";
+                
+                // Update UI
+                statusText.innerHTML = 'PROCESSING_TENSORS...';
+                statusText.className = 'text-k-red font-bold animate-pulse uppercase';
+                btnScan.innerText = 'SCANNING...';
+                btnScan.classList.replace('bg-k-blue', 'bg-k-red');
+                scanner.style.opacity = '0.35';
+
+                // Scanline Animation Down
+                gsap.to(scanline, { opacity: 1, duration: 0.1 });
+                gsap.fromTo(scanline, 
+                    { top: "0%" },
+                    { 
+                        top: "100%", 
+                        duration: 1.8, 
+                        ease: "power1.inOut",
+                        onComplete: () => {
+                            // Hide scanline
+                            gsap.to(scanline, { opacity: 0, duration: 0.2 });
+                            scanner.style.opacity = '0';
+                            
+                            // Apply post-process effect
+                            img.style.filter = "grayscale(20%) contrast(1.3) brightness(1.05)";
+                            
+                            // Reveal Bounding Boxes
+                            gsap.to(activeBoxes, {
+                                opacity: 1,
+                                scale: 1,
+                                duration: 0.5,
+                                stagger: 0.15,
+                                ease: "back.out(1.7)"
+                            });
+
+                            // Final UI State Delay
+                            setTimeout(() => {
+                                statusText.innerHTML = 'INFERENCE_COMPLETE (18ms)';
+                                statusText.className = 'text-k-blue font-bold uppercase';
+                                btnScan.innerText = 'RESET_ENGINE()';
+                                btnScan.classList.replace('bg-k-red', 'bg-k-blue');
+                                
+                                if (currentImg === 1) {
+                                    hudBills.innerText = '6';
+                                    hudValue.innerText = 'KHR 34,000 (2x10k + 2x5k + 2x2k)';
+                                } else {
+                                    hudBills.innerText = '1';
+                                    hudValue.innerText = 'USD 100';
+                                }
+
+                                // Attach Reset Logic
+                                const resetHandler = () => {
+                                    resetDemo();
+                                    isScanning = false;
+                                    btnScan.removeEventListener('click', resetHandler);
+                                };
+                                btnScan.addEventListener('click', resetHandler, { once: true });
+                            }, 400);
+                        }
+                    }
+                );
+            });
+
+            // Scroll Freeze helper variables & functions
+            let savedScrollX = 0;
+            let savedScrollY = 0;
+
+            function freezeScroll() {
+                window.scrollTo(savedScrollX, savedScrollY);
+            }
+
+            function preventDefaultScroll(e) {
+                e.preventDefault();
+            }
+
+            const scrollKeys = {32: 1, 33: 1, 34: 1, 35: 1, 36: 1, 37: 1, 38: 1, 39: 1, 40: 1};
+            function preventDefaultKeys(e) {
+                if (scrollKeys[e.keyCode]) {
+                    e.preventDefault();
+                }
+            }
+
+            // Lightbox Modal functions
+            window.openNoteLightbox = function(imgSrc, title, country, specs, isKhr) {
+                const modal = document.getElementById('note-lightbox');
+                const modalBox = document.getElementById('note-lightbox-box');
+                const titleEl = document.getElementById('lightbox-title');
+                const imgEl = document.getElementById('lightbox-img');
+                const countryEl = document.getElementById('lightbox-country');
+                const specsEl = document.getElementById('lightbox-specs');
+                const badgeEl = document.getElementById('lightbox-badge');
+
+                titleEl.textContent = title;
+                imgEl.src = imgSrc;
+                countryEl.textContent = country;
+                specsEl.textContent = specs;
+
+                if (isKhr) {
+                    modalBox.className = 'border-3 border-k-red bg-k-white p-6 md:p-8 max-w-4xl w-full max-h-[90vh] flex flex-col justify-between relative shadow-[10px_10px_0_var(--red)]';
+                    titleEl.className = 'font-mono font-bold text-2xl md:text-3xl mt-2 text-k-red';
+                    badgeEl.className = 'bg-k-red text-k-white px-2 py-0.5 font-mono text-xs uppercase tracking-wider';
+                    countryEl.parentElement.className = 'flex justify-between items-center font-mono text-xs text-k-red border-t border-k-red/20 pt-4';
+                } else {
+                    modalBox.className = 'border-3 border-k-blue bg-k-white p-6 md:p-8 max-w-4xl w-full max-h-[90vh] flex flex-col justify-between relative shadow-[10px_10px_0_var(--blue)]';
+                    titleEl.className = 'font-mono font-bold text-2xl md:text-3xl mt-2 text-k-blue';
+                    badgeEl.className = 'bg-k-blue text-k-white px-2 py-0.5 font-mono text-xs uppercase tracking-wider';
+                    countryEl.parentElement.className = 'flex justify-between items-center font-mono text-xs text-k-blue border-t border-k-blue/20 pt-4';
+                }
+
+                // Record scroll position and freeze page scroll without removing the scrollbar
+                savedScrollX = window.pageXOffset || document.documentElement.scrollLeft;
+                savedScrollY = window.pageYOffset || document.documentElement.scrollTop;
+                
+                window.addEventListener('scroll', freezeScroll);
+                window.addEventListener('wheel', preventDefaultScroll, { passive: false });
+                window.addEventListener('touchmove', preventDefaultScroll, { passive: false });
+                window.addEventListener('keydown', preventDefaultKeys, { passive: false });
+
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                
+                // GSAP Animate in (snappy and beautiful)
+                gsap.to(modal, { opacity: 1, duration: 0.15, ease: "power2.out" });
+                gsap.fromTo(modalBox, 
+                    { scale: 0.94, y: 15, opacity: 0 }, 
+                    { scale: 1, y: 0, opacity: 1, duration: 0.2, ease: "back.out(1.2)" }
+                );
+            };
+
+            window.closeNoteLightbox = function() {
+                const modal = document.getElementById('note-lightbox');
+                const modalBox = document.getElementById('note-lightbox-box');
+                if (!modal) return;
+                
+                // Unfreeze scroll listeners
+                window.removeEventListener('scroll', freezeScroll);
+                window.removeEventListener('wheel', preventDefaultScroll, { passive: false });
+                window.removeEventListener('touchmove', preventDefaultScroll, { passive: false });
+                window.removeEventListener('keydown', preventDefaultKeys, { passive: false });
+                
+                // GSAP Animate out (matching exit zoom & fade)
+                gsap.to(modal, { opacity: 0, duration: 0.18, ease: "power2.inOut" });
+                gsap.to(modalBox, { 
+                    scale: 0.94, 
+                    y: 12, 
+                    opacity: 0, 
+                    duration: 0.18, 
+                    ease: "power2.in", 
+                    onComplete: () => {
+                        modal.classList.remove('flex');
+                        modal.classList.add('hidden');
+                        // Reset opacity & transform properties for clean next trigger
+                        gsap.set(modalBox, { opacity: 1, scale: 1, y: 0 });
+                    }
+                });
+            };
+
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeNoteLightbox();
+                }
+            });
+        });
+    </script>
+
+    <!-- LIGHTBOX MODAL -->
+    <div id="note-lightbox" class="fixed inset-0 bg-dark-gray/95 backdrop-blur-md z-[100] hidden items-center justify-center p-4 md:p-12 opacity-0" onclick="closeNoteLightbox()">
+        <div id="note-lightbox-box" class="border-3 border-k-blue bg-k-white p-6 md:p-8 max-w-4xl w-full max-h-[90vh] flex flex-col justify-between relative shadow-[10px_10px_0_var(--blue)]" onclick="event.stopPropagation()">
+            <!-- Close Button -->
+            <button class="absolute top-4 right-4 text-k-blue font-mono font-bold hover:text-k-red transition-colors text-lg md:text-xl" onclick="closeNoteLightbox()">×</button>
+            
+            <!-- Title & Meta -->
+            <div class="mb-4">
+                <span id="lightbox-badge" class="bg-k-blue text-k-white px-2 py-0.5 font-mono uppercase tracking-wider text-sm md:text-base">// BANKNOTE SCAN</span>
+                <h3 id="lightbox-title" class="font-mono font-bold mt-2 text-k-blue text-lg md:text-xl">USD $1</h3>
+            </div>
+            
+            <!-- Large Image Frame -->
+            <div class="w-full flex-grow aspect-[2.35/1] bg-k-blue/5 border-2 border-k-blue/10 flex items-center justify-center p-4 overflow-hidden mb-6 relative">
+                <img id="lightbox-img" src="" alt="" class="max-w-full max-h-full object-contain pointer-events-none shadow-md">
+            </div>
+            
+            <!-- Info/Description -->
+            <div class="flex justify-between items-center font-mono text-k-blue border-t border-k-blue/20 pt-4 text-sm md:text-base">
+                <span id="lightbox-country">UNITED STATES OF AMERICA</span>
+                <span id="lightbox-specs">DIMENSIONS: 156 × 66.3 MM</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- THREE.JS SCENE EXECUTION -->
+    <script type="module" src="js/threejs_scene.js"></script>
+    <script src="js/demo.js"></script>
+</body>
+</html>
