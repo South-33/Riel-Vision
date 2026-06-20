@@ -348,7 +348,7 @@ function parseOutput(outputTensor, scale, padX, padY, origW, origH) {
         return applyNMS(boxes);
     }
     
-    return boxes;
+    return applyNMS(boxes);
 }
 
 function applyNMS(boxes) {
