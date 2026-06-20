@@ -1,0 +1,19 @@
+# Ignore Python dependencies and build configs on Vercel
+requirements.txt
+
+# Ignore ML/training datasets, cache, and runs
+data/
+runs/
+.cache_runtime/
+.longrun/
+
+# Ignore Python backend source files, scripts, and tests
+configs/
+manifests/
+scripts/
+tests/
+tools/
+
+# Ignore local batch/launch scripts
+Launch_Presentation.bat
+autostart.bat
