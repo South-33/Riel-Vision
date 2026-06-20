@@ -58,13 +58,58 @@ if (confSlider) {
 async function initModel() {
     if (session) return;
     isModelLoading = true;
-    statusText.innerText = 'LOADING MODEL (9.4MB)...';
+    
+    const progressContainer = document.getElementById('model-progress-container');
+    const progressBar = document.getElementById('model-progress-bar');
+    const progressText = document.getElementById('model-progress-text');
+    
+    if (progressContainer) progressContainer.classList.remove('hidden');
+    statusText.innerText = 'DOWNLOADING MODEL...';
     statusText.className = 'text-k-red font-bold uppercase animate-pulse';
     
     try {
         ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
         
-        session = await ort.InferenceSession.create(MODEL_URL, {
+        // Fetch model with progress tracking
+        const response = await fetch(MODEL_URL);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
+        const contentLength = response.headers.get('content-length');
+        const total = contentLength ? parseInt(contentLength, 10) : 0;
+        
+        const reader = response.body.getReader();
+        let loaded = 0;
+        const chunks = [];
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            chunks.push(value);
+            loaded += value.length;
+            
+            if (total > 0) {
+                const percent = (loaded / total) * 100;
+                if (progressBar) progressBar.style.width = `${percent}%`;
+                if (progressText) progressText.innerText = `DOWNLOADING: ${percent.toFixed(0)}%`;
+            } else {
+                const loadedMB = (loaded / (1024 * 1024)).toFixed(1);
+                if (progressText) progressText.innerText = `DOWNLOADING: ${loadedMB}MB`;
+            }
+        }
+        
+        if (progressText) progressText.innerText = 'INITIALIZING...';
+        statusText.innerText = 'INITIALIZING...';
+        
+        // Combine chunks into a single Uint8Array
+        const modelData = new Uint8Array(loaded);
+        let position = 0;
+        for (const chunk of chunks) {
+            modelData.set(chunk, position);
+            position += chunk.length;
+        }
+        
+        session = await ort.InferenceSession.create(modelData.buffer, {
             executionProviders: ['wasm'],
             graphOptimizationLevel: 'all'
         });
@@ -72,10 +117,23 @@ async function initModel() {
         console.log("Model loaded successfully.");
         statusText.innerText = 'READY';
         statusText.className = 'text-green-600 font-bold uppercase';
+        
+        // Hide the progress bar container when done
+        if (progressContainer) {
+            setTimeout(() => {
+                progressContainer.style.opacity = '0';
+                progressContainer.style.transition = 'opacity 0.5s ease';
+                setTimeout(() => {
+                    progressContainer.classList.add('hidden');
+                    progressContainer.style.opacity = '1'; // Reset for next load if any
+                }, 500);
+            }, 1000);
+        }
     } catch (e) {
         console.error("Failed to load model:", e);
         statusText.innerText = 'ERROR LOADING MODEL';
         statusText.className = 'text-k-red font-bold uppercase';
+        if (progressText) progressText.innerText = 'FAILED';
     }
     isModelLoading = false;
 }
