@@ -1,6 +1,10 @@
 {
+	"scripts": {
+		"build": "echo 'Static presentation, no build required'"
+	},
 	"dependencies": {
 		"three": "0.160.0",
 		"esbuild": "^0.28.1"
 	}
 }
+

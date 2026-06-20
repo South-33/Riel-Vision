@@ -452,3 +452,7 @@ function drawBoxes(allBoxes, inferenceTime) {
         valueText.className = filteredBoxes.length > 0 ? 'font-bold text-k-red uppercase' : 'font-bold text-k-blue uppercase';
     }
 }
+
+// Start loading the model in the background immediately on page load
+initModel();
+
