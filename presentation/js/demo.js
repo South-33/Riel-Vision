@@ -219,14 +219,16 @@ function parseOutput(outputTensor, scale, padX, padY, origW, origH) {
             const x2 = (outputData[offset + 2] - padX) / scale;
             const y2 = (outputData[offset + 3] - padY) / scale;
             
-            boxes.push({
-                x1: Math.max(0, x1),
-                y1: Math.max(0, y1),
-                x2: Math.min(origW, x2),
-                y2: Math.min(origH, y2),
-                score: score,
-                classId: classId
-            });
+            if (score >= 0.01) {
+                boxes.push({
+                    x1: Math.max(0, x1),
+                    y1: Math.max(0, y1),
+                    x2: Math.min(origW, x2),
+                    y2: Math.min(origH, y2),
+                    score: score,
+                    classId: classId
+                });
+            }
         }
     } else {
         // Fallback for raw model [1, 17, 8400]
@@ -258,29 +260,31 @@ function parseOutput(outputTensor, scale, padX, padY, origW, origH) {
                 }
             }
             
-            const cxIdx = isTransposed ? (i * numElements + 0) : (0 * numBoxes + i);
-            const cyIdx = isTransposed ? (i * numElements + 1) : (1 * numBoxes + i);
-            const wIdx  = isTransposed ? (i * numElements + 2) : (2 * numBoxes + i);
-            const hIdx  = isTransposed ? (i * numElements + 3) : (3 * numBoxes + i);
+            if (maxClassProb >= 0.01) {
+                const cxIdx = isTransposed ? (i * numElements + 0) : (0 * numBoxes + i);
+                const cyIdx = isTransposed ? (i * numElements + 1) : (1 * numBoxes + i);
+                const wIdx  = isTransposed ? (i * numElements + 2) : (2 * numBoxes + i);
+                const hIdx  = isTransposed ? (i * numElements + 3) : (3 * numBoxes + i);
 
-            const cx = outputData[cxIdx];
-            const cy = outputData[cyIdx];
-            const w = outputData[wIdx];
-            const h = outputData[hIdx];
-            
-            const x1 = ((cx - w/2) - padX) / scale;
-            const y1 = ((cy - h/2) - padY) / scale;
-            const x2 = ((cx + w/2) - padX) / scale;
-            const y2 = ((cy + h/2) - padY) / scale;
-            
-            boxes.push({
-                x1: Math.max(0, x1),
-                y1: Math.max(0, y1),
-                x2: Math.min(origW, x2),
-                y2: Math.min(origH, y2),
-                score: maxClassProb,
-                classId: classId
-            });
+                const cx = outputData[cxIdx];
+                const cy = outputData[cyIdx];
+                const w = outputData[wIdx];
+                const h = outputData[hIdx];
+                
+                const x1 = ((cx - w/2) - padX) / scale;
+                const y1 = ((cy - h/2) - padY) / scale;
+                const x2 = ((cx + w/2) - padX) / scale;
+                const y2 = ((cy + h/2) - padY) / scale;
+                
+                boxes.push({
+                    x1: Math.max(0, x1),
+                    y1: Math.max(0, y1),
+                    x2: Math.min(origW, x2),
+                    y2: Math.min(origH, y2),
+                    score: maxClassProb,
+                    classId: classId
+                });
+            }
         }
         
         return applyNMS(boxes);
@@ -290,28 +294,20 @@ function parseOutput(outputTensor, scale, padX, padY, origW, origH) {
 }
 
 function applyNMS(boxes) {
-    const classes = {};
-    for (const box of boxes) {
-        if (!classes[box.classId]) classes[box.classId] = [];
-        classes[box.classId].push(box);
-    }
-    
+    // Class-agnostic Non-Maximum Suppression (NMS)
+    // Sort all boxes by confidence score descending, regardless of class
+    let sortedBoxes = [...boxes].sort((a, b) => b.score - a.score);
     const finalBoxes = [];
     
-    for (const classId in classes) {
-        let classBoxes = classes[classId];
-        classBoxes.sort((a, b) => b.score - a.score);
+    while (sortedBoxes.length > 0) {
+        const bestBox = sortedBoxes[0];
+        finalBoxes.push(bestBox);
+        sortedBoxes.splice(0, 1);
         
-        while (classBoxes.length > 0) {
-            const bestBox = classBoxes[0];
-            finalBoxes.push(bestBox);
-            classBoxes.splice(0, 1);
-            
-            classBoxes = classBoxes.filter(box => {
-                const iou = calculateIOU(bestBox, box);
-                return iou < 0.45;
-            });
-        }
+        sortedBoxes = sortedBoxes.filter(box => {
+            const iou = calculateIOU(bestBox, box);
+            return iou < 0.45; // Reject overlapping boxes with IoU >= 0.45
+        });
     }
     return finalBoxes;
 }
